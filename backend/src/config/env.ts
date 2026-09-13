@@ -32,8 +32,8 @@ if (nodeEnv === "production") {
   if (jwtSecret.length < 32 || jwtSecret === "replace-this-production-secret") {
     throw new Error("Production JWT_SECRET must be a unique secret of at least 32 characters");
   }
-  if (adminPassword === "ChangeMe123!") {
-    throw new Error("The default development administrator password cannot be used in production");
+  if (adminPassword === "ChangeMe123!" || process.env.ADMIN_EMAIL === "admin@dsu.local") {
+    throw new Error("The default development administrator credentials cannot be used in production");
   }
   if (corsOrigins.includes("*")) {
     throw new Error("CORS_ORIGIN must be explicit in production");
