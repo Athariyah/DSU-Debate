@@ -1,0 +1,14 @@
+# Dependencies
+node_modules/
+
+# Vite build output
+/dist/
+.vite/
+
+# Next.js build output (legacy files kept in this repository)
+.next/
+
+# Local environment files
+.env
+.env.*
+!.env.example
