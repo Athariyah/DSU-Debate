@@ -3,7 +3,22 @@ import path from "path";
 import { pool } from "../config/db";
 
 export async function runMigrations(): Promise<void> {
-  const migrationsDir = path.resolve(__dirname, "../../../sql/migrations");
+  const candidates = [
+    path.resolve(__dirname, "../../sql/migrations"),
+    path.resolve(__dirname, "../../../sql/migrations"),
+  ];
+  let migrationsDir: string | undefined;
+  for (const candidate of candidates) {
+    try {
+      await fs.access(candidate);
+      migrationsDir = candidate;
+      break;
+    } catch {
+      // Try the next layout (source tree vs compiled Docker tree).
+    }
+  }
+  if (!migrationsDir) throw new Error("SQL migrations directory was not found");
+
   const files = (await fs.readdir(migrationsDir))
     .filter((file) => /^\d+_.+\.sql$/.test(file))
     .sort();
