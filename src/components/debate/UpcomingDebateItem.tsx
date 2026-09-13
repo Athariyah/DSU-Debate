@@ -1,0 +1,39 @@
+import { ChevronRight, Users } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import type { DebateEvent } from "../../types";
+
+const MONTHS_SHORT = [
+  "Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек",
+];
+
+export function UpcomingDebateItem({ event }: { event: DebateEvent }) {
+  const navigate = useNavigate();
+  const date = new Date(event.scheduledAt);
+  const day = date.getDate();
+  const month = MONTHS_SHORT[date.getMonth()];
+  const time = date.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+
+  return (
+    <button
+      onClick={() => navigate(`/debate/${event.id}`)}
+      className="glass-panel flex w-full items-center gap-3 rounded-2xl border border-white/10 p-3 text-left transition hover:border-white/20 active:scale-[0.99]"
+    >
+      <div className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-xl border border-white/10 bg-white/5">
+        <span className="text-base font-bold leading-none text-white">{day}</span>
+        <span className="mt-1 text-[10px] font-medium uppercase text-white/50">{month}</span>
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <p className="line-clamp-2 text-sm font-semibold leading-snug text-white">{event.title}</p>
+        <div className="mt-1.5 flex items-center gap-1.5 text-xs text-white/45">
+          <Users size={13} />
+          <span>{event.participantsCount} участника</span>
+          <span className="mx-0.5">·</span>
+          <span>{time}</span>
+        </div>
+      </div>
+
+      <ChevronRight size={18} className="shrink-0 text-white/30" />
+    </button>
+  );
+}
