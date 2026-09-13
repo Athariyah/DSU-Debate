@@ -4,7 +4,11 @@ import { pool } from "../config/db";
 
 export async function runMigrations(): Promise<void> {
   const candidates = [
+    // Compiled Docker layout: /app/dist -> /app/sql.
+    path.resolve(__dirname, "../sql/migrations"),
+    // Source tree and local compiled layout: repository/backend/{src,dist} -> repository/sql.
     path.resolve(__dirname, "../../sql/migrations"),
+    // Backwards-compatible fallback for older package layouts.
     path.resolve(__dirname, "../../../sql/migrations"),
   ];
   let migrationsDir: string | undefined;

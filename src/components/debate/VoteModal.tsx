@@ -57,8 +57,8 @@ export function VoteModal({ event, open, onClose, onVoted, preselectedParticipan
       setVotedParticipant(event.id, result.data.participantId);
       onVoted(result.data.participantId);
     } catch (error) {
-      const anyError = error as { status?: number; message?: string };
-      if (anyError.status === 409) {
+      const anyError = error as { code?: string; message?: string };
+      if (anyError.code === "DUPLICATE_VOTE") {
         setVotedParticipant(event.id, result.data.participantId);
         onVoted(result.data.participantId);
       } else {

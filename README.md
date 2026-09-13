@@ -25,7 +25,9 @@ Email:    admin@dsu.local
 Password: ChangeMe123!
 ```
 
-Change all development secrets before production deployment.
+Change all development secrets before production deployment. Production also requires
+`COOKIE_SECURE=true`, an explicit `CORS_ORIGIN`, and a non-default
+`ADMIN_REGISTRATION_KEY`; the backend fails closed if development defaults remain.
 
 ## Development without the frontend container
 

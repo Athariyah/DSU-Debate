@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { pool } from "../config/db";
+import { pool, withTransaction } from "../config/db";
 import { EventRecord, ParticipantRecord } from "../types";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../middleware/errorHandler";
@@ -22,26 +22,35 @@ export const createParticipant = asyncHandler(async (req: Request, res: Response
   }
   const { eventId, name, description } = parsed.data;
 
-  const eventResult = await pool.query<EventRecord>("SELECT id FROM events WHERE id = $1", [eventId]);
-  if (eventResult.rowCount === 0) {
-    throw new ApiError(404, "EVENT_NOT_FOUND", "Мероприятие не найдено");
-  }
-  const countResult = await pool.query<{ count: string }>(
-    "SELECT COUNT(*)::text AS count FROM participants WHERE event_id = $1",
-    [eventId]
-  );
-  if (Number(countResult.rows[0].count) >= 3) {
-    throw new ApiError(400, "PARTICIPANTS_LIMIT", "У мероприятия может быть не более трёх участников");
-  }
+  const inserted = await withTransaction(async (client) => {
+    // Lock the parent event so concurrent admin requests cannot exceed the
+    // three-participant business limit.
+    const eventResult = await client.query<EventRecord>(
+      "SELECT id FROM events WHERE id = $1 FOR UPDATE",
+      [eventId]
+    );
+    if (eventResult.rowCount === 0) {
+      throw new ApiError(404, "EVENT_NOT_FOUND", "Мероприятие не найдено");
+    }
 
-  const inserted = await pool.query<ParticipantRecord>(
-    `INSERT INTO participants (event_id, name, description)
-     VALUES ($1, $2, $3)
-     RETURNING *`,
-    [eventId, name, description ?? null]
-  );
+    const countResult = await client.query<{ count: string }>(
+      "SELECT COUNT(*)::text AS count FROM participants WHERE event_id = $1",
+      [eventId]
+    );
+    if (Number(countResult.rows[0].count) >= 3) {
+      throw new ApiError(400, "PARTICIPANTS_LIMIT", "У мероприятия может быть не более трёх участников");
+    }
 
-  res.status(201).json({ participant: serializeParticipant(inserted.rows[0]) });
+    const result = await client.query<ParticipantRecord>(
+      `INSERT INTO participants (event_id, name, description)
+       VALUES ($1, $2, $3)
+       RETURNING *`,
+      [eventId, name, description ?? null]
+    );
+    return result.rows[0];
+  });
+
+  res.status(201).json({ participant: serializeParticipant(inserted) });
 });
 
 export const listParticipants = asyncHandler(async (req: Request, res: Response) => {
@@ -119,9 +128,36 @@ export const deleteParticipant = asyncHandler(async (req: Request, res: Response
     throw new ApiError(400, "VALIDATION_ERROR", "Некорректный id участника");
   }
 
-  const result = await pool.query("DELETE FROM participants WHERE id = $1 RETURNING id", [id]);
-  if (result.rowCount === 0) {
-    throw new ApiError(404, "PARTICIPANT_NOT_FOUND", "Участник не найден");
-  }
+  await withTransaction(async (client) => {
+    const participant = await client.query<{ event_id: number; status: EventRecord["status"] }>(
+      `SELECT p.event_id, e.status
+       FROM participants p
+       JOIN events e ON e.id = p.event_id
+       WHERE p.id = $1
+       FOR UPDATE OF e, p`,
+      [id]
+    );
+    if (participant.rowCount === 0) {
+      throw new ApiError(404, "PARTICIPANT_NOT_FOUND", "Участник не найден");
+    }
+
+    const { event_id: eventId, status } = participant.rows[0];
+    if (status === "active") {
+      const countResult = await client.query<{ count: string }>(
+        "SELECT COUNT(*)::text AS count FROM participants WHERE event_id = $1",
+        [eventId]
+      );
+      if (Number(countResult.rows[0].count) <= 2) {
+        throw new ApiError(
+          409,
+          "ACTIVE_EVENT_MIN_PARTICIPANTS",
+          "У активного дебата должно оставаться минимум два участника"
+        );
+      }
+    }
+
+    await client.query("DELETE FROM participants WHERE id = $1", [id]);
+  });
+
   res.status(204).send();
 });

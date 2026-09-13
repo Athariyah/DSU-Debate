@@ -70,6 +70,7 @@ export function AdminPage() {
         dateTime: new Date(event.dateTime).toISOString(),
       });
       setEvents((current) => current.map((item) => (item.id === saved.id ? saved : item)));
+      if (saved.status === "active") await loadEvents();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Не удалось сохранить мероприятие");
     } finally {

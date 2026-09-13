@@ -9,7 +9,9 @@ import { VoteModal } from "../components/debate/VoteModal";
 import { fetchDebateById } from "../api/debates";
 import { useDebateSocket } from "../hooks/useDebateSocket";
 import { getVotedParticipant } from "../utils/votedStore";
-import type { DebateEvent } from "../types";
+import type { DebateEvent, Participant } from "../types";
+
+const EMPTY_PARTICIPANTS: Participant[] = [];
 
 export function DebateDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -50,7 +52,7 @@ export function DebateDetailPage() {
   const { participants, totalVotes, eventStatus, status } = useDebateSocket({
     eventId: event?.id,
     initialStatus: event?.status ?? "upcoming",
-    initialParticipants: event?.participants ?? [],
+    initialParticipants: event?.participants ?? EMPTY_PARTICIPANTS,
     initialTotalVotes: event?.totalVotes ?? 0,
   });
 
@@ -106,7 +108,13 @@ export function DebateDetailPage() {
           <span className="text-white/20">·</span>
           <span className="inline-flex items-center gap-1.5 text-white/40">
             {status === "live" ? <Wifi size={13} className="text-emerald-400" /> : <WifiOff size={13} />}
-            {status === "live" ? "Live" : status === "connecting" ? "Подключение…" : "Демо-режим"}
+            {status === "live"
+              ? "Live"
+              : status === "connecting"
+                ? "Подключение…"
+                : status === "offline"
+                  ? "Нет realtime-соединения"
+                  : "Демо-режим"}
           </span>
         </div>
 

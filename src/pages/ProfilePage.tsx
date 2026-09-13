@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { KeyRound, LogIn, LogOut, ShieldCheck, UserRound } from "lucide-react";
 import { TopBar } from "../components/layout/TopBar";
 import { BottomNav } from "../components/layout/BottomNav";
@@ -9,6 +10,8 @@ import { getAdminToken, setAdminToken } from "../api/httpClient";
 import { loginAdmin, logoutAdmin, registerAdmin } from "../api/debates";
 
 export function ProfilePage() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const profile = getSavedProfileName();
   const fingerprint = getDeviceFingerprint();
   const [token, setToken] = useState(getAdminToken() ?? "");
@@ -34,6 +37,8 @@ export function ProfilePage() {
       setAdminToken(response.token);
       setToken(response.token);
       setPassword("");
+      const redirect = searchParams.get("redirect");
+      if (redirect?.startsWith("/") && !redirect.startsWith("//")) navigate(redirect);
     } catch (error) {
       setLoginError(error instanceof Error ? error.message : "Не удалось войти");
     } finally {

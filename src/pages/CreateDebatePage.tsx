@@ -71,7 +71,7 @@ export function CreateDebatePage() {
         participants: participants.map((p) => ({ name: p.name.trim(), subtitle: p.subtitle.trim() || undefined })),
         scheduledAt: new Date(scheduledAt).toISOString(),
       });
-      navigate("/debates");
+      navigate("/admin");
     } catch {
       setError("Не удалось создать дебат. Попробуйте ещё раз.");
     } finally {

@@ -35,13 +35,16 @@ export const createEvent = asyncHandler(async (req: Request, res: Response) => {
     throw new ApiError(400, "VALIDATION_ERROR", "Активный дебат должен иметь минимум двух участников");
   }
 
+  let previousActiveId: number | null = null;
   const event = await withTransaction(async (client) => {
     // Поддерживаем инвариант "один активный дебат одновременно":
     // если создаём сразу активный дебат — предыдущий активный переводим в completed.
     if (status === "active") {
-      await client.query(
-        `UPDATE events SET status = 'completed' WHERE status = 'active'`
+      const previous = await client.query<{ id: number }>(
+        "SELECT id FROM events WHERE status = 'active' FOR UPDATE"
       );
+      previousActiveId = previous.rows[0]?.id ?? null;
+      await client.query(`UPDATE events SET status = 'completed' WHERE status = 'active'`);
     }
 
     const inserted = await client.query<EventRecord>(
@@ -63,6 +66,10 @@ export const createEvent = asyncHandler(async (req: Request, res: Response) => {
 
     return inserted.rows[0];
   });
+
+  if (previousActiveId !== null) {
+    broadcastEventStatusChanged(previousActiveId, "completed");
+  }
 
   const participantsCount = await pool.query<{ count: string }>(
     "SELECT COUNT(*)::text AS count FROM participants WHERE event_id = $1",
@@ -177,6 +184,7 @@ export const updateEvent = asyncHandler(async (req: Request, res: Response) => {
     throw new ApiError(400, "VALIDATION_ERROR", "Нет полей для обновления");
   }
 
+  let previousActiveId: number | null = null;
   const updatedEvent = await withTransaction(async (client) => {
     const existing = await client.query<EventRecord>(
       "SELECT * FROM events WHERE id = $1 FOR UPDATE",
@@ -194,6 +202,11 @@ export const updateEvent = asyncHandler(async (req: Request, res: Response) => {
       if (Number(participantsCount.rows[0].count) < 2) {
         throw new ApiError(400, "VALIDATION_ERROR", "Активный дебат должен иметь минимум двух участников");
       }
+      const previous = await client.query<{ id: number }>(
+        "SELECT id FROM events WHERE status = 'active' AND id <> $1 FOR UPDATE",
+        [eventId]
+      );
+      previousActiveId = previous.rows[0]?.id ?? null;
       await client.query(
         `UPDATE events SET status = 'completed' WHERE status = 'active' AND id <> $1`,
         [eventId]
@@ -212,6 +225,9 @@ export const updateEvent = asyncHandler(async (req: Request, res: Response) => {
     return updated.rows[0];
   });
 
+  if (previousActiveId !== null) {
+    broadcastEventStatusChanged(previousActiveId, "completed");
+  }
   if (status) {
     broadcastEventStatusChanged(eventId, status);
   }

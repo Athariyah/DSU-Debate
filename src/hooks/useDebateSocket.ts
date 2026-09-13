@@ -3,7 +3,9 @@ import { getSocket } from "../lib/socket";
 import { mockSubscribe } from "../mock/mockRealtime";
 import type { DebateStatus, Participant, VoteUpdatePayload } from "../types";
 
-export type RealtimeStatus = "connecting" | "live" | "demo-offline";
+export type RealtimeStatus = "connecting" | "live" | "offline" | "demo-offline";
+
+const USE_MOCKS = import.meta.env.VITE_USE_MOCKS === "true";
 
 interface UseDebateSocketArgs {
   eventId: number | null | undefined;
@@ -108,8 +110,8 @@ export function useDebateSocket({
 
     const fallbackTimer = window.setTimeout(() => {
       if (!hasLiveConnection.current) {
-        setStatus("demo-offline");
-        demoUnsubscribe = mockSubscribe(eventId, applyUpdate);
+        setStatus(USE_MOCKS ? "demo-offline" : "offline");
+        if (USE_MOCKS) demoUnsubscribe = mockSubscribe(eventId, applyUpdate);
       }
     }, 2500);
 
