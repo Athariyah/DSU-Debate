@@ -19,7 +19,9 @@ export function createApp(): Application {
   app.use(helmet());
   app.use(
     cors({
-      origin: env.corsOrigin,
+      // `true` reflects the requesting origin, which keeps local development
+      // usable while still allowing an explicit production allow-list.
+      origin: env.corsOrigin === "*" ? true : env.corsOrigin,
       credentials: true,
     })
   );

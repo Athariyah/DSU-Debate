@@ -13,8 +13,13 @@ function required(name: string, fallback?: string): string {
 export const env = {
   port: parseInt(process.env.PORT ?? "4000", 10),
   databaseUrl: required("DATABASE_URL"),
-  jwtSecret: required("JWT_SECRET", "dev-only-secret"),
+  jwtSecret: required(
+    "JWT_SECRET",
+    process.env.NODE_ENV === "production" ? undefined : "dev-only-secret"
+  ),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "8h",
   corsOrigin: process.env.CORS_ORIGIN ?? "*",
   nodeEnv: process.env.NODE_ENV ?? "development",
+  adminEmail: process.env.ADMIN_EMAIL,
+  adminPassword: process.env.ADMIN_PASSWORD,
 };

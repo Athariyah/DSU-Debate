@@ -1,38 +1,37 @@
 /**
- * Типы клиента синхронизированы со схемой БД бэкенда:
- * events, participants, votes (см. src/types на бэкенде).
+ * Public client models. IDs and statuses intentionally mirror the backend
+ * PostgreSQL API so no lossy conversions are needed at the UI boundary.
  */
 
-export type DebateStatus = "upcoming" | "active" | "finished";
+export type DebateStatus = "upcoming" | "active" | "completed";
 
 export interface Participant {
-  id: string;
-  eventId: string;
+  id: number;
+  eventId: number;
   name: string;
-  /** Короткая подпись под именем — позиция/сторона участника в дебате */
+  /** Backend `description`, shown as the short position subtitle in the UI. */
   subtitle?: string;
   votesCount: number;
-  /** Вычисляется на бэкенде (votesCount / totalVotes * 100), 0..100 */
   percentage: number;
   rank?: number;
 }
 
 export interface DebateEvent {
-  id: string;
+  id: number;
   title: string;
   status: DebateStatus;
   participantsCount: number;
-  scheduledAt: string; // ISO date
+  /** ISO timestamp; backend calls this `dateTime`. */
+  scheduledAt: string;
   totalVotes: number;
   participants: Participant[];
   coverGradient?: string;
 }
 
 export interface VoteRequestPayload {
-  eventId: string;
-  participantId: string;
-  firstName: string;
-  lastName: string;
+  eventId: number;
+  participantId: number;
+  voterName: string;
   deviceFingerprint: string;
 }
 
@@ -44,9 +43,8 @@ export interface VoteResponse {
   totalVotes: number;
 }
 
-/** Полезная нагрузка, приходящая из Socket.io комнаты дебата */
 export interface VoteUpdatePayload {
-  eventId: string;
+  eventId: number;
   totalVotes: number;
   participants: Participant[];
 }

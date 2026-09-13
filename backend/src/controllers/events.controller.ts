@@ -28,7 +28,7 @@ export const createEvent = asyncHandler(async (req: Request, res: Response) => {
   if (!parsed.success) {
     throw new ApiError(400, "VALIDATION_ERROR", parsed.error.issues[0].message);
   }
-  const { title, dateTime, status } = parsed.data;
+  const { title, dateTime, status, participants } = parsed.data;
   const adminId = req.admin!.adminId;
 
   const event = await withTransaction(async (client) => {
@@ -46,6 +46,17 @@ export const createEvent = asyncHandler(async (req: Request, res: Response) => {
        RETURNING *`,
       [title, status, dateTime, adminId]
     );
+
+    if (participants) {
+      for (const participant of participants) {
+        await client.query(
+          `INSERT INTO participants (event_id, name, description)
+           VALUES ($1, $2, $3)`,
+          [inserted.rows[0].id, participant.name, participant.description ?? null]
+        );
+      }
+    }
+
     return inserted.rows[0];
   });
 

@@ -5,8 +5,6 @@ node_modules/
 /dist/
 .vite/
 
-# Next.js build output (legacy files kept in this repository)
-.next/
 
 # Local environment files
 .env

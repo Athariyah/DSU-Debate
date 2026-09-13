@@ -15,10 +15,18 @@ export const loginSchema = z.object({
 
 export const eventStatusEnum = z.enum(["upcoming", "active", "completed"]);
 
+const participantDraftSchema = z.object({
+  name: z.string().trim().min(1).max(255),
+  description: z.string().trim().max(2000).optional().nullable(),
+});
+
 export const createEventSchema = z.object({
   title: z.string().trim().min(3).max(500),
   dateTime: z.string().datetime({ offset: true }).or(z.string().min(1)),
   status: eventStatusEnum.optional().default("upcoming"),
+  // Optional keeps the CRUD endpoint backwards compatible. When supplied,
+  // event and participants are persisted atomically in one transaction.
+  participants: z.array(participantDraftSchema).min(2).max(3).optional(),
 });
 
 export const updateEventSchema = z.object({

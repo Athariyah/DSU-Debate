@@ -1,59 +1,137 @@
 import { apiFetch, getAdminToken } from "./httpClient";
-import type { CreateDebateInput, DebateEvent, VoteRequestPayload, VoteResponse } from "../types";
+import type {
+  CreateDebateInput,
+  DebateEvent,
+  Participant,
+  VoteRequestPayload,
+  VoteResponse,
+} from "../types";
 import { mockGetEvent, mockRegisterVote, mockStore } from "../mock/mockData";
 import { mockPublish } from "../mock/mockRealtime";
 
-/**
- * Все функции сначала пытаются достучаться до реального Express API.
- * Если бэкенд недоступен (сеть/404 — например, при автономной верстке),
- * тихо переключаются на локальные моки, повторяющие ту же форму данных.
- * Как только VITE_API_URL указывает на живой сервис — мок не используется.
- */
+interface BackendEvent {
+  id: number;
+  title: string;
+  status: "upcoming" | "active" | "completed";
+  dateTime: string;
+  participantsCount?: number;
+}
 
+interface BackendParticipant {
+  id: number;
+  eventId?: number;
+  name: string;
+  description?: string | null;
+  votesCount?: number;
+  percentage?: number;
+}
+
+interface BackendPublicEventResponse {
+  event: BackendEvent;
+  participants: BackendParticipant[];
+  totalVotes: number;
+}
+
+const USE_MOCKS = import.meta.env.VITE_USE_MOCKS === "true";
+
+function mapParticipant(raw: BackendParticipant, eventId: number): Participant {
+  return {
+    id: Number(raw.id),
+    eventId,
+    name: raw.name,
+    subtitle: raw.description ?? undefined,
+    votesCount: Number(raw.votesCount ?? 0),
+    percentage: Number(raw.percentage ?? 0),
+  };
+}
+
+function mapPublicEvent(payload: BackendPublicEventResponse): DebateEvent {
+  const eventId = Number(payload.event.id);
+  const participants = payload.participants.map((participant) =>
+    mapParticipant(participant, eventId)
+  );
+
+  return {
+    id: eventId,
+    title: payload.event.title,
+    status: payload.event.status,
+    participantsCount: Number(payload.event.participantsCount ?? participants.length),
+    scheduledAt: payload.event.dateTime,
+    totalVotes: Number(payload.totalVotes ?? 0),
+    participants,
+  };
+}
+
+function mapVoteResponse(payload: {
+  success: boolean;
+  results: {
+    eventId: number;
+    totalVotes: number;
+    participants: BackendParticipant[];
+  };
+}): VoteResponse {
+  return {
+    ok: payload.success,
+    totalVotes: payload.results.totalVotes,
+    participants: payload.results.participants.map((participant) =>
+      mapParticipant(participant, payload.results.eventId)
+    ),
+  };
+}
+
+/** Return the active event, or null when the backend correctly reports 404. */
 export async function fetchActiveDebate(): Promise<DebateEvent | null> {
   try {
-    return await apiFetch<DebateEvent | null>("/events/active");
-  } catch {
-    return mockStore.events.find((e) => e.status === "active") ?? null;
+    const response = await apiFetch<BackendPublicEventResponse>("/events/active");
+    return mapPublicEvent(response);
+  } catch (error) {
+    if (isNotFound(error)) return null;
+    if (USE_MOCKS) return mockStore.events.find((event) => event.status === "active") ?? null;
+    throw error;
   }
 }
 
 export async function fetchUpcomingDebates(): Promise<DebateEvent[]> {
   try {
-    return await apiFetch<DebateEvent[]>("/events/upcoming");
-  } catch {
-    return mockStore.events.filter((e) => e.status === "upcoming");
+    const response = await apiFetch<BackendPublicEventResponse[]>("/events/upcoming");
+    return response.map(mapPublicEvent);
+  } catch (error) {
+    if (USE_MOCKS) return mockStore.events.filter((event) => event.status === "upcoming");
+    throw error;
   }
 }
 
 export async function fetchDebateById(eventId: string): Promise<DebateEvent | null> {
   try {
-    return await apiFetch<DebateEvent>(`/events/${eventId}`);
-  } catch {
-    return mockGetEvent(eventId) ?? null;
+    const response = await apiFetch<BackendPublicEventResponse>(`/events/${eventId}`);
+    return mapPublicEvent(response);
+  } catch (error) {
+    if (isNotFound(error)) return null;
+    if (USE_MOCKS) return mockGetEvent(Number(eventId)) ?? null;
+    throw error;
   }
 }
 
-/**
- * POST /api/events/:eventId/votes
- * Тело запроса строго соответствует Zod-схеме бэкенда: participantId,
- * firstName, lastName, deviceFingerprint. ip_address бэкенд определяет
- * сам из заголовков запроса. Голос обрабатывается в транзакции с
- * SELECT ... FOR UPDATE, поэтому в ответ возвращается уже пересчитанный
- * тотал по всем участникам.
- */
 export async function submitVote(payload: VoteRequestPayload): Promise<VoteResponse> {
   try {
-    return await apiFetch<VoteResponse>(`/events/${payload.eventId}/votes`, {
+    const response = await apiFetch<{
+      success: boolean;
+      results: {
+        eventId: number;
+        totalVotes: number;
+        participants: BackendParticipant[];
+      };
+    }>(`/events/${payload.eventId}/vote`, {
       method: "POST",
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        participantId: payload.participantId,
+        voterName: payload.voterName,
+        deviceFingerprint: payload.deviceFingerprint,
+      }),
     });
+    return mapVoteResponse(response);
   } catch (error) {
-    // Локальная эмуляция anti-fraud ответа сервера (409 при повторном голосе)
-    const anyErr = error as { status?: number };
-    if (anyErr?.status === 409) {
-      throw error;
-    }
+    if (!USE_MOCKS) throw error;
     const updated = mockRegisterVote(payload.eventId, payload.participantId);
     mockPublish({
       eventId: updated.id,
@@ -65,35 +143,48 @@ export async function submitVote(payload: VoteRequestPayload): Promise<VoteRespo
 }
 
 export async function createDebate(input: CreateDebateInput): Promise<DebateEvent> {
-  try {
-    return await apiFetch<DebateEvent>("/events", {
-      method: "POST",
-      auth: true,
-      body: JSON.stringify(input),
-    });
-  } catch {
-    const id = `evt-${Date.now()}`;
-    const event: DebateEvent = {
-      id,
-      title: input.title,
-      status: "upcoming",
-      participantsCount: input.participants.length,
-      scheduledAt: input.scheduledAt,
-      totalVotes: 0,
-      participants: input.participants.map((p, idx) => ({
-        id: `${id}-p-${idx}`,
-        eventId: id,
-        name: p.name,
-        subtitle: p.subtitle,
-        votesCount: 0,
-        percentage: 0,
-      })),
-    };
-    mockStore.events = [...mockStore.events, event];
-    return event;
+  if (!getAdminToken()) {
+    throw new Error("Для создания дебата требуется токен администратора");
   }
+
+  const created = await apiFetch<{ event: BackendEvent }>("/admin/events", {
+    method: "POST",
+    auth: true,
+    body: JSON.stringify({
+      title: input.title,
+      dateTime: input.scheduledAt,
+      status: "upcoming",
+      participants: input.participants.map((participant) => ({
+        name: participant.name,
+        description: participant.subtitle ?? null,
+      })),
+    }),
+  });
+
+  const eventId = Number(created.event.id);
+  const event = await fetchDebateById(String(eventId));
+  if (!event) throw new Error("Созданный дебат не найден после сохранения");
+  return event;
+}
+
+export interface AdminAuthResponse {
+  admin: { id: number; email: string };
+  token: string;
+  expiresIn: string;
+}
+
+export async function loginAdmin(email: string, password: string): Promise<AdminAuthResponse> {
+  const response = await apiFetch<AdminAuthResponse>("/admin/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+  return response;
 }
 
 export function isAdminAuthenticated(): boolean {
   return Boolean(getAdminToken());
+}
+
+function isNotFound(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "status" in error && error.status === 404;
 }

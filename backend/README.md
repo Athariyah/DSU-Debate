@@ -1,62 +1,59 @@
-# DSU Debate — Backend (Express + Socket.io + PostgreSQL)
+# DSU Debate Backend
 
-Отдельный микросервис, реализующий REST API и real-time трансляцию результатов
-голосования для платформы "DSU Debate".
+Express + Socket.io + PostgreSQL API for DSU Debate.
 
-## Стек
-- Node.js + TypeScript + Express
-- PostgreSQL (`pg`, без ORM — чистый SQL, транзакции через `pg.Pool`)
-- Socket.io для realtime broadcast результатов голосования
-- JWT (`jsonwebtoken`) для авторизации администратора, `bcrypt` для хэширования паролей
-- `zod` для валидации входных данных
+## Быстрый запуск с PostgreSQL
 
-## Структура
-```
-backend/
-  src/
-    config/       # env, пул подключения к PostgreSQL, транзакции
-    controllers/   # auth, events, participants, vote
-    middleware/    # JWT auth guard, error handler, async wrapper
-    routes/        # маршруты admin/* и публичные events/*
-    sockets/       # инициализация Socket.io, broadcast helpers
-    types/         # общие TS-типы моделей
-    validation/    # zod-схемы валидации запросов
-    app.ts         # сборка Express-приложения
-    server.ts      # http.Server + Socket.io + graceful shutdown
-```
+Из корня репозитория:
 
-## Схема БД
-DDL находится в `../sql/schema.sql` (4 таблицы: admins, events, participants, votes).
-Применить к базе:
 ```bash
-psql "$DATABASE_URL" -f ../sql/schema.sql
-```
-
-## Запуск
-```bash
+docker compose up -d db
+cp backend/.env.example backend/.env
 cd backend
-npm install
-cp .env .env.local   # при необходимости поправить значения
-npm run dev           # разработка (ts-node-dev, hot reload)
-npm run build && npm start   # production
+npm ci
+npm run build
+npm run dev
 ```
 
-Переменные окружения (`.env`):
-- `DATABASE_URL` — строка подключения к PostgreSQL
-- `PORT` — порт HTTP/WebSocket сервера (по умолчанию 4000)
-- `JWT_SECRET`, `JWT_EXPIRES_IN` — параметры подписи токена администратора
-- `CORS_ORIGIN` — разрешённый origin для фронтенда и Socket.io
+SQL-схема монтируется в контейнер и применяется автоматически при первом создании
+тома. Для уже существующего тома примените миграцию вручную:
 
-## API
-Полная спецификация эндпоинтов — в `../docs/API_SPEC.md`.
+```bash
+docker compose exec -T db psql -U dsu -d dsu_debate < sql/schema.sql
+```
 
-## Anti-fraud
-Голос зрителя защищён двумя рубежами:
-1. Явная проверка в контроллере `POST /api/events/:id/vote` перед вставкой —
-   ищем существующую запись с тем же `event_id` и (`device_fingerprint` ИЛИ `ip_address`).
-2. `UNIQUE` constraints в БД (`uq_votes_event_fingerprint`, `uq_votes_event_ip`) —
-   финальный барьер на случай гонки при одновременных запросах.
+Frontend запускается во втором терминале:
 
-Вся операция (проверка + вставка + пересчёт процентов) выполняется в единой
-транзакции PostgreSQL с блокировкой строки мероприятия (`SELECT ... FOR UPDATE`),
-что исключает рассинхронизацию счётчиков при высокой конкурентной нагрузке.
+```bash
+npm ci
+npm run dev
+```
+
+Vite проксирует `/api` и `/socket.io` на `http://localhost:4000`. Для другого адреса
+задайте `VITE_BACKEND_URL`, либо используйте абсолютные `VITE_API_URL` и
+`VITE_SOCKET_URL`.
+
+## Администратор
+
+При наличии `ADMIN_EMAIL` и `ADMIN_PASSWORD` backend один раз создаёт пользователя,
+если его ещё нет. Это удобно для локальной разработки и не перезаписывает существующий
+аккаунт. В production переменные должны быть заданы явным образом.
+
+После запуска получить JWT можно через login:
+
+```bash
+curl -s http://localhost:4000/api/admin/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@dsu.local","password":"ChangeMe123!"}'
+```
+
+Скопируйте `token` в раздел «Доступ администратора» на странице профиля frontend.
+
+## Проверки
+
+```bash
+npm run typecheck
+npm run build
+```
+
+Полный REST и Socket.io контракт находится в `../docs/API_SPEC.md`.

@@ -33,7 +33,7 @@ function extractClientIp(req: Request): string {
  * LEFT JOIN гарантирует, что участники без единого голоса тоже попадут
  * в выдачу с процентом 0, а не будут "проглочены" агрегацией.
  */
-async function computeEventResults(
+export async function computeEventResults(
   client: PoolClient,
   eventId: number
 ): Promise<EventResults> {
@@ -103,9 +103,11 @@ export const getActiveEvent = asyncHandler(async (_req: Request, res: Response) 
       title: event.title,
       status: event.status,
       dateTime: event.date_time,
+      participantsCount: results.participants.length,
     },
     participants: results.participants.map((p) => ({
       id: p.participantId,
+      eventId: event.id,
       name: p.name,
       description: p.description,
       votesCount: p.votesCount,

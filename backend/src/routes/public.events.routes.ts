@@ -1,12 +1,12 @@
 import { Router } from "express";
 import { castVote, getActiveEvent } from "../controllers/vote.controller";
+import { getPublicEventById, listUpcomingEvents } from "../controllers/publicEvents.controller";
 
 const router = Router();
 
-// GET /api/events/active
 router.get("/active", getActiveEvent);
-
-// POST /api/events/:id/vote
+router.get("/upcoming", listUpcomingEvents);
+router.get("/:id", getPublicEventById);
 router.post("/:id/vote", castVote);
 
 export default router;

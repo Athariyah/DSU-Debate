@@ -1,4 +1,5 @@
-export const API_BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? "/api";
+const configuredApiUrl = import.meta.env.VITE_API_URL?.trim();
+export const API_BASE_URL = (configuredApiUrl || "/api").replace(/\/$/, "");
 
 const AUTH_TOKEN_KEY = "dsu_admin_jwt";
 
@@ -7,18 +8,14 @@ export function getAdminToken(): string | null {
 }
 
 export function setAdminToken(token: string) {
-  localStorage.setItem(AUTH_TOKEN_KEY, token);
+  if (token) localStorage.setItem(AUTH_TOKEN_KEY, token);
+  else localStorage.removeItem(AUTH_TOKEN_KEY);
 }
 
 interface RequestOptions extends RequestInit {
   auth?: boolean;
 }
 
-/**
- * Тонкая обёртка над fetch под REST API Express-бэкенда.
- * JWT (если есть) прокидывается в заголовке Authorization для
- * защищённых admin-маршрутов (см. src/middleware на бэкенде).
- */
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { auth, headers, ...rest } = options;
   const token = auth ? getAdminToken() : null;
@@ -38,7 +35,7 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
       const body = await response.json();
       message = body?.message ?? message;
     } catch {
-      /* noop */
+      // The server may return an empty/non-JSON error response.
     }
     throw new ApiError(message, response.status);
   }
@@ -49,6 +46,7 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
 
 export class ApiError extends Error {
   status: number;
+
   constructor(message: string, status: number) {
     super(message);
     this.status = status;

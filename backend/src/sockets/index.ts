@@ -21,8 +21,9 @@ export function debateRoom(eventId: number): string {
 export function initSocketServer(httpServer: HttpServer): Server {
   const io = new Server(httpServer, {
     cors: {
-      origin: env.corsOrigin,
+      origin: env.corsOrigin === "*" ? true : env.corsOrigin,
       methods: ["GET", "POST"],
+      credentials: true,
     },
   });
 

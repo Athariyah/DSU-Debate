@@ -11,7 +11,7 @@ interface ProgressBarProps {
 /**
  * Прогресс-бар результатов голосования. Ширина заливки анимируется через
  * Framer Motion при каждом новом значении percentage, приходящем из
- * Socket.io (событие vote_update), — без дерганья и без перезагрузки.
+ * Socket.io (событие vote:update), — без дёрганья и без перезагрузки.
  */
 export function ProgressBar({
   percentage,

@@ -17,7 +17,7 @@ export function DebateDetailPage() {
   const [loading, setLoading] = useState(true);
   const [voteModalOpen, setVoteModalOpen] = useState(false);
   const votedRecord = event ? getVotedParticipant(event.id) : null;
-  const [justVotedFor, setJustVotedFor] = useState<string | null>(votedRecord?.participantId ?? null);
+  const [justVotedFor, setJustVotedFor] = useState<number | null>(votedRecord?.participantId ?? null);
 
   useEffect(() => {
     let mounted = true;
