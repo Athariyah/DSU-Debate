@@ -1,20 +1,59 @@
 import { useState } from "react";
-import { KeyRound, ShieldCheck, UserRound } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { KeyRound, LogIn, LogOut, ShieldCheck, UserRound } from "lucide-react";
 import { TopBar } from "../components/layout/TopBar";
 import { BottomNav } from "../components/layout/BottomNav";
 import { Button } from "../components/ui/Button";
 import { getSavedProfileName } from "../utils/votedStore";
 import { getDeviceFingerprint } from "../utils/device";
 import { getAdminToken, setAdminToken } from "../api/httpClient";
+import { loginAdmin, logoutAdmin, registerAdmin } from "../api/debates";
 
 export function ProfilePage() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const profile = getSavedProfileName();
   const fingerprint = getDeviceFingerprint();
   const [token, setToken] = useState(getAdminToken() ?? "");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [saved, setSaved] = useState(false);
+  const [loggingIn, setLoggingIn] = useState(false);
+  const [registerMode, setRegisterMode] = useState(false);
+  const [registrationKey, setRegistrationKey] = useState("");
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   const fullName = profile ? `${profile.firstName} ${profile.lastName}` : "Гость";
   const initials = profile ? `${profile.firstName[0]}${profile.lastName[0]}`.toUpperCase() : "?";
+  const isAdmin = Boolean(token);
+
+  async function handleLogin() {
+    setLoginError(null);
+    setLoggingIn(true);
+    try {
+      const response = registerMode
+        ? await registerAdmin(email.trim(), password, registrationKey)
+        : await loginAdmin(email.trim(), password);
+      setAdminToken(response.token);
+      setToken(response.token);
+      setPassword("");
+      const redirect = searchParams.get("redirect");
+      if (redirect?.startsWith("/") && !redirect.startsWith("//")) navigate(redirect);
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : "Не удалось войти");
+    } finally {
+      setLoggingIn(false);
+    }
+  }
+
+  async function logout() {
+    try {
+      await logoutAdmin();
+    } finally {
+      setAdminToken("");
+      setToken("");
+    }
+  }
 
   return (
     <div className="relative flex h-full flex-col">
@@ -53,29 +92,86 @@ export function ProfilePage() {
             Доступ администратора
           </h3>
           <div className="glass-panel space-y-3 rounded-2xl border border-white/10 p-4">
-            <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5">
-              <KeyRound size={15} className="text-white/35" />
-              <input
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-                placeholder="Вставьте JWT администратора"
-                className="w-full bg-transparent text-xs text-white placeholder:text-white/25 outline-none"
-              />
+            <div className="flex items-center gap-2 text-sm font-medium text-white">
+              <ShieldCheck size={16} className={isAdmin ? "text-emerald-400" : "text-white/35"} />
+              {isAdmin ? "Администратор авторизован" : registerMode ? "Регистрация администратора" : "Вход администратора"}
             </div>
-            <Button
-              variant="glass"
-              fullWidth
-              onClick={() => {
-                setAdminToken(token.trim());
-                setSaved(true);
-                setTimeout(() => setSaved(false), 1500);
-              }}
-            >
-              {saved ? "Сохранено ✓" : "Сохранить токен"}
-            </Button>
+
+            {!isAdmin && (
+              <>
+                <input
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  type="email"
+                  placeholder="Email администратора"
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-xs text-white placeholder:text-white/25 outline-none focus:border-indigo-400/60"
+                />
+                <input
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  type="password"
+                  placeholder="Пароль"
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-xs text-white placeholder:text-white/25 outline-none focus:border-indigo-400/60"
+                />
+                {registerMode && (
+                  <input
+                    value={registrationKey}
+                    onChange={(event) => setRegistrationKey(event.target.value)}
+                    type="password"
+                    placeholder="Ключ регистрации"
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-xs text-white placeholder:text-white/25 outline-none focus:border-indigo-400/60"
+                  />
+                )}
+                {loginError && <p className="text-xs text-rose-400">{loginError}</p>}
+                <Button fullWidth onClick={handleLogin} disabled={loggingIn || !email || !password || (registerMode && !registrationKey)}>
+                  <LogIn size={16} />
+                  {loggingIn ? "Подождите…" : registerMode ? "Зарегистрироваться" : "Войти"}
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => { setRegisterMode((current) => !current); setLoginError(null); }}
+                  className="w-full text-center text-xs text-white/45 hover:text-white/75"
+                >
+                  {registerMode ? "Уже есть аккаунт? Войти" : "Зарегистрировать нового администратора"}
+                </button>
+              </>
+            )}
+
+            {isAdmin && (
+              <Button variant="glass" fullWidth onClick={logout}>
+                <LogOut size={16} />
+                Выйти
+              </Button>
+            )}
+
+            <details className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <summary className="flex cursor-pointer items-center gap-2 text-xs text-white/55">
+                <KeyRound size={14} /> Вставить JWT вручную
+              </summary>
+              <div className="mt-3 space-y-3">
+                <input
+                  value={token}
+                  onChange={(event) => setToken(event.target.value)}
+                  placeholder="JWT администратора"
+                  className="w-full bg-transparent font-mono text-[10px] text-white placeholder:text-white/25 outline-none"
+                />
+                <Button
+                  variant="glass"
+                  fullWidth
+                  onClick={() => {
+                    setAdminToken(token.trim());
+                    setSaved(true);
+                    setTimeout(() => setSaved(false), 1500);
+                  }}
+                >
+                  {saved ? "Сохранено ✓" : "Сохранить токен"}
+                </Button>
+              </div>
+            </details>
+
             <p className="text-[11px] leading-relaxed text-white/35">
-              Токен передаётся в заголовке Authorization при создании дебатов
-              (защищённые маршруты admin на бэкенде).
+              Администратор может создавать дебаты через кнопку «+». JWT хранится только
+              в localStorage и передаётся в защищённые admin-запросы.
             </p>
           </div>
         </div>

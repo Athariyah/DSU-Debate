@@ -1,37 +1,31 @@
-/**
- * Локальный кэш "я уже голосовал(а) за X в дебате Y".
- * Реальным источником истины остаётся бэкенд (UNIQUE ограничения в votes),
- * это лишь UX-оптимизация, чтобы мгновенно показывать экран результатов
- * без повторного запроса модалки голосования.
- */
-
 interface VotedRecord {
-  participantId: string;
+  participantId: number;
   votedAt: string;
 }
 
-function key(eventId: string) {
+function key(eventId: string | number) {
   return `dsu_voted_${eventId}`;
 }
 
-export function getVotedParticipant(eventId: string): VotedRecord | null {
+export function getVotedParticipant(eventId: string | number): VotedRecord | null {
   const raw = localStorage.getItem(key(eventId));
   if (!raw) return null;
   try {
-    return JSON.parse(raw) as VotedRecord;
+    const parsed = JSON.parse(raw) as VotedRecord;
+    return Number.isInteger(parsed.participantId) ? parsed : null;
   } catch {
     return null;
   }
 }
 
-export function setVotedParticipant(eventId: string, participantId: string) {
+export function setVotedParticipant(eventId: string | number, participantId: number) {
   localStorage.setItem(
     key(eventId),
     JSON.stringify({ participantId, votedAt: new Date().toISOString() } satisfies VotedRecord)
   );
 }
 
-export function hasVoted(eventId: string): boolean {
+export function hasVoted(eventId: string | number): boolean {
   return getVotedParticipant(eventId) !== null;
 }
 

@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { getSocket } from "../lib/socket";
 import { mockSubscribe } from "../mock/mockRealtime";
-import type { Participant, VoteUpdatePayload } from "../types";
+import type { DebateStatus, Participant, VoteUpdatePayload } from "../types";
 
-export type RealtimeStatus = "connecting" | "live" | "demo-offline";
+export type RealtimeStatus = "connecting" | "live" | "offline" | "demo-offline";
+
+const USE_MOCKS = import.meta.env.VITE_USE_MOCKS === "true";
 
 interface UseDebateSocketArgs {
-  eventId: string | null | undefined;
+  eventId: number | null | undefined;
+  initialStatus: DebateStatus;
   initialParticipants: Participant[];
   initialTotalVotes: number;
 }
@@ -14,46 +17,77 @@ interface UseDebateSocketArgs {
 interface UseDebateSocketResult {
   participants: Participant[];
   totalVotes: number;
+  eventStatus: DebateStatus;
   status: RealtimeStatus;
 }
 
-/**
- * Подключается к комнате конкретного дебата через Socket.io:
- *  - client:  socket.emit('join_debate', eventId)
- *  - server:  io.to(`debate:${eventId}`).emit('vote_update', payload)
- *
- * Если реальный сервер недоступен (например, при локальной верстке без
- * поднятого бэкенда), хук через 2.5с переключается в демо-режим и слушает
- * локальную шину mockRealtime, чтобы прогресс-бары всё равно обновлялись
- * плавно в реальном времени при голосовании внутри этой же вкладки.
- */
+interface BackendRealtimeParticipant {
+  participantId: number;
+  name: string;
+  description?: string | null;
+  votesCount: number;
+  percentage: number;
+}
+
+interface BackendRealtimePayload {
+  eventId: number;
+  totalVotes: number;
+  participants: BackendRealtimeParticipant[];
+}
+
+interface StatusPayload {
+  eventId: number;
+  status: DebateStatus;
+}
+
+type RealtimePayload = VoteUpdatePayload | BackendRealtimePayload;
+
 export function useDebateSocket({
   eventId,
+  initialStatus,
   initialParticipants,
   initialTotalVotes,
 }: UseDebateSocketArgs): UseDebateSocketResult {
   const [participants, setParticipants] = useState<Participant[]>(initialParticipants);
-  const [totalVotes, setTotalVotes] = useState<number>(initialTotalVotes);
+  const [totalVotes, setTotalVotes] = useState(initialTotalVotes);
+  const [eventStatus, setEventStatus] = useState<DebateStatus>(initialStatus);
   const [status, setStatus] = useState<RealtimeStatus>("connecting");
   const hasLiveConnection = useRef(false);
 
-  // Синхронизируем локальный стейт, когда сменился сам eventId / первичные данные
   useEffect(() => {
     setParticipants(initialParticipants);
     setTotalVotes(initialTotalVotes);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventId]);
+    setEventStatus(initialStatus);
+  }, [eventId, initialParticipants, initialTotalVotes, initialStatus]);
 
   useEffect(() => {
-    if (!eventId) return;
+    if (eventId === undefined || eventId === null) return;
 
     const socket = getSocket();
     let demoUnsubscribe: (() => void) | null = null;
+    hasLiveConnection.current = socket.connected;
 
-    const applyUpdate = (payload: VoteUpdatePayload) => {
-      if (payload.eventId !== eventId) return;
-      setParticipants(payload.participants);
+    const applyUpdate = (payload: RealtimePayload) => {
+      if (Number(payload.eventId) !== eventId) return;
+      const nextParticipants = payload.participants.map((participant) => {
+        if ("participantId" in participant) {
+          return {
+            id: participant.participantId,
+            eventId,
+            name: participant.name,
+            subtitle: participant.description ?? undefined,
+            votesCount: participant.votesCount,
+            percentage: participant.percentage,
+          };
+        }
+        return participant;
+      });
+      setParticipants(nextParticipants);
       setTotalVotes(payload.totalVotes);
+    };
+
+    const applyStatus = (payload: StatusPayload) => {
+      if (Number(payload.eventId) === eventId) setEventStatus(payload.status);
     };
 
     const handleConnect = () => {
@@ -63,23 +97,21 @@ export function useDebateSocket({
     };
 
     const handleDisconnect = () => {
+      hasLiveConnection.current = false;
       setStatus("connecting");
     };
 
     socket.on("connect", handleConnect);
     socket.on("disconnect", handleDisconnect);
-    socket.on("vote_update", applyUpdate);
-    socket.on("results_update", applyUpdate);
+    socket.on("vote:update", applyUpdate);
+    socket.on("event:status_changed", applyStatus);
 
-    if (socket.connected) {
-      handleConnect();
-    }
+    if (socket.connected) handleConnect();
 
-    // Демо-фолбэк: если через 2.5с настоящего сокета так и нет — не блокируем UX
     const fallbackTimer = window.setTimeout(() => {
       if (!hasLiveConnection.current) {
-        setStatus("demo-offline");
-        demoUnsubscribe = mockSubscribe(eventId, applyUpdate);
+        setStatus(USE_MOCKS ? "demo-offline" : "offline");
+        if (USE_MOCKS) demoUnsubscribe = mockSubscribe(eventId, applyUpdate);
       }
     }, 2500);
 
@@ -87,12 +119,12 @@ export function useDebateSocket({
       window.clearTimeout(fallbackTimer);
       socket.off("connect", handleConnect);
       socket.off("disconnect", handleDisconnect);
-      socket.off("vote_update", applyUpdate);
-      socket.off("results_update", applyUpdate);
+      socket.off("vote:update", applyUpdate);
+      socket.off("event:status_changed", applyStatus);
       if (socket.connected) socket.emit("leave_debate", eventId);
       demoUnsubscribe?.();
     };
   }, [eventId]);
 
-  return { participants, totalVotes, status };
+  return { participants, totalVotes, eventStatus, status };
 }

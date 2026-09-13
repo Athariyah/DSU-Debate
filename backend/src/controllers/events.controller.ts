@@ -3,7 +3,7 @@ import { pool, withTransaction } from "../config/db";
 import { EventRecord } from "../types";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../middleware/errorHandler";
-import { createEventSchema, updateEventSchema } from "../validation/schemas";
+import { createEventSchema, eventStatusEnum, updateEventSchema } from "../validation/schemas";
 import { broadcastEventStatusChanged } from "../sockets";
 
 function serializeEvent(row: EventRecord & { participants_count?: string }) {
@@ -28,16 +28,23 @@ export const createEvent = asyncHandler(async (req: Request, res: Response) => {
   if (!parsed.success) {
     throw new ApiError(400, "VALIDATION_ERROR", parsed.error.issues[0].message);
   }
-  const { title, dateTime, status } = parsed.data;
+  const { title, dateTime, status, participants } = parsed.data;
   const adminId = req.admin!.adminId;
 
+  if (status === "active" && (!participants || participants.length < 2)) {
+    throw new ApiError(400, "VALIDATION_ERROR", "Активный дебат должен иметь минимум двух участников");
+  }
+
+  let previousActiveId: number | null = null;
   const event = await withTransaction(async (client) => {
     // Поддерживаем инвариант "один активный дебат одновременно":
     // если создаём сразу активный дебат — предыдущий активный переводим в completed.
     if (status === "active") {
-      await client.query(
-        `UPDATE events SET status = 'completed' WHERE status = 'active'`
+      const previous = await client.query<{ id: number }>(
+        "SELECT id FROM events WHERE status = 'active' FOR UPDATE"
       );
+      previousActiveId = previous.rows[0]?.id ?? null;
+      await client.query(`UPDATE events SET status = 'completed' WHERE status = 'active'`);
     }
 
     const inserted = await client.query<EventRecord>(
@@ -46,10 +53,31 @@ export const createEvent = asyncHandler(async (req: Request, res: Response) => {
        RETURNING *`,
       [title, status, dateTime, adminId]
     );
+
+    if (participants) {
+      for (const participant of participants) {
+        await client.query(
+          `INSERT INTO participants (event_id, name, description)
+           VALUES ($1, $2, $3)`,
+          [inserted.rows[0].id, participant.name, participant.description ?? null]
+        );
+      }
+    }
+
     return inserted.rows[0];
   });
 
-  res.status(201).json({ event: serializeEvent(event) });
+  if (previousActiveId !== null) {
+    broadcastEventStatusChanged(previousActiveId, "completed");
+  }
+
+  const participantsCount = await pool.query<{ count: string }>(
+    "SELECT COUNT(*)::text AS count FROM participants WHERE event_id = $1",
+    [event.id]
+  );
+  res.status(201).json({
+    event: { ...serializeEvent(event), participantsCount: Number(participantsCount.rows[0].count) },
+  });
 });
 
 /**
@@ -63,6 +91,9 @@ export const listEvents = asyncHandler(async (req: Request, res: Response) => {
   );
   const offset = (page - 1) * limit;
   const statusFilter = req.query.status ? String(req.query.status) : null;
+  if (statusFilter && !eventStatusEnum.safeParse(statusFilter).success) {
+    throw new ApiError(400, "VALIDATION_ERROR", "Некорректный статус мероприятия");
+  }
 
   const values: unknown[] = [];
   let whereClause = "";
@@ -153,6 +184,7 @@ export const updateEvent = asyncHandler(async (req: Request, res: Response) => {
     throw new ApiError(400, "VALIDATION_ERROR", "Нет полей для обновления");
   }
 
+  let previousActiveId: number | null = null;
   const updatedEvent = await withTransaction(async (client) => {
     const existing = await client.query<EventRecord>(
       "SELECT * FROM events WHERE id = $1 FOR UPDATE",
@@ -163,6 +195,18 @@ export const updateEvent = asyncHandler(async (req: Request, res: Response) => {
     }
 
     if (status === "active") {
+      const participantsCount = await client.query<{ count: string }>(
+        "SELECT COUNT(*)::text AS count FROM participants WHERE event_id = $1",
+        [eventId]
+      );
+      if (Number(participantsCount.rows[0].count) < 2) {
+        throw new ApiError(400, "VALIDATION_ERROR", "Активный дебат должен иметь минимум двух участников");
+      }
+      const previous = await client.query<{ id: number }>(
+        "SELECT id FROM events WHERE status = 'active' AND id <> $1 FOR UPDATE",
+        [eventId]
+      );
+      previousActiveId = previous.rows[0]?.id ?? null;
       await client.query(
         `UPDATE events SET status = 'completed' WHERE status = 'active' AND id <> $1`,
         [eventId]
@@ -181,11 +225,20 @@ export const updateEvent = asyncHandler(async (req: Request, res: Response) => {
     return updated.rows[0];
   });
 
+  if (previousActiveId !== null) {
+    broadcastEventStatusChanged(previousActiveId, "completed");
+  }
   if (status) {
     broadcastEventStatusChanged(eventId, status);
   }
 
-  res.status(200).json({ event: serializeEvent(updatedEvent) });
+  const participantsCount = await pool.query<{ count: string }>(
+    "SELECT COUNT(*)::text AS count FROM participants WHERE event_id = $1",
+    [eventId]
+  );
+  res.status(200).json({
+    event: { ...serializeEvent(updatedEvent), participantsCount: Number(participantsCount.rows[0].count) },
+  });
 });
 
 /**

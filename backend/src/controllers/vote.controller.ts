@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { isIP } from "node:net";
 import { PoolClient } from "pg";
 import { pool, withTransaction } from "../config/db";
 import { EventRecord, EventResults, ParticipantResult } from "../types";
@@ -10,21 +11,15 @@ import { broadcastVoteUpdate } from "../sockets";
 /**
  * Извлекает реальный IP-адрес клиента из запроса.
  * Учитывает работу за обратным прокси (nginx / load balancer):
- * если задан заголовок X-Forwarded-For, берём первый (самый левый) адрес —
- * это адрес исходного клиента. Приложение должно иметь `app.set('trust proxy', ...)`
- * настроенным в app.ts, иначе Express сам не будет доверять этому заголовку.
+ * Express сам вычисляет req.ip с учётом ограниченного количества доверенных
+ * прокси (`TRUST_PROXY`). Приложение не читает X-Forwarded-For напрямую от клиента.
  */
 function extractClientIp(req: Request): string {
-  const forwardedFor = req.headers["x-forwarded-for"];
-  if (typeof forwardedFor === "string" && forwardedFor.length > 0) {
-    const first = forwardedFor.split(",")[0]?.trim();
-    if (first) return first;
-  }
-  if (Array.isArray(forwardedFor) && forwardedFor.length > 0) {
-    return forwardedFor[0];
-  }
-  // req.ip учитывает 'trust proxy', также нормализует IPv4-mapped IPv6 (::ffff:127.0.0.1)
-  return req.ip ?? req.socket.remoteAddress ?? "0.0.0.0";
+  // Express resolves X-Forwarded-For only through the configured trusted proxy
+  // count. Never trust a client-supplied header directly.
+  const rawIp = req.ip ?? req.socket.remoteAddress ?? "0.0.0.0";
+  const normalized = rawIp.startsWith("::ffff:") ? rawIp.slice("::ffff:".length) : rawIp;
+  return isIP(normalized) ? normalized : "0.0.0.0";
 }
 
 /**
@@ -33,7 +28,7 @@ function extractClientIp(req: Request): string {
  * LEFT JOIN гарантирует, что участники без единого голоса тоже попадут
  * в выдачу с процентом 0, а не будут "проглочены" агрегацией.
  */
-async function computeEventResults(
+export async function computeEventResults(
   client: PoolClient,
   eventId: number
 ): Promise<EventResults> {
@@ -103,9 +98,11 @@ export const getActiveEvent = asyncHandler(async (_req: Request, res: Response) 
       title: event.title,
       status: event.status,
       dateTime: event.date_time,
+      participantsCount: results.participants.length,
     },
     participants: results.participants.map((p) => ({
       id: p.participantId,
+      eventId: event.id,
       name: p.name,
       description: p.description,
       votesCount: p.votesCount,

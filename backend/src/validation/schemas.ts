@@ -15,15 +15,23 @@ export const loginSchema = z.object({
 
 export const eventStatusEnum = z.enum(["upcoming", "active", "completed"]);
 
+const participantDraftSchema = z.object({
+  name: z.string().trim().min(1).max(255),
+  description: z.string().trim().max(2000).optional().nullable(),
+});
+
 export const createEventSchema = z.object({
   title: z.string().trim().min(3).max(500),
-  dateTime: z.string().datetime({ offset: true }).or(z.string().min(1)),
+  dateTime: z.string().datetime({ offset: true }),
   status: eventStatusEnum.optional().default("upcoming"),
+  // Optional keeps the CRUD endpoint backwards compatible. When supplied,
+  // event and participants are persisted atomically in one transaction.
+  participants: z.array(participantDraftSchema).min(2).max(3).optional(),
 });
 
 export const updateEventSchema = z.object({
   title: z.string().trim().min(3).max(500).optional(),
-  dateTime: z.string().min(1).optional(),
+  dateTime: z.string().datetime({ offset: true }).optional(),
   status: eventStatusEnum.optional(),
 });
 
@@ -39,7 +47,7 @@ export const updateParticipantSchema = z.object({
 });
 
 const UUID_V4_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export const castVoteSchema = z.object({
   participantId: z.number().int().positive(),

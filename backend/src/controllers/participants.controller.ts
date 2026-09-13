@@ -1,12 +1,9 @@
 import { Request, Response } from "express";
-import { pool } from "../config/db";
+import { pool, withTransaction } from "../config/db";
 import { EventRecord, ParticipantRecord } from "../types";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../middleware/errorHandler";
-import {
-  createParticipantSchema,
-  updateParticipantSchema,
-} from "../validation/schemas";
+import { createParticipantSchema, updateParticipantSchema } from "../validation/schemas";
 
 function serializeParticipant(row: ParticipantRecord) {
   return {
@@ -18,9 +15,6 @@ function serializeParticipant(row: ParticipantRecord) {
   };
 }
 
-/**
- * POST /api/admin/participants
- */
 export const createParticipant = asyncHandler(async (req: Request, res: Response) => {
   const parsed = createParticipantSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -28,30 +22,39 @@ export const createParticipant = asyncHandler(async (req: Request, res: Response
   }
   const { eventId, name, description } = parsed.data;
 
-  const eventResult = await pool.query<EventRecord>(
-    "SELECT id FROM events WHERE id = $1",
-    [eventId]
-  );
-  if (eventResult.rowCount === 0) {
-    throw new ApiError(404, "EVENT_NOT_FOUND", "Мероприятие не найдено");
-  }
+  const inserted = await withTransaction(async (client) => {
+    // Lock the parent event so concurrent admin requests cannot exceed the
+    // three-participant business limit.
+    const eventResult = await client.query<EventRecord>(
+      "SELECT id FROM events WHERE id = $1 FOR UPDATE",
+      [eventId]
+    );
+    if (eventResult.rowCount === 0) {
+      throw new ApiError(404, "EVENT_NOT_FOUND", "Мероприятие не найдено");
+    }
 
-  const inserted = await pool.query<ParticipantRecord>(
-    `INSERT INTO participants (event_id, name, description)
-     VALUES ($1, $2, $3)
-     RETURNING *`,
-    [eventId, name, description ?? null]
-  );
+    const countResult = await client.query<{ count: string }>(
+      "SELECT COUNT(*)::text AS count FROM participants WHERE event_id = $1",
+      [eventId]
+    );
+    if (Number(countResult.rows[0].count) >= 3) {
+      throw new ApiError(400, "PARTICIPANTS_LIMIT", "У мероприятия может быть не более трёх участников");
+    }
 
-  res.status(201).json({ participant: serializeParticipant(inserted.rows[0]) });
+    const result = await client.query<ParticipantRecord>(
+      `INSERT INTO participants (event_id, name, description)
+       VALUES ($1, $2, $3)
+       RETURNING *`,
+      [eventId, name, description ?? null]
+    );
+    return result.rows[0];
+  });
+
+  res.status(201).json({ participant: serializeParticipant(inserted) });
 });
 
-/**
- * GET /api/admin/participants?eventId=5
- */
 export const listParticipants = asyncHandler(async (req: Request, res: Response) => {
   const eventId = req.query.eventId ? parseInt(String(req.query.eventId), 10) : null;
-
   const values: unknown[] = [];
   let whereClause = "";
   if (eventId !== null) {
@@ -66,33 +69,22 @@ export const listParticipants = asyncHandler(async (req: Request, res: Response)
     `SELECT * FROM participants ${whereClause} ORDER BY id ASC`,
     values
   );
-
   res.status(200).json({ items: result.rows.map(serializeParticipant) });
 });
 
-/**
- * GET /api/admin/participants/:id
- */
 export const getParticipantById = asyncHandler(async (req: Request, res: Response) => {
   const id = parseInt(req.params.id, 10);
   if (Number.isNaN(id)) {
     throw new ApiError(400, "VALIDATION_ERROR", "Некорректный id участника");
   }
 
-  const result = await pool.query<ParticipantRecord>(
-    "SELECT * FROM participants WHERE id = $1",
-    [id]
-  );
+  const result = await pool.query<ParticipantRecord>("SELECT * FROM participants WHERE id = $1", [id]);
   if (result.rowCount === 0) {
     throw new ApiError(404, "PARTICIPANT_NOT_FOUND", "Участник не найден");
   }
-
   res.status(200).json({ participant: serializeParticipant(result.rows[0]) });
 });
 
-/**
- * PUT /api/admin/participants/:id
- */
 export const updateParticipant = asyncHandler(async (req: Request, res: Response) => {
   const id = parseInt(req.params.id, 10);
   if (Number.isNaN(id)) {
@@ -104,43 +96,68 @@ export const updateParticipant = asyncHandler(async (req: Request, res: Response
     throw new ApiError(400, "VALIDATION_ERROR", parsed.error.issues[0].message);
   }
   const { name, description } = parsed.data;
-
   if (name === undefined && description === undefined) {
     throw new ApiError(400, "VALIDATION_ERROR", "Нет полей для обновления");
   }
 
-  const result = await pool.query<ParticipantRecord>(
-    `UPDATE participants
-     SET name = COALESCE($1, name),
-         description = COALESCE($2, description)
-     WHERE id = $3
-     RETURNING *`,
-    [name ?? null, description ?? null, id]
-  );
+  const updates: string[] = [];
+  const values: unknown[] = [];
+  if (name !== undefined) {
+    values.push(name);
+    updates.push(`name = $${values.length}`);
+  }
+  if (description !== undefined) {
+    values.push(description);
+    updates.push(`description = $${values.length}`);
+  }
+  values.push(id);
 
+  const result = await pool.query<ParticipantRecord>(
+    `UPDATE participants SET ${updates.join(", ")} WHERE id = $${values.length} RETURNING *`,
+    values
+  );
   if (result.rowCount === 0) {
     throw new ApiError(404, "PARTICIPANT_NOT_FOUND", "Участник не найден");
   }
-
   res.status(200).json({ participant: serializeParticipant(result.rows[0]) });
 });
 
-/**
- * DELETE /api/admin/participants/:id
- */
 export const deleteParticipant = asyncHandler(async (req: Request, res: Response) => {
   const id = parseInt(req.params.id, 10);
   if (Number.isNaN(id)) {
     throw new ApiError(400, "VALIDATION_ERROR", "Некорректный id участника");
   }
 
-  const result = await pool.query(
-    "DELETE FROM participants WHERE id = $1 RETURNING id",
-    [id]
-  );
-  if (result.rowCount === 0) {
-    throw new ApiError(404, "PARTICIPANT_NOT_FOUND", "Участник не найден");
-  }
+  await withTransaction(async (client) => {
+    const participant = await client.query<{ event_id: number; status: EventRecord["status"] }>(
+      `SELECT p.event_id, e.status
+       FROM participants p
+       JOIN events e ON e.id = p.event_id
+       WHERE p.id = $1
+       FOR UPDATE OF e, p`,
+      [id]
+    );
+    if (participant.rowCount === 0) {
+      throw new ApiError(404, "PARTICIPANT_NOT_FOUND", "Участник не найден");
+    }
+
+    const { event_id: eventId, status } = participant.rows[0];
+    if (status === "active") {
+      const countResult = await client.query<{ count: string }>(
+        "SELECT COUNT(*)::text AS count FROM participants WHERE event_id = $1",
+        [eventId]
+      );
+      if (Number(countResult.rows[0].count) <= 2) {
+        throw new ApiError(
+          409,
+          "ACTIVE_EVENT_MIN_PARTICIPANTS",
+          "У активного дебата должно оставаться минимум два участника"
+        );
+      }
+    }
+
+    await client.query("DELETE FROM participants WHERE id = $1", [id]);
+  });
 
   res.status(204).send();
 });

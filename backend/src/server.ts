@@ -3,11 +3,15 @@ import { createApp } from "./app";
 import { initSocketServer } from "./sockets";
 import { env } from "./config/env";
 import { pool } from "./config/db";
+import { runMigrations } from "./db/migrate";
+import { ensureSeedAdmin } from "./config/bootstrap";
 
 async function bootstrap(): Promise<void> {
   // Проверяем соединение с БД перед стартом сервера, чтобы упасть быстро
   // и явно, если PostgreSQL недоступен, вместо тихих ошибок в рантайме.
   await pool.query("SELECT 1");
+  await runMigrations();
+  await ensureSeedAdmin();
 
   const app = createApp();
   const httpServer = http.createServer(app);

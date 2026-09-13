@@ -1,62 +1,80 @@
-# DSU Debate — Backend (Express + Socket.io + PostgreSQL)
+# DSU Debate Backend
 
-Отдельный микросервис, реализующий REST API и real-time трансляцию результатов
-голосования для платформы "DSU Debate".
+Express + Socket.io + PostgreSQL API for DSU Debate.
 
-## Стек
-- Node.js + TypeScript + Express
-- PostgreSQL (`pg`, без ORM — чистый SQL, транзакции через `pg.Pool`)
-- Socket.io для realtime broadcast результатов голосования
-- JWT (`jsonwebtoken`) для авторизации администратора, `bcrypt` для хэширования паролей
-- `zod` для валидации входных данных
+## Полный запуск через Docker Compose
 
-## Структура
-```
-backend/
-  src/
-    config/       # env, пул подключения к PostgreSQL, транзакции
-    controllers/   # auth, events, participants, vote
-    middleware/    # JWT auth guard, error handler, async wrapper
-    routes/        # маршруты admin/* и публичные events/*
-    sockets/       # инициализация Socket.io, broadcast helpers
-    types/         # общие TS-типы моделей
-    validation/    # zod-схемы валидации запросов
-    app.ts         # сборка Express-приложения
-    server.ts      # http.Server + Socket.io + graceful shutdown
-```
+Из корня репозитория:
 
-## Схема БД
-DDL находится в `../sql/schema.sql` (4 таблицы: admins, events, participants, votes).
-Применить к базе:
 ```bash
-psql "$DATABASE_URL" -f ../sql/schema.sql
+cp .env.example .env
+docker compose up --build
 ```
 
-## Запуск
+После запуска:
+
+- frontend: `http://localhost:3000`
+- backend: `http://localhost:4000`
+- readiness: `http://localhost:4000/api/health/ready`
+- PostgreSQL: `localhost:5432`
+
+Compose запускает PostgreSQL, применяет схему, запускает миграции, backend и nginx
+frontend. Данные PostgreSQL сохраняются в volume `dsu-debate-postgres`.
+
+Для локальной разработки без Docker:
+
 ```bash
+docker compose up -d db
+cp backend/.env.example backend/.env
 cd backend
-npm install
-cp .env .env.local   # при необходимости поправить значения
-npm run dev           # разработка (ts-node-dev, hot reload)
-npm run build && npm start   # production
+npm ci
+npm run db:migrate
+npm run dev
 ```
 
-Переменные окружения (`.env`):
-- `DATABASE_URL` — строка подключения к PostgreSQL
-- `PORT` — порт HTTP/WebSocket сервера (по умолчанию 4000)
-- `JWT_SECRET`, `JWT_EXPIRES_IN` — параметры подписи токена администратора
-- `CORS_ORIGIN` — разрешённый origin для фронтенда и Socket.io
+В отдельном терминале из корня:
 
-## API
-Полная спецификация эндпоинтов — в `../docs/API_SPEC.md`.
+```bash
+npm ci
+npm run dev
+```
 
-## Anti-fraud
-Голос зрителя защищён двумя рубежами:
-1. Явная проверка в контроллере `POST /api/events/:id/vote` перед вставкой —
-   ищем существующую запись с тем же `event_id` и (`device_fingerprint` ИЛИ `ip_address`).
-2. `UNIQUE` constraints в БД (`uq_votes_event_fingerprint`, `uq_votes_event_ip`) —
-   финальный барьер на случай гонки при одновременных запросах.
+Vite проксирует `/api` и `/socket.io` на `http://localhost:4000`.
 
-Вся операция (проверка + вставка + пересчёт процентов) выполняется в единой
-транзакции PostgreSQL с блокировкой строки мероприятия (`SELECT ... FOR UPDATE`),
-что исключает рассинхронизацию счётчиков при высокой конкурентной нагрузке.
+## Миграции
+
+Миграции находятся в `../sql/migrations` и запускаются автоматически перед стартом
+backend. Вручную их можно применить командой:
+
+```bash
+npm run db:migrate
+```
+
+## Администратор
+
+При наличии `ADMIN_EMAIL` и `ADMIN_PASSWORD` backend один раз создаёт пользователя,
+если его ещё нет. Существующий аккаунт не перезаписывается.
+
+Для локального `.env.example`:
+
+```text
+Email:    admin@dsu.local
+Пароль:   ChangeMe123!
+```
+
+Затем вход выполняется в frontend через раздел «Профиль». JWT устанавливается также
+в HttpOnly cookie; Bearer-токен оставлен для совместимости с ручными API-клиентами.
+
+Публичная регистрация администратора закрыта в production. Для контролируемой
+регистрации передавайте `X-Admin-Registration-Key`, совпадающий с
+`ADMIN_REGISTRATION_KEY`.
+
+## Проверки
+
+```bash
+npm run typecheck
+npm run test
+npm run build
+```
+
+Полный REST и Socket.io контракт находится в `../docs/API_SPEC.md`.

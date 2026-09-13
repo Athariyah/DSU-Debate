@@ -101,7 +101,8 @@ CREATE TABLE IF NOT EXISTS participants (
 
   CONSTRAINT fk_participants_event
     FOREIGN KEY (event_id) REFERENCES events (id) ON DELETE CASCADE,
-  CONSTRAINT chk_participants_name_not_empty CHECK (btrim(name) <> '')
+  CONSTRAINT chk_participants_name_not_empty CHECK (btrim(name) <> ''),
+  CONSTRAINT uq_participants_event_id_id UNIQUE (event_id, id)
 );
 
 -- Индекс по event_id — выборка всех участников конкретного дебата (JOIN c votes)
@@ -121,8 +122,9 @@ CREATE TABLE IF NOT EXISTS votes (
 
   CONSTRAINT fk_votes_event
     FOREIGN KEY (event_id) REFERENCES events (id) ON DELETE CASCADE,
-  CONSTRAINT fk_votes_participant
-    FOREIGN KEY (participant_id) REFERENCES participants (id) ON DELETE CASCADE,
+  CONSTRAINT fk_votes_event_participant
+    FOREIGN KEY (event_id, participant_id)
+    REFERENCES participants (event_id, id) ON DELETE CASCADE,
 
   -- ANTI-FRAUD: на уровне БД запрещаем повторный голос с того же fingerprint
   -- или с того же IP в рамках ОДНОГО мероприятия (второй уровень защиты,
