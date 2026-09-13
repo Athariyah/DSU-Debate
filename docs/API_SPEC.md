@@ -3,9 +3,19 @@
 Все URL ниже указаны относительно `/api`. Формат запросов и ответов — JSON.
 Время передаётся в ISO-8601 с timezone.
 
+## Health
+
+- `GET /health/live` — проверяет, что процесс backend запущен.
+- `GET /health/ready` — проверяет подключение к PostgreSQL.
+- `GET /health` — совместимый readiness endpoint.
+
 ## Авторизация администратора
 
 ### `POST /admin/auth/register`
+
+В production требует заголовок `X-Admin-Registration-Key`, совпадающий с
+`ADMIN_REGISTRATION_KEY`. В development также может быть включена переменной
+`ALLOW_ADMIN_REGISTRATION=true`.
 
 ```json
 { "email": "admin@example.com", "password": "StrongPassword123" }
@@ -17,11 +27,20 @@
 { "email": "admin@example.com", "password": "StrongPassword123" }
 ```
 
-Успешный ответ содержит `token`. Для защищённых запросов используйте:
+Успешный ответ содержит JWT и устанавливает HttpOnly cookie `dsu_admin_token`.
+Для ручных API-клиентов можно использовать:
 
 ```text
 Authorization: Bearer <token>
 ```
+
+### `GET /admin/auth/me`
+
+Проверяет текущую сессию администратора.
+
+### `POST /admin/auth/logout`
+
+Очищает HttpOnly cookie.
 
 ## Публичные дебаты
 
@@ -33,11 +52,19 @@ Authorization: Bearer <token>
 
 Возвращает массив предстоящих дебатов.
 
+### `GET /events/history?page=1&limit=20`
+
+Возвращает страницу завершённых дебатов:
+
+```json
+{ "items": [], "total": 0, "page": 1, "limit": 20 }
+```
+
 ### `GET /events/:id`
 
 Возвращает дебат с участниками и текущими результатами.
 
-Формат всех трёх успешных ответов:
+Формат успешного ответа активного, предстоящего или завершённого дебата:
 
 ```json
 {
@@ -74,29 +101,16 @@ Authorization: Bearer <token>
 }
 ```
 
-`deviceFingerprint` должен быть UUID v4. Backend дополнительно определяет IP,
-проверяет уникальность голоса по fingerprint или IP и выполняет вставку с пересчётом
-результатов в одной транзакции.
+`deviceFingerprint` должен быть UUID v4. Backend определяет IP через Express с
+учётом только настроенного количества доверенных прокси, проверяет уникальность
+голоса и выполняет вставку с пересчётом результатов в одной транзакции.
 
-Успешный ответ:
-
-```json
-{
-  "success": true,
-  "vote": { "id": 981, "participantId": 11, "createdAt": "2026-09-14T16:05:00.000Z" },
-  "results": {
-    "eventId": 5,
-    "totalVotes": 101,
-    "participants": []
-  }
-}
-```
-
-Повторный голос возвращает `409 DUPLICATE_VOTE`.
+Повторный голос возвращает `409 DUPLICATE_VOTE`. Запросы голосования дополнительно
+ограничиваются rate limit.
 
 ## Административные мероприятия
 
-Все маршруты ниже требуют Bearer JWT.
+Все маршруты ниже требуют Bearer JWT или HttpOnly auth cookie.
 
 ### `POST /admin/events`
 
@@ -116,21 +130,21 @@ Authorization: Bearer <token>
 
 ### `GET /admin/events`
 
-Список мероприятий. Поддерживает `page`, `limit` и `status`.
+Список мероприятий. Поддерживает `page`, `limit` и фильтр `status`.
 
 ### `GET /admin/events/:id`, `PUT /admin/events/:id`, `DELETE /admin/events/:id`
 
-CRUD отдельного мероприятия.
+CRUD отдельного мероприятия. При переводе в `active` backend проверяет минимум двух
+участников и автоматически завершает предыдущий active event.
 
 ### `/admin/participants`
 
-CRUD участников. `POST /admin/participants` принимает `eventId`, `name` и
-`description`. Отдельные операции нужны для административного редактирования;
-создание через frontend выполняется атомарно через `POST /admin/events`.
+CRUD участников с проверкой существования мероприятия. Удаление участника каскадно
+удаляет его голоса.
 
 ## Socket.io
 
-Frontend подключается к тому же origin (Vite проксирует `/socket.io`) либо к
+Frontend подключается к тому же origin (Vite/nginx проксирует `/socket.io`) либо к
 `VITE_SOCKET_URL`.
 
 Клиент → сервер:
@@ -141,4 +155,4 @@ Frontend подключается к тому же origin (Vite проксиру
 Сервер → клиент:
 
 - `vote:update` — `{ eventId, totalVotes, participants }` после успешного голоса;
-- `event:status_changed` — `{ eventId, status }` после изменения статуса администратором.
+- `event:status_changed` — `{ eventId, status }` после изменения статуса дебата.

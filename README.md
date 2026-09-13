@@ -1,58 +1,70 @@
 # DSU Debate
 
-Платформа live-голосований на дебатах.
+Production-ready foundation for live audience voting during debates.
 
-## Локальный запуск полного стека
+## Full stack via Docker
 
-Требуется Node.js 20+ и Docker с Compose.
-
-### 1. PostgreSQL
-
-```bash
-docker compose up -d db
-```
-
-### 2. Backend
+Requirements: Docker Compose.
 
 ```bash
 cp backend/.env.example backend/.env
-cd backend
-npm ci
-npm run dev
+docker compose up --build
 ```
 
-Backend будет доступен на `http://localhost:4000`. При первом запуске с настройками
-из `backend/.env.example` автоматически создаётся локальный администратор:
+Open `http://localhost:3000`. The Compose stack contains:
+
+- PostgreSQL with persistent volume;
+- Express + Socket.io backend;
+- automatic SQL migrations and admin bootstrap;
+- nginx-served React frontend with REST and WebSocket proxy.
+
+Default local administrator:
 
 ```text
 Email:    admin@dsu.local
-Пароль:   ChangeMe123!
+Password: ChangeMe123!
 ```
 
-### 3. Frontend
+Change all development secrets before production deployment.
 
-В отдельном терминале из корня:
+## Development without the frontend container
+
+```bash
+docker compose up -d db
+cp backend/.env.example backend/.env
+cd backend && npm ci && npm run db:migrate && npm run dev
+```
+
+In a second terminal:
 
 ```bash
 npm ci
 npm run dev
 ```
 
-Vite проксирует REST `/api` и Socket.io `/socket.io` на backend. Для удалённого
-backend можно задать `VITE_API_URL`, `VITE_SOCKET_URL` и `VITE_BACKEND_URL` в `.env`.
+Vite proxies `/api` and `/socket.io` to backend port `4000`.
 
-## Проверки
+## Features
+
+- anonymous audience voting with UUID and IP anti-fraud checks;
+- PostgreSQL transactions and relational integrity constraints;
+- JWT admin authentication with HttpOnly session cookie;
+- protected `/admin` frontend route;
+- event and participant CRUD;
+- status management: `upcoming`, `active`, `completed`;
+- completed-event history with pagination;
+- live Socket.io result and status updates;
+- readiness/liveness health checks;
+- migration runner and local seed administrator;
+- frontend and backend typecheck/test/build scripts.
+
+## Verification
 
 ```bash
 npm run typecheck
+npm run test
 npm run build
-cd backend && npm run typecheck && npm run build
+cd backend && npm run typecheck && npm run test && npm run build
 ```
 
-## Административная сторона
-
-Откройте раздел «Профиль» и войдите с локальными учётными данными выше либо вставьте
-JWT вручную. После авторизации кнопка `+` создаёт мероприятие и всех участников в
-одной транзакции.
-
-Подробный API-контракт: `docs/API_SPEC.md`.
+API contract: `docs/API_SPEC.md`.

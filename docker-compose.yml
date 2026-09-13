@@ -18,5 +18,50 @@ services:
       timeout: 5s
       retries: 20
 
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: dsu-debate-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://dsu:dsu@db:5432/dsu_debate
+      JWT_SECRET: ${JWT_SECRET:-replace-this-production-secret}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@dsu.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-ChangeMe123!}
+      ALLOW_ADMIN_REGISTRATION: "false"
+      ADMIN_REGISTRATION_KEY: ${ADMIN_REGISTRATION_KEY:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "4000:4000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4000/api/health/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: /api
+        VITE_SOCKET_URL: ""
+    container_name: dsu-debate-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "3000:80"
+
 volumes:
   dsu-debate-postgres:

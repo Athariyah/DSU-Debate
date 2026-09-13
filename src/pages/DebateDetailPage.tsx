@@ -15,6 +15,7 @@ export function DebateDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [event, setEvent] = useState<DebateEvent | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [voteModalOpen, setVoteModalOpen] = useState(false);
   const votedRecord = event ? getVotedParticipant(event.id) : null;
   const [justVotedFor, setJustVotedFor] = useState<number | null>(votedRecord?.participantId ?? null);
@@ -22,30 +23,52 @@ export function DebateDetailPage() {
   useEffect(() => {
     let mounted = true;
     setLoading(true);
-    if (!id) return;
-    fetchDebateById(id).then((data) => {
-      if (!mounted) return;
-      setEvent(data);
-      setJustVotedFor(getVotedParticipant(id)?.participantId ?? null);
+    setError(null);
+    if (!id) {
+      setError("Некорректный идентификатор дебата");
       setLoading(false);
-    });
+      return;
+    }
+    fetchDebateById(id)
+      .then((data) => {
+        if (!mounted) return;
+        if (!data) setError("Дебат не найден");
+        setEvent(data);
+        setJustVotedFor(getVotedParticipant(id)?.participantId ?? null);
+      })
+      .catch(() => {
+        if (mounted) setError("Не удалось загрузить дебат");
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
     return () => {
       mounted = false;
     };
   }, [id]);
 
-  const { participants, totalVotes, status } = useDebateSocket({
+  const { participants, totalVotes, eventStatus, status } = useDebateSocket({
     eventId: event?.id,
+    initialStatus: event?.status ?? "upcoming",
     initialParticipants: event?.participants ?? [],
     initialTotalVotes: event?.totalVotes ?? 0,
   });
 
-  if (loading || !event) {
+  if (loading) {
     return (
       <div className="flex h-full flex-col">
         <TopBar showBack rightSlot="menu" />
-        <div className="flex-1 px-5">
-          <div className="h-40 animate-pulse rounded-3xl bg-white/5" />
+        <div className="flex-1 px-5"><div className="h-40 animate-pulse rounded-3xl bg-white/5" /></div>
+      </div>
+    );
+  }
+
+  if (!event) {
+    return (
+      <div className="flex h-full flex-col">
+        <TopBar showBack />
+        <div className="flex flex-1 items-center justify-center px-5 text-center text-sm text-rose-300">
+          {error ?? "Дебат не найден"}
         </div>
       </div>
     );
@@ -57,15 +80,15 @@ export function DebateDetailPage() {
     minute: "2-digit",
   })}`;
   const voted = Boolean(justVotedFor);
-  const canVote = event.status === "active";
+  const canVote = eventStatus === "active";
 
   return (
     <div className="relative flex h-full flex-col">
       <TopBar showBack rightSlot="menu" />
 
       <div className="no-scrollbar flex-1 overflow-y-auto px-5 pb-8">
-        <Badge tone={event.status === "active" ? "active" : "neutral"}>
-          {event.status === "active" ? "Активный дебат" : "Скоро"}
+        <Badge tone={eventStatus === "active" ? "active" : "neutral"}>
+          {eventStatus === "active" ? "Активный дебат" : eventStatus === "completed" ? "Завершён" : "Скоро"}
         </Badge>
 
         <h1 className="mt-3 text-[22px] font-bold leading-snug text-white">{event.title}</h1>

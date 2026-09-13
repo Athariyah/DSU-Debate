@@ -1,6 +1,7 @@
 import { Home, MessagesSquare, Plus, UserRound } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { cn } from "../../utils/cn";
+import { isAdminAuthenticated } from "../../api/debates";
 
 const items = [
   { to: "/home", label: "Главная", icon: Home },
@@ -17,7 +18,7 @@ export function BottomNav() {
           <NavItem key={item.to} {...item} />
         ))}
 
-        <NavLink to="/create" aria-label="Добавить">
+        <NavLink to={isAdminAuthenticated() ? "/admin" : "/profile"} aria-label="Администратор">
           {({ isActive }) => (
             <div
               className={cn(

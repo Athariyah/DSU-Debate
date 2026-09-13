@@ -6,7 +6,7 @@ import { Button } from "../components/ui/Button";
 import { getSavedProfileName } from "../utils/votedStore";
 import { getDeviceFingerprint } from "../utils/device";
 import { getAdminToken, setAdminToken } from "../api/httpClient";
-import { loginAdmin } from "../api/debates";
+import { loginAdmin, logoutAdmin, registerAdmin } from "../api/debates";
 
 export function ProfilePage() {
   const profile = getSavedProfileName();
@@ -16,6 +16,8 @@ export function ProfilePage() {
   const [password, setPassword] = useState("");
   const [saved, setSaved] = useState(false);
   const [loggingIn, setLoggingIn] = useState(false);
+  const [registerMode, setRegisterMode] = useState(false);
+  const [registrationKey, setRegistrationKey] = useState("");
   const [loginError, setLoginError] = useState<string | null>(null);
 
   const fullName = profile ? `${profile.firstName} ${profile.lastName}` : "Гость";
@@ -26,7 +28,9 @@ export function ProfilePage() {
     setLoginError(null);
     setLoggingIn(true);
     try {
-      const response = await loginAdmin(email.trim(), password);
+      const response = registerMode
+        ? await registerAdmin(email.trim(), password, registrationKey)
+        : await loginAdmin(email.trim(), password);
       setAdminToken(response.token);
       setToken(response.token);
       setPassword("");
@@ -37,9 +41,13 @@ export function ProfilePage() {
     }
   }
 
-  function logout() {
-    setAdminToken("");
-    setToken("");
+  async function logout() {
+    try {
+      await logoutAdmin();
+    } finally {
+      setAdminToken("");
+      setToken("");
+    }
   }
 
   return (
@@ -81,7 +89,7 @@ export function ProfilePage() {
           <div className="glass-panel space-y-3 rounded-2xl border border-white/10 p-4">
             <div className="flex items-center gap-2 text-sm font-medium text-white">
               <ShieldCheck size={16} className={isAdmin ? "text-emerald-400" : "text-white/35"} />
-              {isAdmin ? "Администратор авторизован" : "Вход администратора"}
+              {isAdmin ? "Администратор авторизован" : registerMode ? "Регистрация администратора" : "Вход администратора"}
             </div>
 
             {!isAdmin && (
@@ -100,11 +108,27 @@ export function ProfilePage() {
                   placeholder="Пароль"
                   className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-xs text-white placeholder:text-white/25 outline-none focus:border-indigo-400/60"
                 />
+                {registerMode && (
+                  <input
+                    value={registrationKey}
+                    onChange={(event) => setRegistrationKey(event.target.value)}
+                    type="password"
+                    placeholder="Ключ регистрации"
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-xs text-white placeholder:text-white/25 outline-none focus:border-indigo-400/60"
+                  />
+                )}
                 {loginError && <p className="text-xs text-rose-400">{loginError}</p>}
-                <Button fullWidth onClick={handleLogin} disabled={loggingIn || !email || !password}>
+                <Button fullWidth onClick={handleLogin} disabled={loggingIn || !email || !password || (registerMode && !registrationKey)}>
                   <LogIn size={16} />
-                  {loggingIn ? "Входим…" : "Войти"}
+                  {loggingIn ? "Подождите…" : registerMode ? "Зарегистрироваться" : "Войти"}
                 </Button>
+                <button
+                  type="button"
+                  onClick={() => { setRegisterMode((current) => !current); setLoginError(null); }}
+                  className="w-full text-center text-xs text-white/45 hover:text-white/75"
+                >
+                  {registerMode ? "Уже есть аккаунт? Войти" : "Зарегистрировать нового администратора"}
+                </button>
               </>
             )}
 

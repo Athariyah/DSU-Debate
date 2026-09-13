@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { getSocket } from "../lib/socket";
 import { mockSubscribe } from "../mock/mockRealtime";
-import type { Participant, VoteUpdatePayload } from "../types";
+import type { DebateStatus, Participant, VoteUpdatePayload } from "../types";
 
 export type RealtimeStatus = "connecting" | "live" | "demo-offline";
 
 interface UseDebateSocketArgs {
   eventId: number | null | undefined;
+  initialStatus: DebateStatus;
   initialParticipants: Participant[];
   initialTotalVotes: number;
 }
@@ -14,6 +15,7 @@ interface UseDebateSocketArgs {
 interface UseDebateSocketResult {
   participants: Participant[];
   totalVotes: number;
+  eventStatus: DebateStatus;
   status: RealtimeStatus;
 }
 
@@ -31,22 +33,30 @@ interface BackendRealtimePayload {
   participants: BackendRealtimeParticipant[];
 }
 
+interface StatusPayload {
+  eventId: number;
+  status: DebateStatus;
+}
+
 type RealtimePayload = VoteUpdatePayload | BackendRealtimePayload;
 
 export function useDebateSocket({
   eventId,
+  initialStatus,
   initialParticipants,
   initialTotalVotes,
 }: UseDebateSocketArgs): UseDebateSocketResult {
   const [participants, setParticipants] = useState<Participant[]>(initialParticipants);
   const [totalVotes, setTotalVotes] = useState(initialTotalVotes);
+  const [eventStatus, setEventStatus] = useState<DebateStatus>(initialStatus);
   const [status, setStatus] = useState<RealtimeStatus>("connecting");
   const hasLiveConnection = useRef(false);
 
   useEffect(() => {
     setParticipants(initialParticipants);
     setTotalVotes(initialTotalVotes);
-  }, [eventId, initialParticipants, initialTotalVotes]);
+    setEventStatus(initialStatus);
+  }, [eventId, initialParticipants, initialTotalVotes, initialStatus]);
 
   useEffect(() => {
     if (eventId === undefined || eventId === null) return;
@@ -57,8 +67,7 @@ export function useDebateSocket({
 
     const applyUpdate = (payload: RealtimePayload) => {
       if (Number(payload.eventId) !== eventId) return;
-
-      const participants = payload.participants.map((participant) => {
+      const nextParticipants = payload.participants.map((participant) => {
         if ("participantId" in participant) {
           return {
             id: participant.participantId,
@@ -71,9 +80,12 @@ export function useDebateSocket({
         }
         return participant;
       });
-
-      setParticipants(participants);
+      setParticipants(nextParticipants);
       setTotalVotes(payload.totalVotes);
+    };
+
+    const applyStatus = (payload: StatusPayload) => {
+      if (Number(payload.eventId) === eventId) setEventStatus(payload.status);
     };
 
     const handleConnect = () => {
@@ -90,6 +102,7 @@ export function useDebateSocket({
     socket.on("connect", handleConnect);
     socket.on("disconnect", handleDisconnect);
     socket.on("vote:update", applyUpdate);
+    socket.on("event:status_changed", applyStatus);
 
     if (socket.connected) handleConnect();
 
@@ -105,10 +118,11 @@ export function useDebateSocket({
       socket.off("connect", handleConnect);
       socket.off("disconnect", handleDisconnect);
       socket.off("vote:update", applyUpdate);
+      socket.off("event:status_changed", applyStatus);
       if (socket.connected) socket.emit("leave_debate", eventId);
       demoUnsubscribe?.();
     };
   }, [eventId]);
 
-  return { participants, totalVotes, status };
+  return { participants, totalVotes, eventStatus, status };
 }

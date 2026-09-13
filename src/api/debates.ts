@@ -101,6 +101,21 @@ export async function fetchUpcomingDebates(): Promise<DebateEvent[]> {
   }
 }
 
+export async function fetchCompletedDebates(page = 1, limit = 20): Promise<{ items: DebateEvent[]; total: number }> {
+  try {
+    const response = await apiFetch<{ items: BackendPublicEventResponse[]; total: number }>(
+      `/events/history?page=${page}&limit=${limit}`
+    );
+    return { items: response.items.map(mapPublicEvent), total: response.total };
+  } catch (error) {
+    if (USE_MOCKS) {
+      const items = mockStore.events.filter((event) => event.status === "completed");
+      return { items, total: items.length };
+    }
+    throw error;
+  }
+}
+
 export async function fetchDebateById(eventId: string): Promise<DebateEvent | null> {
   try {
     const response = await apiFetch<BackendPublicEventResponse>(`/events/${eventId}`);
@@ -142,6 +157,79 @@ export async function submitVote(payload: VoteRequestPayload): Promise<VoteRespo
   }
 }
 
+export interface AdminEventSummary {
+  id: number;
+  title: string;
+  status: DebateEvent["status"];
+  dateTime: string;
+  participantsCount: number;
+}
+
+export async function listAdminDebates(status?: DebateEvent["status"]): Promise<AdminEventSummary[]> {
+  const query = status ? `?status=${encodeURIComponent(status)}` : "";
+  const response = await apiFetch<{ items: AdminEventSummary[] }>(`/admin/events${query}`, { auth: true });
+  return response.items;
+}
+
+export async function updateDebate(
+  eventId: number,
+  patch: Partial<Pick<AdminEventSummary, "title" | "status">> & { dateTime?: string }
+): Promise<AdminEventSummary> {
+  const response = await apiFetch<{ event: AdminEventSummary }>(`/admin/events/${eventId}`, {
+    method: "PUT",
+    auth: true,
+    body: JSON.stringify(patch),
+  });
+  return response.event;
+}
+
+export async function deleteDebate(eventId: number): Promise<void> {
+  await apiFetch<void>(`/admin/events/${eventId}`, { method: "DELETE", auth: true });
+}
+
+export interface AdminParticipant {
+  id: number;
+  eventId: number;
+  name: string;
+  description: string | null;
+}
+
+export async function listAdminParticipants(eventId: number): Promise<AdminParticipant[]> {
+  const response = await apiFetch<{ items: AdminParticipant[] }>(
+    `/admin/participants?eventId=${eventId}`,
+    { auth: true }
+  );
+  return response.items;
+}
+
+export async function updateAdminParticipant(
+  participantId: number,
+  patch: { name?: string; description?: string | null }
+): Promise<AdminParticipant> {
+  const response = await apiFetch<{ participant: AdminParticipant }>(`/admin/participants/${participantId}`, {
+    method: "PUT",
+    auth: true,
+    body: JSON.stringify(patch),
+  });
+  return response.participant;
+}
+
+export async function deleteAdminParticipant(participantId: number): Promise<void> {
+  await apiFetch<void>(`/admin/participants/${participantId}`, { method: "DELETE", auth: true });
+}
+
+export async function createAdminParticipant(
+  eventId: number,
+  participant: { name: string; description?: string | null }
+): Promise<AdminParticipant> {
+  const response = await apiFetch<{ participant: AdminParticipant }>("/admin/participants", {
+    method: "POST",
+    auth: true,
+    body: JSON.stringify({ eventId, ...participant }),
+  });
+  return response.participant;
+}
+
 export async function createDebate(input: CreateDebateInput): Promise<DebateEvent> {
   if (!getAdminToken()) {
     throw new Error("Для создания дебата требуется токен администратора");
@@ -179,6 +267,18 @@ export async function loginAdmin(email: string, password: string): Promise<Admin
     body: JSON.stringify({ email, password }),
   });
   return response;
+}
+
+export async function registerAdmin(email: string, password: string, registrationKey: string): Promise<AdminAuthResponse> {
+  return apiFetch<AdminAuthResponse>("/admin/auth/register", {
+    method: "POST",
+    headers: { "X-Admin-Registration-Key": registrationKey },
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export async function logoutAdmin(): Promise<void> {
+  await apiFetch<void>("/admin/auth/logout", { method: "POST", auth: true });
 }
 
 export function isAdminAuthenticated(): boolean {

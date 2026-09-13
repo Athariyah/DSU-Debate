@@ -52,6 +52,18 @@ const rawEvents: DebateEvent[] = [
     ],
   },
   {
+    id: 5,
+    title: "Нужен ли обязательный волонтёрский год?",
+    status: "completed",
+    participantsCount: 2,
+    scheduledAt: buildDate(2, 18, 0),
+    totalVotes: 64,
+    participants: [
+      { id: 11, eventId: 5, name: "За обязательную практику", votesCount: 38, percentage: 0 },
+      { id: 12, eventId: 5, name: "За добровольный формат", votesCount: 26, percentage: 0 },
+    ],
+  },
+  {
     id: 4,
     title: "Лучше жить в городе или в деревне?",
     status: "upcoming",
