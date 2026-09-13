@@ -7,7 +7,7 @@ Production-ready foundation for live audience voting during debates.
 Requirements: Docker Compose.
 
 ```bash
-cp backend/.env.example backend/.env
+cp .env.example .env
 docker compose up --build
 ```
 

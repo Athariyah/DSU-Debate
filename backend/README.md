@@ -7,7 +7,7 @@ Express + Socket.io + PostgreSQL API for DSU Debate.
 Из корня репозитория:
 
 ```bash
-cp backend/.env.example backend/.env
+cp .env.example .env
 docker compose up --build
 ```
 

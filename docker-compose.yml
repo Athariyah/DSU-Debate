@@ -25,10 +25,10 @@ services:
     container_name: dsu-debate-backend
     restart: unless-stopped
     environment:
-      NODE_ENV: production
+      NODE_ENV: ${NODE_ENV:-development}
       PORT: 4000
       DATABASE_URL: postgresql://dsu:dsu@db:5432/dsu_debate
-      JWT_SECRET: ${JWT_SECRET:-replace-this-production-secret}
+      JWT_SECRET: ${JWT_SECRET:-change-this-development-secret}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
       TRUST_PROXY: ${TRUST_PROXY:-1}

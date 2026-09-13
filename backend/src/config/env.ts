@@ -48,7 +48,10 @@ export const env = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "8h",
   corsOrigins,
   trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
-  cookieSecure: process.env.COOKIE_SECURE === "true" || nodeEnv === "production",
+  cookieSecure:
+    process.env.COOKIE_SECURE !== undefined
+      ? process.env.COOKIE_SECURE === "true"
+      : nodeEnv === "production",
   adminEmail: process.env.ADMIN_EMAIL,
   adminPassword,
   adminRegistrationKey: process.env.ADMIN_REGISTRATION_KEY,
