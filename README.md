@@ -60,7 +60,7 @@ it works out of the box on any public host name.
 | Variable | Default | Notes |
 | --- | --- | --- |
 | `RUN_MODE` | `embedded` | `proxy` = run nginx only and proxy `/api` to `BACKEND_HOST:4000` |
-| `BACKEND_HOST` | `127.0.0.1` | Upstream host for the nginx proxy |
+| `BACKEND_HOST` | `127.0.0.1` | Upstream host for the nginx proxy in `proxy` mode. In the default `embedded` mode the backend always lives inside the container, so the upstream is forced to `127.0.0.1` and this variable is ignored (a stale `BACKEND_HOST=backend` from an old 3-service deployment cannot break the site) |
 | `JWT_SECRET` | random per start | Set a stable value so admin sessions survive restarts |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | `admin@dsu.local` / `ChangeMe123!` | Seed admin created once if the `admins` table is empty |
 | `CORS_ORIGIN` | `*` | Comma-separated origins; socket.io follows the same list |
