@@ -53,10 +53,11 @@ COPY --from=backend  /app/sql /app/sql
 COPY backend/package*.json ./
 RUN npm ci --omit=dev
 
-# nginx config is rendered at container start by the official nginx image
-# helper (20-envsubst-on-templates.sh): templates in /etc/nginx/templates
-# become /etc/nginx/conf.d/*. ${BACKEND_HOST} is substituted from the
-# environment, nginx variables ($host, $uri, ...) are left untouched.
+# nginx config is rendered at container start by /entrypoint.sh (deploy/):
+# templates in /etc/nginx/templates become /etc/nginx/conf.d/*. The entrypoint
+# substitutes the __BACKEND_HOST__ placeholder with sed (this base image has
+# no official-nginx docker-entrypoint helpers and no envsubst), leaves nginx
+# variables ($host, $uri, ...) untouched, and runs `nginx -t` before start.
 COPY nginx.conf /etc/nginx/templates/default.conf.template
 COPY deploy/entrypoint.sh /entrypoint.sh
 COPY deploy/embedded.sh /app/embedded.sh
