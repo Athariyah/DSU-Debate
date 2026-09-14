@@ -9,6 +9,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "db:migrate": "tsx src/db/migrate-cli.ts",
+    "db:check": "tsx src/db/check-cli.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "tsx --test test/**/*.test.ts"
   },

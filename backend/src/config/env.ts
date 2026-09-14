@@ -1,4 +1,5 @@
 import dotenv from "dotenv";
+import { describeDatabaseConfig, resolveDatabaseConfig } from "./database";
 
 dotenv.config();
 
@@ -50,10 +51,24 @@ if (nodeEnv === "production") {
   }
 }
 
+// Разбор параметров БД происходит ПОСЛЕ dotenv.config(): так переменные из
+// backend/.env видны и для DATABASE_URL, и для отдельных DB_* / PG*.
+const database = resolveDatabaseConfig();
+
+if (nodeEnv === "production" && database.sslMode === "disable" && database.isRemote) {
+  // Не валим процесс: часть облачных провайдеров (внутренние домена Amvera)
+  // работает и без TLS, но предупредить стоит.
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[dsu-debate-backend] WARNING: connecting to ${describeDatabaseConfig(database)} without TLS`
+  );
+}
+
 export const env = {
   nodeEnv,
   port: parseInt(process.env.PORT ?? "4000", 10),
-  databaseUrl: required("DATABASE_URL"),
+  database,
+  databaseUrl: database.connectionString ?? "",
   jwtSecret,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "8h",
   corsOrigins,

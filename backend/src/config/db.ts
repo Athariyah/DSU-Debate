@@ -1,16 +1,30 @@
 import { Pool, PoolClient } from "pg";
 import { env } from "./env";
+import { describeDatabaseConfig } from "./database";
 
 /**
  * Единый пул соединений с PostgreSQL для всего приложения.
  * Пул переиспользуется во всех контроллерах — не создаём новые
  * подключения на каждый запрос.
+ *
+ * Параметры берутся из config/database.ts: поддерживаются и готовая
+ * `DATABASE_URL`, и отдельные `DB_HOST`/`DB_USER`/... (удобно для облачных
+ * БД вроде Amvera CNPG), и режимы SSL уровня libpq.
  */
+const config = env.database;
+
 export const pool = new Pool({
-  connectionString: env.databaseUrl,
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
+  connectionString: config.connectionString,
+  host: config.host,
+  port: config.port,
+  user: config.user,
+  password: config.password,
+  database: config.database,
+  ssl: config.ssl,
+  max: config.pool.max,
+  idleTimeoutMillis: config.pool.idleTimeoutMillis,
+  connectionTimeoutMillis: config.connect.timeoutMs,
+  application_name: config.applicationName,
 });
 
 pool.on("error", (err) => {
@@ -18,6 +32,151 @@ pool.on("error", (err) => {
   // eslint-disable-next-line no-console
   console.error("Unexpected error on idle PostgreSQL client", err);
 });
+
+/**
+ * Пул хранит копию конфигурации и отдаёт её каждому новому клиенту, поэтому
+ * переключение `ssl` здесь влияет на все последующие соединения. Нужно для
+ * режимов `allow`/`prefer`: сначала пробуем TLS, при неудаче — без него.
+ * В @types/pg поле `options` не описано, поэтому доступ через приведение.
+ */
+type PoolWithMutableOptions = Pool & { options: { ssl?: unknown } };
+
+function disablePoolSsl(): void {
+  (pool as unknown as PoolWithMutableOptions).options.ssl = false;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Ждёт, пока база станет доступна, и поднимает понятную ошибку, если она так
+ * и не ответила. Облачные СУБД (Amvera и аналоги) после паузы/перезапуска
+ * принимают соединения не мгновенно, поэтому старт бэкенда ретраится.
+ */
+export async function waitForDatabase(): Promise<void> {
+  const { retries, delayMs } = config.connect;
+  const target = describeDatabaseConfig(config);
+  let lastError: unknown;
+  let sslFallbackTried = false;
+
+  for (let attempt = 1; attempt <= retries; attempt += 1) {
+    try {
+      const client = await pool.connect();
+      try {
+        await client.query("SELECT 1");
+      } finally {
+        client.release();
+      }
+      if (attempt > 1 || sslFallbackTried) {
+        // eslint-disable-next-line no-console
+        console.log(`[db] connected to ${target} on attempt ${attempt}`);
+      }
+      return;
+    } catch (error) {
+      lastError = error;
+
+      // allow/prefer: пробуем TLS, а если сервер его не поддерживает —
+      // откатываемся на обычное соединение (поведение libpq).
+      if (config.sslCanFallback && config.ssl !== false && !sslFallbackTried) {
+        sslFallbackTried = true;
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[db] TLS connection to ${target} failed (${errorMessage(error)}) — retrying without TLS (sslmode=${config.sslMode})`
+        );
+        disablePoolSsl();
+        continue;
+      }
+
+      if (attempt < retries) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[db] ${target} is not ready (attempt ${attempt}/${retries}): ${errorMessage(error)} — retrying in ${delayMs}ms`
+        );
+        await sleep(delayMs);
+      }
+    }
+  }
+
+  throw new Error(
+    `Could not connect to PostgreSQL at ${target} after ${retries} attempt(s): ${errorMessage(lastError)}`
+  );
+}
+
+/**
+ * Диагностическое подключение: возвращает параметры сервера, состояние TLS
+ * и список таблиц. Используется скриптом `npm run db:check` — им удобно
+ * проверять настройки облачной БД (Amvera CNPG) до деплоя.
+ */
+export interface DatabaseReport {
+  target: string;
+  sslMode: string;
+  database?: string;
+  user?: string;
+  serverAddress?: string | null;
+  serverPort?: number | null;
+  tls: { active: boolean; version?: string | null; cipher?: string | null } | null;
+  serverVersion?: string;
+  tables: string[];
+  migrations: string[];
+}
+
+export async function inspectDatabase(): Promise<DatabaseReport> {
+  const client = await pool.connect();
+  try {
+    const meta = await client.query<{
+      database: string;
+      user: string;
+      server_address: string | null;
+      server_port: number | null;
+      version: string;
+    }>(
+      `SELECT current_database() AS database,
+              current_user      AS user,
+              inet_server_addr() AS server_address,
+              inet_server_port() AS server_port,
+              version()          AS version`
+    );
+
+    const tls = await client.query<{ ssl: boolean; version: string | null; cipher: string | null }>(
+      `SELECT ssl, version, cipher FROM pg_stat_ssl WHERE pid = pg_backend_pid()`
+    );
+
+    // Таблицы могут отсутствовать до миграций, а pg_stat_ssl — быть недоступным,
+    // поэтому обе выборки не считаются фатальными.
+    const tables = await client
+      .query<{ tablename: string }>(
+        `SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename`
+      )
+      .catch(() => ({ rows: [] as { tablename: string }[] }));
+
+    const migrations = await client
+      .query<{ version: string }>(`SELECT version FROM schema_migrations ORDER BY version`)
+      .catch(() => ({ rows: [] as { version: string }[] }));
+
+    const row = meta.rows[0];
+    const sslRow = tls.rows[0];
+
+    return {
+      target: describeDatabaseConfig(config),
+      sslMode: config.sslMode,
+      database: row?.database,
+      user: row?.user,
+      serverAddress: row?.server_address ?? null,
+      serverPort: row?.server_port ?? null,
+      tls: sslRow ? { active: sslRow.ssl, version: sslRow.version, cipher: sslRow.cipher } : null,
+      serverVersion: row?.version,
+      tables: tables.rows.map((table) => table.tablename),
+      migrations: migrations.rows.map((row2) => row2.version),
+    };
+  } finally {
+    client.release();
+  }
+}
 
 /**
  * Вспомогательная обёртка для выполнения операции в рамках транзакции.

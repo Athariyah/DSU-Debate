@@ -11,6 +11,12 @@
 #                   embedded = internal PostgreSQL + backend;
 #                   proxy    = nginx only, proxies to $BACKEND_HOST
 #   BACKEND_HOST    where nginx proxies /api and /socket.io (default 127.0.0.1)
+#   DATABASE_URL    full connection string; for a managed DB (Amvera CNPG)
+#                   either set it or the separate DB_HOST/DB_PORT/DB_NAME/
+#                   DB_USER/DB_PASSWORD variables below
+#   DB_SSLMODE      disable | allow | prefer | require | verify-ca | verify-full
+#   EMBEDDED_POSTGRES  true (default) | false — false skips the built-in
+#                   PostgreSQL entirely (use it with an external managed DB)
 #   JWT_SECRET, ADMIN_EMAIL, ADMIN_PASSWORD, CORS_ORIGIN, COOKIE_SECURE, ...
 #
 # Local development with the classic 3-service docker-compose stack is NOT
@@ -71,6 +77,14 @@ RUN chmod +x /entrypoint.sh /app/embedded.sh
 ENV NODE_ENV=development \
     PORT=4000 \
     DATABASE_URL=postgresql://dsu:dsu@127.0.0.1:5432/dsu_debate \
+    DB_HOST= \
+    DB_PORT= \
+    DB_NAME= \
+    DB_USER= \
+    DB_PASSWORD= \
+    DB_SSLMODE= \
+    DB_POOL_MAX=20 \
+    EMBEDDED_POSTGRES=true \
     CORS_ORIGIN=* \
     TRUST_PROXY=1 \
     COOKIE_SECURE=false \
