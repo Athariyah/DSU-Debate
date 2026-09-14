@@ -58,7 +58,7 @@ RUN npm ci --omit=dev
 # substitutes the __BACKEND_HOST__ placeholder with sed (this base image has
 # no official-nginx docker-entrypoint helpers and no envsubst), leaves nginx
 # variables ($host, $uri, ...) untouched, and runs `nginx -t` before start.
-COPY nginx.conf /etc/nginx/templates/default.conf.template
+COPY nginx.conf /etc/nginx/templates/nginx.conf.template
 COPY deploy/entrypoint.sh /entrypoint.sh
 COPY deploy/embedded.sh /app/embedded.sh
 COPY deploy/supervisord.conf /etc/supervisor/app.conf

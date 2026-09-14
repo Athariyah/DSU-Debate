@@ -1,7 +1,11 @@
 #!/bin/sh
 # Container entrypoint for the all-in-one image.
 #
-# 1. Renders /etc/nginx/templates/*.template -> /etc/nginx/conf.d/*.
+# 1. Renders /etc/nginx/templates/nginx.conf.template -> /etc/nginx/nginx.conf.
+#    The template is a COMPLETE nginx config (main/events/http), because the
+#    Alpine nginx package includes /etc/nginx/conf.d/*.conf in the ROOT
+#    context — a bare `server { ... }` snippet there makes nginx fail with
+#    `"server" directive is not allowed here`.
 #    IMPORTANT: this base image (node:22-alpine + `apk add nginx`) does NOT
 #    contain the official nginx image's docker-entrypoint helpers
 #    (/docker-entrypoint.d/20-envsubst-on-templates.sh) and has no envsubst
@@ -23,14 +27,15 @@ else
   BACKEND_HOST=127.0.0.1
 fi
 
-mkdir -p /etc/nginx/conf.d
-for templated in /etc/nginx/templates/*.template; do
-  [ -e "$templated" ] || continue
-  name=$(basename "$templated")
-  conf="/etc/nginx/conf.d/${name%.template}"
-  sed "s|__BACKEND_HOST__|${BACKEND_HOST}|g" "$templated" > "$conf"
-  echo "[entrypoint] rendered $conf (BACKEND_HOST=${BACKEND_HOST})" >&2
-done
+# Stale snippets from older image builds would still be included by a
+# distro nginx.conf, so make sure nothing unexpected is left behind.
+rm -f /etc/nginx/conf.d/default.conf /etc/nginx/http.d/default.conf 2>/dev/null || true
+
+sed "s|__BACKEND_HOST__|${BACKEND_HOST}|g" \
+  /etc/nginx/templates/nginx.conf.template > /etc/nginx/nginx.conf
+echo "[entrypoint] rendered /etc/nginx/nginx.conf (BACKEND_HOST=${BACKEND_HOST})" >&2
+
+mkdir -p /run /var/log/nginx /var/lib/nginx/tmp
 
 # Fail fast with a clear log message if the rendered configuration is
 # invalid — better than a silent supervisord/nginx restart loop.
