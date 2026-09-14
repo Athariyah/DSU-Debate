@@ -2,14 +2,19 @@ import http from "http";
 import { createApp } from "./app";
 import { initSocketServer } from "./sockets";
 import { env } from "./config/env";
-import { pool } from "./config/db";
+import { describeDatabaseConfig } from "./config/database";
+import { pool, waitForDatabase } from "./config/db";
 import { runMigrations } from "./db/migrate";
 import { ensureSeedAdmin } from "./config/bootstrap";
 
 async function bootstrap(): Promise<void> {
   // Проверяем соединение с БД перед стартом сервера, чтобы упасть быстро
   // и явно, если PostgreSQL недоступен, вместо тихих ошибок в рантайме.
-  await pool.query("SELECT 1");
+  // Облачная БД (например Amvera CNPG) может принимать соединения не сразу
+  // после старта/выхода из паузы — поэтому ждём её с повторами.
+  // eslint-disable-next-line no-console
+  console.log(`[dsu-debate-backend] database: ${describeDatabaseConfig(env.database)}`);
+  await waitForDatabase();
   await runMigrations();
   await ensureSeedAdmin();
 

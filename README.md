@@ -68,6 +68,11 @@ it works out of the box on any public host name.
 | `NODE_ENV` | `development` | See hardening below |
 | `TRUST_PROXY` | `1` | Needed behind the platform's load balancer (anti-fraud uses the client IP) |
 | `ALLOW_ADMIN_REGISTRATION` / `ADMIN_REGISTRATION_KEY` | `false` / — | Self-service admin registration |
+| `DATABASE_URL` | `postgresql://dsu:dsu@127.0.0.1:5432/dsu_debate` | Full connection string; used when `DB_HOST` is empty |
+| `DB_HOST` / `DB_PORT` / `DB_NAME` / `DB_USER` / `DB_PASSWORD` | — | Separate connection parameters (handy when the password is stored as a secret); `PGHOST`/`PGPORT`/`PGDATABASE`/`PGUSER`/`PGPASSWORD` are accepted too |
+| `DB_SSLMODE` | `disable` for localhost, `prefer` for a remote host | `disable`\|`allow`\|`prefer`\|`require`\|`verify-ca`\|`verify-full` |
+| `DB_POOL_MAX` | `20` | Connection pool size (mind the limit of your managed DB plan) |
+| `EMBEDDED_POSTGRES` | `true` | `false` skips the built-in PostgreSQL when an external database is used. See [docs/AMVERA_DB.md](docs/AMVERA_DB.md) |
 
 ### Persistence
 
@@ -82,6 +87,30 @@ With `NODE_ENV=production` the backend fails closed and additionally
 requires: a `JWT_SECRET` of at least 32 characters, non-default admin
 credentials, `COOKIE_SECURE=true`, and an explicit (non-`*`) `CORS_ORIGIN`.
 Set these as environment variables on the platform when moving to production.
+
+## External (managed) database
+
+By default the container runs its own PostgreSQL. To use a managed cluster
+instead — for example **Amvera PostgreSQL (CNPG)** — point the backend at it
+and switch the built-in server off:
+
+```bash
+# Internal Amvera domain (the app runs in Amvera):
+DATABASE_URL=postgresql://<USER>:<PASSWORD>@amvera-athariyah-cnpg-dsu-debatedb-rw:5432/<DB>
+# External domain (access from the internet — TLS is required):
+DATABASE_URL=postgresql://<USER>:<PASSWORD>@dsu-debatedb-athariyyah.db-msk0.amvera.tech:5432/<DB>?sslmode=require
+
+DB_SSLMODE=prefer        # or require for the external domain
+EMBEDDED_POSTGRES=false  # do not start the built-in PostgreSQL
+```
+
+The same settings can be given as separate variables (`DB_HOST`, `DB_PORT`,
+`DB_NAME`, `DB_USER`, `DB_PASSWORD`) so the password never ends up inside the
+URL. Migrations run automatically on backend start; the connection can be
+verified beforehand with `npm run db:check` (see `backend/README.md`).
+
+Full reference, TLS modes and troubleshooting:
+[docs/AMVERA_DB.md](docs/AMVERA_DB.md).
 
 ## Development without the all-in-one container
 
@@ -123,6 +152,13 @@ npm run typecheck
 npm run test
 npm run build
 cd backend && npm run typecheck && npm run test && npm run build
+```
+
+Check the database connection (works for the built-in and any external
+PostgreSQL, including Amvera CNPG):
+
+```bash
+cd backend && npm run db:check
 ```
 
 API contract: `docs/API_SPEC.md`.
