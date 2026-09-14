@@ -6,7 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:live": "vite build --mode live-server",
     "preview": "vite preview",
+    "serve:local": "vite build && vite preview",
+    "backend": "npm --prefix backend run dev",
+    "db": "npm --prefix backend run db:local",
+    "db:stop": "npm --prefix backend run db:local:stop",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

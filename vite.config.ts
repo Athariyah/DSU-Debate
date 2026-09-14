@@ -29,9 +29,23 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
+    // `npm run preview` отдаёт собранный `dist` и проксирует API/сокеты так же,
+    // как dev-сервер: это самый простой способ проверить локальный хостинг
+    // без VS Code Live Server (тогда относительные URL «/api» работают как есть).
     preview: {
       host: "0.0.0.0",
       allowedHosts: true,
+      proxy: {
+        "/api": {
+          target: backendUrl,
+          changeOrigin: true,
+        },
+        "/socket.io": {
+          target: backendUrl,
+          changeOrigin: true,
+          ws: true,
+        },
+      },
     },
     resolve: {
       alias: {

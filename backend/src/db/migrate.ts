@@ -4,11 +4,11 @@ import { pool } from "../config/db";
 
 export async function runMigrations(): Promise<void> {
   const candidates = [
-    // Compiled Docker layout: /app/dist -> /app/sql.
+    // SQL рядом с собранным кодом: backend/dist/db -> backend/sql.
     path.resolve(__dirname, "../sql/migrations"),
-    // Source tree and local compiled layout: repository/backend/{src,dist} -> repository/sql.
+    // backend/dist/db -> backend.
     path.resolve(__dirname, "../../sql/migrations"),
-    // Backwards-compatible fallback for older package layouts.
+    // Основной вариант: backend/{src,dist}/db -> <репозиторий>/sql/migrations.
     path.resolve(__dirname, "../../../sql/migrations"),
   ];
   let migrationsDir: string | undefined;
@@ -18,7 +18,7 @@ export async function runMigrations(): Promise<void> {
       migrationsDir = candidate;
       break;
     } catch {
-      // Try the next layout (source tree vs compiled Docker tree).
+      // Пробуем следующий вариант расположения.
     }
   }
   if (!migrationsDir) throw new Error("SQL migrations directory was not found");

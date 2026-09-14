@@ -1,22 +1,35 @@
 /**
  * Конфигурация подключения к PostgreSQL.
  *
- * Поддерживаются два сценария, которые можно комбинировать:
+ * Поддерживаются три сценария:
+ *
+ * 0. Ничего не задано — используется ВСТРОЕННАЯ БД: PostgreSQL, который
+ *    приложение само поднимает на этом компьютере (см. `src/localdb`).
+ *    Адрес и параметры по умолчанию берутся из `LOCAL_DB_*`
+ *    (по умолчанию `postgresql://postgres@127.0.0.1:55432/dsu_debate`).
+ *    Отключается переменной `LOCAL_DATABASE=false`.
  *
  * 1. Готовая строка подключения — `DATABASE_URL`
  *    (`postgresql://user:password@host:5432/db?sslmode=require`).
  *
  * 2. Отдельные переменные — `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`,
- *    `DB_PASSWORD`. Удобно для облачных панелей (Amvera и аналоги), где
- *    пароль хранится как секрет отдельной переменной и его не хочется
- *    встраивать в URL. Стандартные libpq-переменные `PGHOST`, `PGPORT`,
- *    `PGUSER`, `PGPASSWORD`, `PGDATABASE` тоже распознаются.
+ *    `DB_PASSWORD` (удобно, когда пароль хранится отдельным секретом).
+ *    Стандартные libpq-переменные `PGHOST`, `PGPORT`, `PGUSER`,
+ *    `PGPASSWORD`, `PGDATABASE` тоже распознаются.
+ *
+ * Если задан `DATABASE_URL` или `DB_HOST`, приложение считает, что база
+ * внешняя, и встроенный PostgreSQL не запускает.
  *
  * SSL настраивается через `DB_SSLMODE` (или `sslmode=` внутри DATABASE_URL,
  * или libpq-овскую `PGSSLMODE`). Значения повторяют libpq:
  * disable | allow | prefer | require | verify-ca | verify-full.
  */
 import fs from "fs";
+import {
+  isLocalDatabaseEnabled,
+  localDatabaseUrl,
+  resolveLocalDatabaseSettings,
+} from "../localdb/settings";
 
 export type SslMode = "disable" | "allow" | "prefer" | "require" | "verify-ca" | "verify-full";
 
@@ -47,6 +60,11 @@ export interface DatabaseConfig {
   applicationName: string;
   /** `true`, если БД находится на другом хосте (облачная/управляемая). */
   isRemote: boolean;
+  /**
+   * `true`, если используется встроенная БД на этом компьютере: её нужно
+   * запустить перед подключением (и остановить при выходе).
+   */
+  localEmbedded: boolean;
   /** Описание подключения для логов — БЕЗ пароля. */
   safeTarget: string;
 }
@@ -54,7 +72,7 @@ export interface DatabaseConfig {
 const SSL_MODES: SslMode[] = ["disable", "allow", "prefer", "require", "verify-ca", "verify-full"];
 
 /** Хосты, которые считаются локальными (там TLS обычно не нужен). */
-const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "0.0.0.0", "host.docker.internal"]);
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "0.0.0.0"]);
 
 function read(name: string): string | undefined {
   const value = process.env[name];
@@ -210,6 +228,10 @@ export function resolveDatabaseConfig(): DatabaseConfig {
   let urlSslMode: string | undefined;
   let urlApplicationName: string | undefined;
 
+  // Встроенная БД на этом компьютере: включается, когда внешняя не задана
+  // и она не отключена явно (LOCAL_DATABASE=false).
+  const useLocalEmbedded = !rawUrl && !host && isLocalDatabaseEnabled();
+
   if (rawUrl) {
     const parsed = parseUrl(rawUrl);
     connectionString = parsed.connectionString;
@@ -221,12 +243,21 @@ export function resolveDatabaseConfig(): DatabaseConfig {
     urlApplicationName = parsed.applicationName;
   } else if (host) {
     connectionString = composeUrl({ host, port, user, password, database });
+  } else if (useLocalEmbedded) {
+    const local = resolveLocalDatabaseSettings();
+    connectionString = localDatabaseUrl(local);
+    resolvedHost = local.host;
+    resolvedPort = local.port;
+    resolvedUser = local.user;
+    resolvedDatabase = local.database;
   } else {
     throw new Error(
       [
-        "Database connection is not configured. Set DATABASE_URL, for example:",
-        '  DATABASE_URL=postgresql://user:password@amvera-athariyyah-cnpg-dsu-debatedb-rw:5432/dsu_debate?sslmode=prefer',
-        "or the separate variables DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD.",
+        "Database connection is not configured and the built-in local PostgreSQL is disabled.",
+        "Either remove LOCAL_DATABASE=false to use the built-in database on this computer,",
+        "or point the backend at an existing PostgreSQL, for example:",
+        "  DATABASE_URL=postgresql://user:password@localhost:5432/dsu_debate",
+        "  DB_HOST=localhost DB_PORT=5432 DB_NAME=dsu_debate DB_USER=dsu DB_PASSWORD=dsu",
       ].join("\n")
     );
   }
@@ -263,6 +294,7 @@ export function resolveDatabaseConfig(): DatabaseConfig {
     },
     applicationName,
     isRemote: !isLocalHost(resolvedHost),
+    localEmbedded: useLocalEmbedded,
     safeTarget: describeTarget({
       host: resolvedHost,
       port: resolvedPort,

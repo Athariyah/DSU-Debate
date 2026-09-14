@@ -1,0 +1,39 @@
+{
+  // ---------------------------------------------------------------------------
+  // Live Server (расширение ritwickdey.LiveServer)
+  // ---------------------------------------------------------------------------
+  // Перед запуском выполните `npm run build:live` — Live Server отдаёт папку
+  // dist как обычные статические файлы. Затем: правый клик по dist/index.html
+  // → «Open with Live Server».
+  "liveServer.settings.host": "127.0.0.1",
+  "liveServer.settings.port": 5500,
+
+  // Открывать сайт нужно по адресу http://127.0.0.1:5500/dist/index.html
+  // (эти источники уже разрешены в backend, см. backend/src/config/env.ts).
+
+  // За какими файлами Live Server следит (от этого зависит авто-перезагрузка).
+  // backend/** и .localdb/** исключены специально: PostgreSQL постоянно пишет
+  // там файлы, и без исключения страница перезагружалась бы бесконечно.
+  "liveServer.settings.ignoreFiles": [
+    ".vscode/**",
+    ".git/**",
+    "backend/**",
+    "node_modules/**",
+    "src/**",
+    "sql/**",
+    "docs/**",
+    "**/*.ts",
+    "**/*.tsx",
+    "**/*.json",
+    "**/*.md"
+  ],
+
+  // Служебные каталоги не мешают в дереве файлов.
+  "files.exclude": {
+    "backend/.localdb": true
+  },
+  "search.exclude": {
+    "backend/.localdb": true,
+    "dist": true
+  }
+}

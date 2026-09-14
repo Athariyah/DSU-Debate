@@ -1,6 +1,14 @@
+import path from "path";
 import dotenv from "dotenv";
 import { describeDatabaseConfig, resolveDatabaseConfig } from "./database";
 
+// Файл `backend/.env` ищем по расположению кода (backend/src/config или
+// backend/dist/config), а не по текущему каталогу: тогда настройки одинаково
+// подхватываются и из `npm run dev`, и из `npm start`, и при запуске из корня.
+// dotenv не перезаписывает уже заданные переменные окружения, поэтому
+// значения из окружения/панели хостинга остаются приоритетными.
+dotenv.config({ path: path.resolve(__dirname, "..", "..", ".env") });
+// Дополнительно — `.env` в текущем каталоге (привычное поведение).
 dotenv.config();
 
 function required(name: string, fallback?: string): string {
@@ -19,7 +27,33 @@ function parseTrustProxy(value: string | undefined): boolean | number {
 }
 
 const nodeEnv = process.env.NODE_ENV ?? "development";
-const corsOrigins = (process.env.CORS_ORIGIN ?? "http://localhost:5173")
+
+/**
+ * Откуда фронтенду разрешено обращаться к API при локальном хостинге:
+ *   - VS Code Live Server (5500 и запасные порты, которые он берёт, если 5500 занят);
+ *   - Vite dev server (5173) и `vite preview` (4173) со своими запасными портами;
+ *   - localhost и 127.0.0.1 считаются разными источниками, поэтому оба в списке.
+ * Для других портов (или для доступа с телефонов по локальной сети) задайте
+ * свой список в CORS_ORIGIN, например CORS_ORIGIN=* .
+ */
+const DEFAULT_CORS_ORIGINS = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "http://localhost:5174",
+  "http://127.0.0.1:5174",
+  "http://localhost:5500",
+  "http://127.0.0.1:5500",
+  "http://localhost:5501",
+  "http://127.0.0.1:5501",
+  "http://localhost:5502",
+  "http://127.0.0.1:5502",
+  "http://localhost:5503",
+  "http://127.0.0.1:5503",
+  "http://localhost:4173",
+  "http://127.0.0.1:4173",
+];
+
+const corsOrigins = (process.env.CORS_ORIGIN ?? DEFAULT_CORS_ORIGINS.join(","))
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
@@ -27,7 +61,18 @@ const jwtSecret = required(
   "JWT_SECRET",
   nodeEnv === "production" ? undefined : "dev-only-secret"
 );
-const adminPassword = process.env.ADMIN_PASSWORD;
+/**
+ * Локальный хостинг «из коробки»: в режиме разработки, если ADMIN_* не заданы,
+ * используется предсказуемая учётная запись (её создаёт backend при первом
+ * старте — см. config/bootstrap.ts). В production такие значения запрещены.
+ */
+const DEV_ADMIN_EMAIL = "admin@dsu.local";
+const DEV_ADMIN_PASSWORD = "ChangeMe123!";
+const adminEmail = process.env.ADMIN_EMAIL ?? (nodeEnv === "production" ? undefined : DEV_ADMIN_EMAIL);
+const adminPassword =
+  process.env.ADMIN_PASSWORD ?? (nodeEnv === "production" ? undefined : DEV_ADMIN_PASSWORD);
+const adminCredentialsAreDefaults =
+  process.env.ADMIN_EMAIL === undefined && process.env.ADMIN_PASSWORD === undefined;
 const cookieSecure =
   process.env.COOKIE_SECURE !== undefined
     ? process.env.COOKIE_SECURE === "true"
@@ -56,8 +101,7 @@ if (nodeEnv === "production") {
 const database = resolveDatabaseConfig();
 
 if (nodeEnv === "production" && database.sslMode === "disable" && database.isRemote) {
-  // Не валим процесс: часть облачных провайдеров (внутренние домена Amvera)
-  // работает и без TLS, но предупредить стоит.
+  // Не валим процесс: часть провайдеров работает и без TLS, но предупредить стоит.
   // eslint-disable-next-line no-console
   console.warn(
     `[dsu-debate-backend] WARNING: connecting to ${describeDatabaseConfig(database)} without TLS`
@@ -74,8 +118,9 @@ export const env = {
   corsOrigins,
   trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
   cookieSecure,
-  adminEmail: process.env.ADMIN_EMAIL,
+  adminEmail,
   adminPassword,
+  adminCredentialsAreDefaults,
   adminRegistrationKey: process.env.ADMIN_REGISTRATION_KEY,
   allowAdminRegistration: process.env.ALLOW_ADMIN_REGISTRATION === "true",
 };

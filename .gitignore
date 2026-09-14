@@ -5,8 +5,13 @@ node_modules/
 /dist/
 .vite/
 
+# Встроенная локальная БД (PostgreSQL на этом компьютере): данные, логи, PID
+.localdb/
 
 # Local environment files
 .env
 .env.*
 !.env.example
+# Файл режима live-server нужен в репозитории: это настройки сборки для
+# VS Code Live Server без секретов.
+!.env.live-server

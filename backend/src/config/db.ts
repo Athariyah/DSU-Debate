@@ -7,9 +7,10 @@ import { describeDatabaseConfig } from "./database";
  * Пул переиспользуется во всех контроллерах — не создаём новые
  * подключения на каждый запрос.
  *
- * Параметры берутся из config/database.ts: поддерживаются и готовая
- * `DATABASE_URL`, и отдельные `DB_HOST`/`DB_USER`/... (удобно для облачных
- * БД вроде Amvera CNPG), и режимы SSL уровня libpq.
+ * Параметры берутся из config/database.ts: по умолчанию это встроенный
+ * PostgreSQL, который приложение поднимает на этом компьютере; также
+ * поддерживаются готовая `DATABASE_URL`, отдельные `DB_HOST`/`DB_USER`/...
+ * и режимы SSL уровня libpq.
  */
 const config = env.database;
 
@@ -55,8 +56,9 @@ function errorMessage(error: unknown): string {
 
 /**
  * Ждёт, пока база станет доступна, и поднимает понятную ошибку, если она так
- * и не ответила. Облачные СУБД (Amvera и аналоги) после паузы/перезапуска
- * принимают соединения не мгновенно, поэтому старт бэкенда ретраится.
+ * и не ответила. Встроенный PostgreSQL стартует быстро, но внешние СУБД после
+ * паузы/перезапуска принимают соединения не мгновенно, поэтому старт бэкенда
+ * ретраится.
  */
 export async function waitForDatabase(): Promise<void> {
   const { retries, delayMs } = config.connect;
@@ -110,7 +112,7 @@ export async function waitForDatabase(): Promise<void> {
 /**
  * Диагностическое подключение: возвращает параметры сервера, состояние TLS
  * и список таблиц. Используется скриптом `npm run db:check` — им удобно
- * проверять настройки облачной БД (Amvera CNPG) до деплоя.
+ * проверять, к какой базе реально подключилось приложение.
  */
 export interface DatabaseReport {
   target: string;
