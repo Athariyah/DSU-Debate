@@ -1,6 +1,7 @@
 import type { Server as HttpServer } from "http";
 import { Server, Socket } from "socket.io";
 import { env } from "../config/env";
+import { isSocketOriginAllowed } from "../config/cors";
 import { EventResults } from "../types";
 
 let ioInstance: Server | null = null;
@@ -21,10 +22,16 @@ export function debateRoom(eventId: number): string {
 export function initSocketServer(httpServer: HttpServer): Server {
   const io = new Server(httpServer, {
     cors: {
-      origin: env.corsOrigins.includes("*") ? true : env.corsOrigins,
+      // Та же политика, что и у REST-API (см. config/cors.ts): при локальном
+      // хостинге по умолчанию разрешены любые источники, чтобы Live Server,
+      // локальный IP, туннели и превью-домены работали без настройки.
+      origin: env.corsAllowAll ? true : env.corsOrigins,
       methods: ["GET", "POST"],
       credentials: true,
     },
+    // Отдельная проверка для WebSocket-транспорта: CORS-заголовки его не
+    // защищают, поэтому источник проверяем вручную.
+    allowRequest: isSocketOriginAllowed,
   });
 
   io.on("connection", (socket: Socket) => {

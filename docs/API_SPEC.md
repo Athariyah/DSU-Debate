@@ -145,8 +145,10 @@ CRUD участников с проверкой существования ме�
 
 ## Socket.io
 
-Frontend подключается к тому же origin (Vite/nginx проксирует `/socket.io`) либо к
-`VITE_SOCKET_URL`.
+Frontend подключается к тому же origin (`npm run dev` и `npm run serve:local`
+проксируют `/socket.io` на backend) либо к адресу из `VITE_SOCKET_URL` — это
+вариант VS Code Live Server, где запрос идёт напрямую на
+`http://127.0.0.1:4000` и backend разрешает источник через CORS.
 
 Клиент → сервер:
 

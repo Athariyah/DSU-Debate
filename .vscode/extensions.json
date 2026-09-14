@@ -1,0 +1,5 @@
+{
+  // Live Server — статический сервер, через который приложение хостится
+  // на этом компьютере (см. docs/LOCAL_HOSTING.md).
+  "recommendations": ["ritwickdey.LiveServer"]
+}

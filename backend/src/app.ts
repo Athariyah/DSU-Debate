@@ -3,6 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { env } from "./config/env";
+import { corsGuard, isOriginAllowed } from "./config/cors";
 import { pool } from "./config/db";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 import adminAuthRoutes from "./routes/admin.auth.routes";
@@ -34,15 +35,10 @@ export function createApp(): Application {
   app.set("trust proxy", env.trustProxy);
 
   app.use(helmet());
+  app.use(corsGuard());
   app.use(
     cors({
-      origin: (origin, callback) => {
-        if (!origin || env.corsOrigins.includes("*") || env.corsOrigins.includes(origin)) {
-          callback(null, true);
-          return;
-        }
-        callback(new Error("Origin is not allowed by CORS"));
-      },
+      origin: (origin, callback) => callback(null, isOriginAllowed(origin)),
       credentials: true,
     })
   );

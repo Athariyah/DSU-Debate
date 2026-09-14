@@ -1,15 +1,17 @@
 import { Pool, PoolClient } from "pg";
 import { env } from "./env";
 import { describeDatabaseConfig } from "./database";
+import { recoverLocalDatabaseIfNeeded } from "../localdb/ensure";
 
 /**
  * Единый пул соединений с PostgreSQL для всего приложения.
  * Пул переиспользуется во всех контроллерах — не создаём новые
  * подключения на каждый запрос.
  *
- * Параметры берутся из config/database.ts: поддерживаются и готовая
- * `DATABASE_URL`, и отдельные `DB_HOST`/`DB_USER`/... (удобно для облачных
- * БД вроде Amvera CNPG), и режимы SSL уровня libpq.
+ * Параметры берутся из config/database.ts: по умолчанию это встроенный
+ * PostgreSQL, который приложение поднимает на этом компьютере; также
+ * поддерживаются готовая `DATABASE_URL`, отдельные `DB_HOST`/`DB_USER`/...
+ * и режимы SSL уровня libpq.
  */
 const config = env.database;
 
@@ -29,9 +31,37 @@ export const pool = new Pool({
 
 pool.on("error", (err) => {
   // Ошибки на уже выданных (idle) клиентах пула — не должны валить процесс.
+  // Если это встроенная БД, причиной может быть упавший/убитый процесс
+  // PostgreSQL: сообщаем и просим менеджер БД поднять его снова.
   // eslint-disable-next-line no-console
-  console.error("Unexpected error on idle PostgreSQL client", err);
+  console.error("[db] ошибка на простаивающем клиенте PostgreSQL:", errorMessage(err));
+  if (isConnectionError(err)) recoverLocalDatabaseIfNeeded(errorMessage(err));
 });
+
+/** Ошибки, означающие «сервер PostgreSQL недоступен» (а не, например, SQL-ошибку). */
+export function isConnectionError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const code = (error as { code?: string }).code;
+  if (!code) return false;
+  return [
+    "ECONNREFUSED",
+    "ECONNRESET",
+    "EPIPE",
+    "ETIMEDOUT",
+    "EHOSTUNREACH",
+    "ENETUNREACH",
+    // Классы PostgreSQL: connection exception / admin shutdown / cannot connect now.
+    "08000",
+    "08001",
+    "08003",
+    "08004",
+    "08006",
+    "08P01",
+    "57P01",
+    "57P02",
+    "57P03",
+  ].includes(code);
+}
 
 /**
  * Пул хранит копию конфигурации и отдаёт её каждому новому клиенту, поэтому
@@ -55,8 +85,9 @@ function errorMessage(error: unknown): string {
 
 /**
  * Ждёт, пока база станет доступна, и поднимает понятную ошибку, если она так
- * и не ответила. Облачные СУБД (Amvera и аналоги) после паузы/перезапуска
- * принимают соединения не мгновенно, поэтому старт бэкенда ретраится.
+ * и не ответила. Встроенный PostgreSQL стартует быстро, но внешние СУБД после
+ * паузы/перезапуска принимают соединения не мгновенно, поэтому старт бэкенда
+ * ретраится.
  */
 export async function waitForDatabase(): Promise<void> {
   const { retries, delayMs } = config.connect;
@@ -110,7 +141,7 @@ export async function waitForDatabase(): Promise<void> {
 /**
  * Диагностическое подключение: возвращает параметры сервера, состояние TLS
  * и список таблиц. Используется скриптом `npm run db:check` — им удобно
- * проверять настройки облачной БД (Amvera CNPG) до деплоя.
+ * проверять, к какой базе реально подключилось приложение.
  */
 export interface DatabaseReport {
   target: string;

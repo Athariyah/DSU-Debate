@@ -1,0 +1,52 @@
+{
+  // Задачи VS Code (Ctrl+Shift+P → «Tasks: Run Task»).
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "DSU: backend + локальная БД",
+      "detail": "Запускает API на http://127.0.0.1:4000 и PostgreSQL на этом компьютере",
+      "type": "shell",
+      "command": "npm",
+      "args": ["--prefix", "backend", "run", "dev"],
+      "windows": { "command": "npm.cmd" },
+      "options": { "cwd": "${workspaceFolder}" },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "DSU: собрать фронтенд для Live Server",
+      "detail": "npm run build:live → dist/index.html (единый файл)",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "build:live"],
+      "windows": { "command": "npm.cmd" },
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": [],
+      "group": { "kind": "build", "isDefault": true },
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "DSU: состояние локальной БД",
+      "detail": "npm run db:local:status",
+      "type": "shell",
+      "command": "npm",
+      "args": ["--prefix", "backend", "run", "db:local:status"],
+      "windows": { "command": "npm.cmd" },
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "DSU: остановить локальную БД",
+      "detail": "npm run db:local:stop",
+      "type": "shell",
+      "command": "npm",
+      "args": ["--prefix", "backend", "run", "db:local:stop"],
+      "windows": { "command": "npm.cmd" },
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared" }
+    }
+  ]
+}
