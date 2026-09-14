@@ -1,5 +1,43 @@
 services:
+  # Single all-in-one container: nginx (React SPA) + Node backend + PostgreSQL.
+  # The same image is what gets deployed to one-container platforms (K8s).
+  app:
+    build:
+      context: .
+      args:
+        VITE_API_URL: /api
+        VITE_SOCKET_URL: ""
+    container_name: dsu-debate
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 4000
+      DATABASE_URL: postgresql://dsu:dsu@127.0.0.1:5432/dsu_debate
+      JWT_SECRET: ${JWT_SECRET:-change-this-development-secret}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@dsu.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-ChangeMe123!}
+      ALLOW_ADMIN_REGISTRATION: "false"
+      ADMIN_REGISTRATION_KEY: ${ADMIN_REGISTRATION_KEY:-}
+    ports:
+      - "3000:80"
+    volumes:
+      # Keeps PostgreSQL data across container rebuilds.
+      - dsu-debate-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:80/api/health/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  # Standalone database for backend-only development
+  # (`docker compose --profile db up -d db`), see README.
   db:
+    profiles: ["db"]
     image: postgres:16-alpine
     container_name: dsu-debate-db
     restart: unless-stopped
@@ -10,58 +48,13 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - dsu-debate-postgres:/var/lib/postgresql/data
-      - ./sql/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+      - dsu-debate-dev-postgres:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U dsu -d dsu_debate"]
       interval: 5s
       timeout: 5s
       retries: 20
 
-  backend:
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
-    container_name: dsu-debate-backend
-    restart: unless-stopped
-    environment:
-      NODE_ENV: ${NODE_ENV:-development}
-      PORT: 4000
-      DATABASE_URL: postgresql://dsu:dsu@db:5432/dsu_debate
-      JWT_SECRET: ${JWT_SECRET:-change-this-development-secret}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
-      TRUST_PROXY: ${TRUST_PROXY:-1}
-      COOKIE_SECURE: ${COOKIE_SECURE:-false}
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@dsu.local}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-ChangeMe123!}
-      ALLOW_ADMIN_REGISTRATION: "false"
-      ADMIN_REGISTRATION_KEY: ${ADMIN_REGISTRATION_KEY:-}
-    depends_on:
-      db:
-        condition: service_healthy
-    ports:
-      - "4000:4000"
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:4000/api/health/ready || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 20
-
-  frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        VITE_API_URL: /api
-        VITE_SOCKET_URL: ""
-    container_name: dsu-debate-frontend
-    restart: unless-stopped
-    depends_on:
-      backend:
-        condition: service_healthy
-    ports:
-      - "3000:80"
-
 volumes:
   dsu-debate-postgres:
+  dsu-debate-dev-postgres:

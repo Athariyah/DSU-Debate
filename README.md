@@ -2,6 +2,11 @@
 
 Production-ready foundation for live audience voting during debates.
 
+The root `Dockerfile` builds an **all-in-one image**: nginx serving the React
+SPA, the Express + Socket.io backend, and a built-in PostgreSQL — one
+container runs the whole stack. That is exactly what single-container
+deployment platforms (Kubernetes/Amvera and similar) need.
+
 ## Full stack via Docker
 
 Requirements: Docker Compose.
@@ -11,28 +16,79 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Open `http://localhost:3000`. The Compose stack contains:
+Open `http://localhost:3000`. The single `app` service contains:
 
-- PostgreSQL with persistent volume;
-- Express + Socket.io backend;
-- automatic SQL migrations and admin bootstrap;
-- nginx-served React frontend with REST and WebSocket proxy.
+- PostgreSQL (data persisted in the `dsu-debate-postgres` volume);
+- Express + Socket.io backend with automatic SQL migrations and admin bootstrap;
+- nginx serving the React frontend and proxying REST + WebSocket traffic.
 
-Default local administrator:
+Default local administrator (seeded once into an empty database):
 
 ```text
 Email:    admin@dsu.local
 Password: ChangeMe123!
 ```
 
-Change all development secrets before production deployment. Production also requires
-`COOKIE_SECURE=true`, an explicit `CORS_ORIGIN`, and a non-default
-`ADMIN_REGISTRATION_KEY`; the backend fails closed if development defaults remain.
+> Upgrading from the old 3-service compose stack (separate `db`/`backend`/
+> `frontend` containers)? The embedded PostgreSQL may be a newer major
+> version and cannot open the old volume — run `docker compose down -v`
+> first (accepts data loss) and then `docker compose up --build`.
 
-## Development without the frontend container
+## Single-container deployment (Kubernetes / Amvera)
+
+Just build and deploy the root `Dockerfile` image and **expose port 80** —
+no separate backend or database services are required on the cluster:
 
 ```bash
-docker compose up -d db
+docker build -t dsu-debate .
+docker push <registry>/dsu-debate:<tag>
+```
+
+The container starts in this order (managed by supervisord):
+
+1. initializes the internal PostgreSQL cluster on first run
+   (`/var/lib/postgresql/data`);
+2. starts PostgreSQL (bound to 127.0.0.1 only) and the backend
+   (port 4000, migrations + admin seed);
+3. starts nginx on port 80 (SPA + `/api` and `/socket.io` proxy).
+
+### Environment variables
+
+All of them are optional; the image ships with development-safe defaults so
+it works out of the box on any public host name.
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `RUN_MODE` | `embedded` | `proxy` = run nginx only and proxy `/api` to `BACKEND_HOST:4000` |
+| `BACKEND_HOST` | `127.0.0.1` | Upstream host for the nginx proxy |
+| `JWT_SECRET` | random per start | Set a stable value so admin sessions survive restarts |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | `admin@dsu.local` / `ChangeMe123!` | Seed admin created once if the `admins` table is empty |
+| `CORS_ORIGIN` | `*` | Comma-separated origins; socket.io follows the same list |
+| `COOKIE_SECURE` | `false` | Set `true` when the site is served over HTTPS only |
+| `NODE_ENV` | `development` | See hardening below |
+| `TRUST_PROXY` | `1` | Needed behind the platform's load balancer (anti-fraud uses the client IP) |
+| `ALLOW_ADMIN_REGISTRATION` / `ADMIN_REGISTRATION_KEY` | `false` / — | Self-service admin registration |
+
+### Persistence
+
+The database lives at `/var/lib/postgresql/data` inside the container. Mount
+a writable volume there to keep data across pod restarts/redeploys; without a
+volume the app still works but the database is recreated (and re-migrated) on
+every new pod.
+
+### Production hardening
+
+With `NODE_ENV=production` the backend fails closed and additionally
+requires: a `JWT_SECRET` of at least 32 characters, non-default admin
+credentials, `COOKIE_SECURE=true`, and an explicit (non-`*`) `CORS_ORIGIN`.
+Set these as environment variables on the platform when moving to production.
+
+## Development without the all-in-one container
+
+Backend-only workflow with a standalone database:
+
+```bash
+docker compose --profile db up -d db
 cp backend/.env.example backend/.env
 cd backend && npm ci && npm run db:migrate && npm run dev
 ```
