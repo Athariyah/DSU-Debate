@@ -15,6 +15,18 @@
 - **Внешний домен** нужен для доступа из интернета (локальная разработка,
   VPS). Такое подключение Amvera отдаёт только по TLS.
 
+## 0. Параметры кластера DSU-Debate
+
+| Параметр | Значение |
+| --- | --- |
+| Имя БД | `DSU` |
+| Пользователь | `Athariyyah` (НЕ superuser — приложению этого и не нужно) |
+| Пароль | задаётся секретом, в репозиторий не попадает |
+| Порт | `5432` |
+
+Имя БД и имя пользователя в Amvera чувствительны к регистру — передавайте их
+так, как указано выше. Пользователь `postgres` и база `postgres` зарезервированы.
+
 ## 1. Переменные окружения в панели Amvera
 
 Раздел проекта → **Переменные**. Пароль добавьте как **секрет**.
@@ -22,10 +34,10 @@
 Вариант А — отдельными переменными (рекомендуется, пароль не попадает в URL):
 
 ```env
-DB_HOST=amvera-athariyah-cnpg-dsu-debatedb-rw
+DB_HOST=amvera-athariyyah-cnpg-dsu-debatedb-rw
 DB_PORT=5432
-DB_NAME=<имя БД>
-DB_USER=<пользователь>
+DB_NAME=DSU
+DB_USER=Athariyyah
 DB_PASSWORD=<пароль>          # секрет
 DB_SSLMODE=prefer
 EMBEDDED_POSTGRES=false
@@ -127,3 +139,26 @@ cd backend && npm run db:migrate
 
 **`too many connections`** — уменьшите `DB_POOL_MAX` (на минимальных тарифах
 Amvera лимит соединений невелик).
+
+**`Connection terminated unexpectedly` / `read ECONNRESET` сразу после
+подключения** — соединение рвётся до авторизации. Проверьте в панели Amvera:
+
+1. статус кластера — должен быть **«PostgreSQL запущен»** (на паузе кластер
+   не отвечает и прокси просто сбрасывает соединение);
+2. статус внешнего домена типа POSTGRES — должен быть привязан.
+
+Проверить из терминала (вне Amvera — по внешнему домену):
+
+```bash
+psql "postgresql://Athariyyah:<ПАРОЛЬ>@dsu-debatedb-athariyyah.db-msk0.amvera.tech:5432/DSU?sslmode=require" -c "\dt"
+```
+
+или из каталога `backend`:
+
+```bash
+DB_HOST=dsu-debatedb-athariyyah.db-msk0.amvera.tech DB_PORT=5432 DB_NAME=DSU \
+DB_USER=Athariyyah DB_PASSWORD=<ПАРОЛЬ> DB_SSLMODE=require npm run db:check
+```
+
+Внутренний домен доступен только из проектов Amvera: с локальной машины и из
+внешних CI он не резолвится — это нормально.
