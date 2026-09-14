@@ -50,6 +50,54 @@ export function isLocalDatabaseManagedByThisProcess(): boolean {
   return startedByThisProcess;
 }
 
+/**
+ * Когда процесс перезапускает наблюдатель (ts-node-dev `--respawn`, nodemon,
+ * VS Code) он присылает SIGTERM. Гасить из-за этого PostgreSQL нельзя: иначе
+ * БД «прыгает» при каждом сохранении файла, и запросы в этот момент падают.
+ * SIGINT (Ctrl+C) — это осознанное завершение, тогда БД останавливаем.
+ */
+let stopOnExit = true;
+
+export function keepLocalDatabaseRunningOnExit(): void {
+  stopOnExit = false;
+}
+
+export function shouldStopLocalDatabaseOnExit(): boolean {
+  return stopOnExit && startedByThisProcess;
+}
+
+/**
+ * Проверяет, что БД на месте, и при необходимости поднимает её заново.
+ * Вызывается, когда запрос упал с ошибкой соединения: например, процесс
+ * PostgreSQL убили, или машина выходила из сна. Попытки троттлятся, чтобы
+ * лавина ошибок не превратилась в лавину перезапусков.
+ */
+const RECOVERY_THROTTLE_MS = 3000;
+let lastRecoveryAttempt = 0;
+let recoveryInFlight: Promise<void> | null = null;
+
+export function recoverLocalDatabase(reason: string): Promise<void> {
+  if (recoveryInFlight) return recoveryInFlight;
+  const now = Date.now();
+  if (now - lastRecoveryAttempt < RECOVERY_THROTTLE_MS) return Promise.resolve();
+  lastRecoveryAttempt = now;
+
+  recoveryInFlight = (async () => {
+    try {
+      const settings = resolveLocalDatabaseSettings();
+      if (await canConnectToLocalDatabase(settings, "postgres", 1500)) return;
+      localWarn(`PostgreSQL недоступен (${reason}) — поднимаю его заново`);
+      await startLocalDatabase();
+    } catch (error) {
+      localWarn(`не удалось восстановить PostgreSQL: ${describeLocalDatabaseError(error)}`);
+    } finally {
+      recoveryInFlight = null;
+    }
+  })();
+
+  return recoveryInFlight;
+}
+
 interface RunResult {
   code: number | null;
   output: string;
@@ -414,6 +462,32 @@ export async function stopLocalDatabase(): Promise<boolean> {
   return false;
 }
 
+/**
+ * Синхронная остановка — для обработчика `process.on("exit")`, где асинхронный
+ * код уже не выполнится. Это последний шанс погасить PostgreSQL, если процесс
+ * завершают не через Ctrl+C (например, закрыто окно терминала на Windows).
+ * Ошибки глушим: на выходе важнее не упасть, чем гарантированно остановить БД.
+ */
+export function stopLocalDatabaseSync(): void {
+  if (!shouldStopLocalDatabaseOnExit()) return;
+
+  try {
+    const settings = resolveLocalDatabaseSettings();
+    const binaries = resolvePostgresBinaries();
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { spawnSync } = require("child_process") as typeof import("child_process");
+    spawnSync(binaries.pgCtl, ["-D", settings.dataDir, "-m", "fast", "-w", "-t", "5", "stop"], {
+      timeout: 8000,
+      stdio: "ignore",
+      env: { ...process.env, LC_MESSAGES: "C" },
+      windowsHide: true,
+    });
+    startedByThisProcess = false;
+  } catch {
+    // Нечего сообщать: процесс уже завершается.
+  }
+}
+
 /** Останавливает и снова запускает сервер. */
 export async function restartLocalDatabase(): Promise<LocalDatabaseStatus> {
   await stopLocalDatabase();
@@ -612,6 +686,53 @@ export async function doctorLocalDatabase(): Promise<DoctorReport> {
             : "ни одна миграция ещё не применена (применятся при запуске)"
           : "таблица schema_migrations не найдена",
       });
+
+      // Таблицы приложения: без них любой запрос вернёт 500 «Внутренняя ошибка
+      // сервера» — это самая частая причина такой ошибки.
+      const tables = await client
+        .query<{ name: string }>(
+          `SELECT tablename AS name FROM pg_tables
+            WHERE schemaname = 'public'
+              AND tablename IN ('admins', 'events', 'participants', 'votes')
+            ORDER BY tablename`
+        )
+        .catch(() => undefined);
+      const requiredTables = ["admins", "events", "participants", "votes"];
+      const present = tables?.rows.map((row) => row.name) ?? [];
+      const missing = requiredTables.filter((name) => !present.includes(name));
+      checks.push({
+        name: "Таблицы приложения",
+        state: missing.length === 0 ? "ok" : "fail",
+        details:
+          missing.length === 0
+            ? `на месте: ${present.join(", ")}`
+            : `нет таблиц: ${missing.join(", ")}`,
+        hint:
+          missing.length === 0
+            ? undefined
+            : "Примените миграции: npm run db:migrate (или запустите backend — он сделает это сам).",
+      });
+
+      if (missing.length === 0) {
+        const admins = await client
+          .query<{ count: string; email: string | null }>(
+            "SELECT count(*)::text AS count, min(email) AS email FROM admins"
+          )
+          .catch(() => undefined);
+        const count = Number.parseInt(admins?.rows[0]?.count ?? "0", 10);
+        checks.push({
+          name: "Администратор",
+          state: count > 0 ? "ok" : "warn",
+          details:
+            count > 0
+              ? `есть в базе (${count}), например ${admins?.rows[0]?.email}`
+              : "администраторов нет — войти в админку не получится",
+          hint:
+            count > 0
+              ? "Забыли пароль? Смените его: npm run admin:reset -- --email=<email> --password=<новый>"
+              : "Запустите backend (он создаст администратора) или добавьте: npm run admin:add -- --email=<email> --password=<пароль>",
+        });
+      }
     } catch (error) {
       checks.push({
         name: "Подключение",

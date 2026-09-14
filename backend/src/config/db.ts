@@ -1,6 +1,7 @@
 import { Pool, PoolClient } from "pg";
 import { env } from "./env";
 import { describeDatabaseConfig } from "./database";
+import { recoverLocalDatabaseIfNeeded } from "../localdb/ensure";
 
 /**
  * Единый пул соединений с PostgreSQL для всего приложения.
@@ -30,9 +31,37 @@ export const pool = new Pool({
 
 pool.on("error", (err) => {
   // Ошибки на уже выданных (idle) клиентах пула — не должны валить процесс.
+  // Если это встроенная БД, причиной может быть упавший/убитый процесс
+  // PostgreSQL: сообщаем и просим менеджер БД поднять его снова.
   // eslint-disable-next-line no-console
-  console.error("Unexpected error on idle PostgreSQL client", err);
+  console.error("[db] ошибка на простаивающем клиенте PostgreSQL:", errorMessage(err));
+  if (isConnectionError(err)) recoverLocalDatabaseIfNeeded(errorMessage(err));
 });
+
+/** Ошибки, означающие «сервер PostgreSQL недоступен» (а не, например, SQL-ошибку). */
+export function isConnectionError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const code = (error as { code?: string }).code;
+  if (!code) return false;
+  return [
+    "ECONNREFUSED",
+    "ECONNRESET",
+    "EPIPE",
+    "ETIMEDOUT",
+    "EHOSTUNREACH",
+    "ENETUNREACH",
+    // Классы PostgreSQL: connection exception / admin shutdown / cannot connect now.
+    "08000",
+    "08001",
+    "08003",
+    "08004",
+    "08006",
+    "08P01",
+    "57P01",
+    "57P02",
+    "57P03",
+  ].includes(code);
+}
 
 /**
  * Пул хранит копию конфигурации и отдаёт её каждому новому клиенту, поэтому

@@ -6,7 +6,12 @@ import { describeDatabaseConfig } from "./config/database";
 import { pool, waitForDatabase } from "./config/db";
 import { runMigrations } from "./db/migrate";
 import { ensureSeedAdmin } from "./config/bootstrap";
-import { ensureLocalDatabase, shutdownLocalDatabase } from "./localdb/ensure";
+import {
+  ensureLocalDatabase,
+  shutdownLocalDatabase,
+  stopLocalDatabaseOnProcessExit,
+} from "./localdb/ensure";
+import { keepLocalDatabaseRunningOnExit } from "./localdb/manager";
 
 async function bootstrap(): Promise<void> {
   // 1. Встроенная БД на этом компьютере: если внешняя не настроена,
@@ -42,6 +47,12 @@ async function bootstrap(): Promise<void> {
     // eslint-disable-next-line no-console
     console.log(`[dsu-debate-backend] получен ${signal}, завершаю работу...`);
 
+    // SIGTERM прилетает от наблюдателя кода (ts-node-dev --respawn, nodemon)
+    // при каждом сохранении файла. Гасить PostgreSQL в этом случае нельзя:
+    // иначе БД перезапускается на каждую правку, а запросы в этот момент
+    // падают с 500. Ctrl+C (SIGINT) — осознанное завершение, БД останавливаем.
+    if (signal === "SIGTERM") keepLocalDatabaseRunningOnExit();
+
     const finish = async (): Promise<void> => {
       await pool.end().catch(() => undefined);
       // Встроенный PostgreSQL останавливаем только если запускали его мы:
@@ -60,9 +71,11 @@ async function bootstrap(): Promise<void> {
 
   process.on("SIGINT", () => void shutdown("SIGINT"));
   process.on("SIGTERM", () => void shutdown("SIGTERM"));
-}
-
-bootstrap().catch(async (error) => {
+  // SIGHUP — закрытие окна терминала (Windows) / обрыв сессии: пробуем
+  // успеть остановить БД, а на выходе есть ещё синхронный «последний шанс».
+  process.on("SIGHUP", () => void shutdown("SIGHUP"));
+  process.on("exit", () => stopLocalDatabaseOnProcessExit());
+}bootstrap().catch(async (error) => {
   // eslint-disable-next-line no-console
   console.error("Failed to start dsu-debate-backend:", error);
   // Если успели поднять встроенный PostgreSQL — не оставляем процесс висеть.

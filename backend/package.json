@@ -19,6 +19,9 @@
     "db:local:status": "tsx src/localdb/cli.ts status",
     "db:local:doctor": "tsx src/localdb/cli.ts doctor",
     "db:local:logs": "tsx src/localdb/cli.ts logs",
+    "admin:list": "tsx src/db/admin-cli.ts list",
+    "admin:add": "tsx src/db/admin-cli.ts add",
+    "admin:reset": "tsx src/db/admin-cli.ts reset",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "tsx --test test/**/*.test.ts"
   },

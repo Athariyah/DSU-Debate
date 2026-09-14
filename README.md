@@ -67,6 +67,8 @@ npm run build:live
 | `npm run db:local:status` | состояние: порт, версия, размер данных, логи |
 | `npm run db:local:doctor` | диагностика окружения и базы |
 | `npm run db:local:logs` | лог PostgreSQL |
+| `npm run admin:list` | список администраторов |
+| `npm run admin:reset -- --email=... --password=...` | сменить пароль администратора |
 | `npm run db:check` | к какой БД реально подключается приложение |
 | `npm run db:migrate` | применить миграции вручную |
 | `npm run typecheck`, `npm run test`, `npm run build` | проверки backend |
