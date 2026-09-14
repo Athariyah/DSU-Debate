@@ -79,7 +79,7 @@ backend/.localdb/logs/postgres.log
 | `PORT` | `4000` | порт API |
 | `JWT_SECRET` / `JWT_EXPIRES_IN` | `dev-only-secret` / `8h` | сессии администратора |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | `admin@dsu.local` / `ChangeMe123!` (dev) | локальный админ |
-| `CORS_ORIGIN` | Live Server 5500–5503, Vite 5173–5174, preview 4173 | источники браузера или `*` |
+| `CORS_ORIGIN` | `*` в режиме разработки, явный список в production | источники браузера, откуда разрешено обращаться к API |
 | `TRUST_PROXY` | `0` | число хопов при работе за прокси |
 | `COOKIE_SECURE` | `false` | `true`, если сайт доступен только по HTTPS |
 | `ALLOW_ADMIN_REGISTRATION` / `ADMIN_REGISTRATION_KEY` | `false` / — | самостоятельная регистрация админов |

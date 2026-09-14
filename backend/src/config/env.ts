@@ -1,6 +1,7 @@
 import path from "path";
 import dotenv from "dotenv";
 import { describeDatabaseConfig, resolveDatabaseConfig } from "./database";
+import { resolveCorsPolicy } from "./corsPolicy";
 
 // Файл `backend/.env` ищем по расположению кода (backend/src/config или
 // backend/dist/config), а не по текущему каталогу: тогда настройки одинаково
@@ -29,34 +30,14 @@ function parseTrustProxy(value: string | undefined): boolean | number {
 const nodeEnv = process.env.NODE_ENV ?? "development";
 
 /**
- * Откуда фронтенду разрешено обращаться к API при локальном хостинге:
- *   - VS Code Live Server (5500 и запасные порты, которые он берёт, если 5500 занят);
- *   - Vite dev server (5173) и `vite preview` (4173) со своими запасными портами;
- *   - localhost и 127.0.0.1 считаются разными источниками, поэтому оба в списке.
- * Для других портов (или для доступа с телефонов по локальной сети) задайте
- * свой список в CORS_ORIGIN, например CORS_ORIGIN=* .
+ * Откуда фронтенду разрешено обращаться к API. Подробности — в
+ * config/corsPolicy.ts: по умолчанию в режиме разработки разрешены любые
+ * источники (локальный хостинг), явный список CORS_ORIGIN делает политику
+ * строгой, а в production список обязателен (проверка ниже).
  */
-const DEFAULT_CORS_ORIGINS = [
-  "http://localhost:5173",
-  "http://127.0.0.1:5173",
-  "http://localhost:5174",
-  "http://127.0.0.1:5174",
-  "http://localhost:5500",
-  "http://127.0.0.1:5500",
-  "http://localhost:5501",
-  "http://127.0.0.1:5501",
-  "http://localhost:5502",
-  "http://127.0.0.1:5502",
-  "http://localhost:5503",
-  "http://127.0.0.1:5503",
-  "http://localhost:4173",
-  "http://127.0.0.1:4173",
-];
+const corsOriginEnv = process.env.CORS_ORIGIN;
+const corsPolicy = resolveCorsPolicy(nodeEnv, corsOriginEnv);
 
-const corsOrigins = (process.env.CORS_ORIGIN ?? DEFAULT_CORS_ORIGINS.join(","))
-  .split(",")
-  .map((origin) => origin.trim())
-  .filter(Boolean);
 const jwtSecret = required(
   "JWT_SECRET",
   nodeEnv === "production" ? undefined : "dev-only-secret"
@@ -91,8 +72,13 @@ if (nodeEnv === "production") {
   if (!cookieSecure) {
     throw new Error("COOKIE_SECURE must be true in production");
   }
-  if (corsOrigins.includes("*")) {
-    throw new Error("CORS_ORIGIN must be explicit in production");
+  if (!corsPolicy.configured) {
+    throw new Error(
+      "CORS_ORIGIN must be set explicitly in production: comma-separated list of allowed origins"
+    );
+  }
+  if (corsPolicy.allowAll) {
+    throw new Error("CORS_ORIGIN=* is not allowed in production: list the allowed origins explicitly");
   }
 }
 
@@ -115,7 +101,9 @@ export const env = {
   databaseUrl: database.connectionString ?? "",
   jwtSecret,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "8h",
-  corsOrigins,
+  corsOrigins: corsPolicy.origins,
+  corsAllowAll: corsPolicy.allowAll,
+  corsPolicy,
   trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
   cookieSecure,
   adminEmail,

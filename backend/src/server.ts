@@ -2,6 +2,7 @@ import http from "http";
 import { createApp } from "./app";
 import { initSocketServer } from "./sockets";
 import { env } from "./config/env";
+import { describeCurrentCorsPolicy } from "./config/cors";
 import { describeDatabaseConfig } from "./config/database";
 import { pool, waitForDatabase } from "./config/db";
 import { runMigrations } from "./db/migrate";
@@ -37,6 +38,10 @@ async function bootstrap(): Promise<void> {
     console.log(`[dsu-debate-backend] HTTP + Socket.io server listening on port ${env.port}`);
     // eslint-disable-next-line no-console
     console.log(`[dsu-debate-backend] API: http://127.0.0.1:${env.port}/api/health/ready`);
+    // Политика источников печатается при старте: если сайт открыт «не с того»
+    // адреса, здесь видно, почему запросы могут не проходить.
+    // eslint-disable-next-line no-console
+    console.log(`[dsu-debate-backend] CORS: ${describeCurrentCorsPolicy()}`);
   });
 
   let shuttingDown = false;
