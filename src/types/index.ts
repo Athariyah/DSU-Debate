@@ -51,7 +51,8 @@ export interface VoteUpdatePayload {
 
 export interface CreateDebateInput {
   title: string;
-  format: 2 | 3;
+  /** Число участников (не ограничено сверху; минимум 2). */
+  format: number;
   participants: { name: string; subtitle?: string }[];
   scheduledAt: string;
 }

@@ -26,7 +26,8 @@ export const createEventSchema = z.object({
   status: eventStatusEnum.optional().default("upcoming"),
   // Optional keeps the CRUD endpoint backwards compatible. When supplied,
   // event and participants are persisted atomically in one transaction.
-  participants: z.array(participantDraftSchema).min(2).max(3).optional(),
+  // Число участников не ограничено сверху: минимум 2 (дебаты требуют сторон).
+  participants: z.array(participantDraftSchema).min(2).optional(),
 });
 
 export const updateEventSchema = z.object({

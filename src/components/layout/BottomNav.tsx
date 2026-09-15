@@ -11,6 +11,10 @@ const items = [
 const profileItem = { to: "/profile", label: "Профиль", icon: UserRound };
 
 export function BottomNav() {
+  // Кнопка «+» (создание мероприятий) видна только администратору, вошедшему
+  // через вкладку «Профиль», и ведёт исключительно на экран администрирования.
+  const isAdmin = isAdminAuthenticated();
+
   return (
     <div className="safe-bottom absolute inset-x-0 bottom-0 z-30 px-5 pb-4">
       <div className="glass-panel flex items-center justify-between rounded-[1.75rem] border border-white/10 px-4 py-3">
@@ -18,18 +22,20 @@ export function BottomNav() {
           <NavItem key={item.to} {...item} />
         ))}
 
-        <NavLink to={isAdminAuthenticated() ? "/admin" : "/profile"} aria-label="Администратор">
-          {({ isActive }) => (
-            <div
-              className={cn(
-                "-mt-8 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/20 bg-gradient-to-br from-indigo-400 via-violet-500 to-sky-400 text-white shadow-[0_10px_25px_-5px_rgba(99,102,241,0.7)] transition-transform active:scale-95",
-                isActive && "scale-105"
-              )}
-            >
-              <Plus size={24} strokeWidth={2.5} />
-            </div>
-          )}
-        </NavLink>
+        {isAdmin && (
+          <NavLink to="/admin" aria-label="Администрирование">
+            {({ isActive }) => (
+              <div
+                className={cn(
+                  "-mt-8 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/20 bg-gradient-to-br from-indigo-400 via-violet-500 to-sky-400 text-white shadow-[0_10px_25px_-5px_rgba(99,102,241,0.7)] transition-transform active:scale-95",
+                  isActive && "scale-105"
+                )}
+              >
+                <Plus size={24} strokeWidth={2.5} />
+              </div>
+            )}
+          </NavLink>
+        )}
 
         <NavItem {...profileItem} />
       </div>
