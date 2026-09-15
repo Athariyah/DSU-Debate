@@ -1,4 +1,4 @@
-import { apiFetch, getAdminToken, isAuthError, setAdminToken } from "./httpClient";
+import { apiFetch, getAdminToken, isAuthError, setAdminToken, setUnauthorizedHandler } from "./httpClient";
 
 /**
  * Единый источник правды о входе администратора.
@@ -62,6 +62,19 @@ export function markLoggedOut(): void {
   status = "anonymous";
   emit();
 }
+
+/**
+ * Сервер ответил 401 на запрос с токеном (любой admin-запрос, не только /me):
+ * стираем токен и переходим в expired. Плюс прячется и защищённый экран
+ * показывает форму входа в тот же момент — рассинхрон «выкинуло, а кнопка
+ * осталась» невозможен.
+ */
+export function markExpired(): void {
+  setAdminToken("");
+  status = "expired";
+  emit();
+}
+setUnauthorizedHandler(markExpired);
 
 /** Одна проверка токена на сервере; результат раскладывается по статусам. */
 export function verifySession(): Promise<void> {

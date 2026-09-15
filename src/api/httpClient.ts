@@ -40,6 +40,15 @@ interface RequestOptions extends RequestInit {
   auth?: boolean;
 }
 
+// Единая реакция на «сервер сказал, что токена нет/он мёртв» (401 на запросе
+// с auth:true). Регистрируется стором сессии: UI мгновенно переходит в
+// согласованное состояние (плюс скрыт, форма входа на месте) — состояние
+// «выкинуло, а кнопка осталась» невозможно в принципе.
+let unauthorizedHandler: (() => void) | null = null;
+export function setUnauthorizedHandler(handler: () => void): void {
+  unauthorizedHandler = handler;
+}
+
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { auth, headers, ...rest } = options;
   const token = auth ? getAdminToken() : null;
@@ -68,6 +77,9 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   }
 
   if (!response.ok) {
+    // 401 на запросе, который ушёл с токеном, — сессия мертва по мнению
+    // сервера. Сообщаем стору, чтобы UI стал согласованным (см. authStore).
+    if (response.status === 401 && auth) unauthorizedHandler?.();
     let message = `Сервер вернул ошибку ${response.status}`;
     let code: string | undefined;
     let details: string | undefined;

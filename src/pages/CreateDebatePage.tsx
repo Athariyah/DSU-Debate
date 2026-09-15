@@ -59,8 +59,15 @@ export function CreateDebatePage() {
         scheduledAt: new Date(scheduledAt).toISOString(),
       });
       navigate("/admin");
-    } catch {
-      setError("Не удалось создать дебат. Попробуйте ещё раз.");
+    } catch (createError) {
+      // Показываем реальную причину. Если это 401, стор сам перейдёт в
+      // «expired» и ProtectedRoute покажет вход на месте — несогласованного
+      // состояния «кнопка есть, а доступа нет» не возникает.
+      setError(
+        createError instanceof Error && createError.message
+          ? createError.message
+          : "Не удалось создать дебат. Попробуйте ещё раз."
+      );
     } finally {
       setSubmitting(false);
     }

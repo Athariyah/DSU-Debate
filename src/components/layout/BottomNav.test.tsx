@@ -4,7 +4,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { BottomNav } from "./BottomNav";
 import { ProtectedRoute } from "../auth/ProtectedRoute";
-import { getAdminToken } from "../../api/httpClient";
+import { useEffect } from "react";
+import { apiFetch, getAdminToken } from "../../api/httpClient";
 import { resetAuthStoreForTests } from "../../api/authStore";
 
 const TOKEN_KEY = "dsu_admin_jwt";
@@ -177,5 +178,53 @@ describe("ProtectedRoute не держит цикл «админ → профи�
     fireEvent.change(screen.getByPlaceholderText("Пароль"), { target: { value: "ChangeMe123!" } });
     fireEvent.click(screen.getByRole("button", { name: /^Войти$/ }));
     expect(await screen.findByText("ADMIN PAGE")).toBeTruthy();
+  });
+
+  test("401 от admin-API при живой сессии: стор сам гасит сессию и показывает вход", async () => {
+    // /me отвечает 200 (сессия подтверждена, плюс виден), но рабочий admin-
+    // запрос возвращает 401 — например, токен отозвали на сервере. UI обязан
+    // стать согласованным: без «выкинуло, а кнопка осталась».
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: unknown) => {
+        const url = String(input);
+        if (url.includes("/admin/auth/me")) {
+          return { ok: true, status: 200, json: async () => ({ admin: { id: 1, email: "a@b.c" } }) };
+        }
+        if (url.includes("/admin/events")) {
+          return {
+            ok: false,
+            status: 401,
+            json: async () => ({ message: "Требуется авторизация администратора", code: "UNAUTHORIZED" }),
+          };
+        }
+        return { ok: true, status: 200, json: async () => ({}) };
+      })
+    );
+    window.localStorage.setItem(TOKEN_KEY, "good-token");
+    resetAuthStoreForTests();
+
+    function Probe() {
+      useEffect(() => {
+        void apiFetch("/admin/events", { auth: true }).catch(() => undefined);
+      }, []);
+      return <div>PROBE</div>;
+    }
+
+    render(
+      <MemoryRouter initialEntries={["/protected-admin"]}>
+        <Routes>
+          <Route path="/protected-admin" element={<ProtectedRoute><Probe /></ProtectedRoute>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    // Сессия подтверждена — защищённый экран открыт.
+    expect(await screen.findByText("PROBE")).toBeTruthy();
+    // Admin-запрос получил 401 → стор перешёл в expired: токен стёрт (плюс
+    // скрыт), экран показал форму входа на месте.
+    expect(await screen.findByText("Вход в панель администрирования")).toBeTruthy();
+    await waitFor(() => expect(getAdminToken()).toBeNull());
+    expect(screen.queryByText("PROBE")).toBeNull();
   });
 });
