@@ -1,0 +1,50 @@
+# ===========================================================================
+# systemd-юнит для backend DSU Debate.
+# Шаблон: __APP_DIR__, __APP_USER__, __NODE_BIN__ подставляет deploy/setup.sh.
+# Ставится в /etc/systemd/system/dsu-debate-backend.service.
+#
+#   systemctl status  dsu-debate-backend
+#   journalctl -u dsu-debate-backend -f          # живой лог
+#   systemctl restart dsu-debate-backend
+# ===========================================================================
+[Unit]
+Description=DSU Debate backend (Express + Socket.io + PostgreSQL)
+Documentation=https://github.com/Athariyah/DSU-Debate
+After=network-online.target postgresql.service
+Wants=network-online.target
+# Backend умеет ждать БД сам (DB_CONNECT_RETRIES), поэтому Requires, а не
+# жёсткая зависимость: при рестарте PostgreSQL сервис не «свалится» навсегда.
+After=postgresql.service
+
+[Service]
+Type=simple
+User=__APP_USER__
+Group=__APP_USER__
+WorkingDirectory=__APP_DIR__/backend
+
+# Секреты и настройки — отдельным файлом (root:root, 600), не в репозитории.
+EnvironmentFile=/etc/dsu-debate/backend.env
+
+ExecStart=__NODE_BIN__ __APP_DIR__/backend/dist/server.js
+
+Restart=always
+RestartSec=3
+TimeoutStopSec=15
+
+# Немного защиты: процесс не сможет писать куда-то кроме своего каталога.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadWritePaths=__APP_DIR__/backend
+
+# Логи уходят в journald (см. journalctl -u dsu-debate-backend).
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=dsu-debate-backend
+
+[Install]
+WantedBy=multi-user.target
