@@ -2,6 +2,7 @@ const configuredApiUrl = import.meta.env.VITE_API_URL?.trim();
 export const API_BASE_URL = (configuredApiUrl || "/api").replace(/\/$/, "");
 
 const AUTH_TOKEN_KEY = "dsu_admin_jwt";
+export const AUTH_TOKEN_EVENT = "dsu-admin-token-changed";
 
 export function getAdminToken(): string | null {
   return localStorage.getItem(AUTH_TOKEN_KEY);
@@ -10,6 +11,9 @@ export function getAdminToken(): string | null {
 export function setAdminToken(token: string) {
   if (token) localStorage.setItem(AUTH_TOKEN_KEY, token);
   else localStorage.removeItem(AUTH_TOKEN_KEY);
+  // Сообщаем всем подписчикам (нижняя панель, профиль), что состояние входа
+  // изменилось — кнопка «Создать» появляется/исчезает без перезагрузки.
+  window.dispatchEvent(new Event(AUTH_TOKEN_EVENT));
 }
 
 interface RequestOptions extends RequestInit {

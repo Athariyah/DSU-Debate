@@ -8,6 +8,7 @@ import { getSavedProfileName } from "../utils/votedStore";
 import { getDeviceFingerprint } from "../utils/device";
 import { getAdminToken, setAdminToken } from "../api/httpClient";
 import { loginAdmin, logoutAdmin, registerAdmin } from "../api/debates";
+import { useAdminAuth } from "../hooks/useAdminAuth";
 
 export function ProfilePage() {
   const navigate = useNavigate();
@@ -25,7 +26,10 @@ export function ProfilePage() {
 
   const fullName = profile ? `${profile.firstName} ${profile.lastName}` : "Гость";
   const initials = profile ? `${profile.firstName[0]}${profile.lastName[0]}`.toUpperCase() : "?";
-  const isAdmin = Boolean(token);
+  // Живое состояние сессии: протухший токен сбрасывается проверкой на сервере,
+  // поэтому «авторизован» не показывается с мёртвым JWT и нет цикла
+  // «плюс → профиль».
+  const isAdmin = useAdminAuth();
 
   async function handleLogin() {
     setLoginError(null);

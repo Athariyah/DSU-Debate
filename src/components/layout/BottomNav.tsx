@@ -2,7 +2,7 @@ import { Home, MessagesSquare, Plus, UserRound } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { NavLink } from "react-router-dom";
 import { cn } from "../../utils/cn";
-import { isAdminAuthenticated } from "../../api/debates";
+import { useAdminAuth } from "../../hooks/useAdminAuth";
 
 const items = [
   { to: "/home", label: "Главная", icon: Home },
@@ -12,10 +12,9 @@ const items = [
 const profileItem = { to: "/profile", label: "Профиль", icon: UserRound };
 
 export function BottomNav() {
-  // Кнопка «Создать» видна только администратору, вошедшему через вкладку
-  // «Профиль», ведёт на экран администрирования и сидит ВНУТРИ панели —
-  // ничего не торчит наружу.
-  const isAdmin = isAdminAuthenticated();
+  // Кнопка «Создать» видна только администратору с живой сессией (вход через
+  // «Профиль»), ведёт на экран администрирования и сидит ВНУТРИ панели.
+  const isAdmin = useAdminAuth();
 
   return (
     <div className="safe-bottom absolute inset-x-0 bottom-0 z-30 px-5 pb-4">
