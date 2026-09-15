@@ -119,6 +119,31 @@ describe("ProtectedRoute не держит цикл «админ → профи�
     expect(await screen.findByText("ADMIN PAGE")).toBeTruthy();
   });
 
+  test("сбой сети не маскируется под 401: повтор вместо формы входа", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("fetch failed");
+      })
+    );
+    window.localStorage.setItem(TOKEN_KEY, "good-token");
+    render(
+      <MemoryRouter initialEntries={["/protected-admin"]}>
+        <Routes>
+          <Route
+            path="/protected-admin"
+            element={<ProtectedRoute><div>ADMIN PAGE</div></ProtectedRoute>}
+          />
+          <Route path="/profile" element={<div>PROFILE PAGE</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+    expect(await screen.findByText("Не удалось связаться с сервером")).toBeTruthy();
+    // Ни формы входа, ни выкидывания на профиль.
+    expect(screen.queryByPlaceholderText("Email администратора")).toBeNull();
+    expect(screen.queryByText("PROFILE PAGE")).toBeNull();
+  });
+
   test("с мёртвым токеном не выкидывает: вход на месте и сразу админка", async () => {
     mockMe("expired");
     window.localStorage.setItem(TOKEN_KEY, "dead-token");

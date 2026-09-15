@@ -116,3 +116,13 @@ export class ApiError extends Error {
     this.name = "ApiError";
   }
 }
+
+/** Токен отсутствует/протух/подделан — нужна форма входа. */
+export function isAuthError(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 401;
+}
+
+/** Запрос вообще не дошёл до API (сервер выключен, обрыв сети). */
+export function isNetworkError(error: unknown): boolean {
+  return error instanceof ApiError && (error.status === 0 || error.code === "NETWORK_ERROR");
+}

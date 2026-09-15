@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { KeyRound, LogOut, ShieldCheck, UserRound } from "lucide-react";
+import { KeyRound, LogOut, RefreshCw, ShieldCheck, UserRound } from "lucide-react";
 import { TopBar } from "../components/layout/TopBar";
 import { BottomNav } from "../components/layout/BottomNav";
 import { Button } from "../components/ui/Button";
 import { getSavedProfileName } from "../utils/votedStore";
 import { getDeviceFingerprint } from "../utils/device";
-import { apiFetch, getAdminToken, setAdminToken } from "../api/httpClient";
+import { apiFetch, getAdminToken, isAuthError, setAdminToken } from "../api/httpClient";
 import { logoutAdmin } from "../api/debates";
 import { useAdminAuth } from "../hooks/useAdminAuth";
 import { AdminLoginForm } from "../components/auth/AdminLoginForm";
@@ -16,13 +16,14 @@ export function ProfilePage() {
   const [token, setToken] = useState(getAdminToken() ?? "");
   const [saved, setSaved] = useState(false);
   const isAdmin = useAdminAuth();
-  const [session, setSession] = useState<"anonymous" | "checking" | "ok" | "expired">(
+  const [session, setSession] = useState<"anonymous" | "checking" | "ok" | "expired" | "error">(
     getAdminToken() ? "checking" : "anonymous"
   );
+  const [retryKey, setRetryKey] = useState(0);
 
-  // Честное состояние сессии: токен проверяется на сервере, поэтому
-  // «авторизован» не показывается с протухшим JWT — вместо этого профиль
-  // прямо говорит «сессия истекла» и даёт войти заново на месте.
+  // Честное состояние сессии: токен проверяется на сервере. 401 — «сессия
+  // истекла» с формой входа; ошибка сети — отдельное сообщение с повтором,
+  // чтобы случайный сбой соединения не выглядел как «выкинули из аккаунта».
   useEffect(() => {
     if (!isAdmin) {
       setSession("anonymous");
@@ -34,13 +35,13 @@ export function ProfilePage() {
       .then(() => {
         if (mounted) setSession("ok");
       })
-      .catch(() => {
-        if (mounted) setSession("expired");
+      .catch((error: unknown) => {
+        if (mounted) setSession(isAuthError(error) ? "expired" : "error");
       });
     return () => {
       mounted = false;
     };
-  }, [isAdmin]);
+  }, [isAdmin, retryKey]);
 
   async function logout() {
     try {
@@ -122,6 +123,19 @@ export function ProfilePage() {
                 </p>
                 <AdminLoginForm onSuccess={() => setToken(getAdminToken() ?? "")} />
               </>
+            )}
+
+            {session === "error" && (
+              <div className="glass-panel space-y-3 rounded-2xl border border-white/10 p-4">
+                <p className="text-xs leading-relaxed text-rose-300">
+                  Не удалось связаться с сервером для проверки сессии. Это не
+                  выход из аккаунта — нажмите «Повторить».
+                </p>
+                <Button variant="glass" fullWidth onClick={() => setRetryKey((k) => k + 1)}>
+                  <RefreshCw size={15} />
+                  Повторить
+                </Button>
+              </div>
             )}
 
             {session === "anonymous" && (
