@@ -100,7 +100,7 @@ export const env = {
   database,
   databaseUrl: database.connectionString ?? "",
   jwtSecret,
-  jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "8h",
+  jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "365d",
   corsOrigins: corsPolicy.origins,
   corsAllowAll: corsPolicy.allowAll,
   corsPolicy,

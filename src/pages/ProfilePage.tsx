@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { KeyRound, LogOut, RefreshCw, ShieldCheck, UserRound } from "lucide-react";
 import { TopBar } from "../components/layout/TopBar";
 import { BottomNav } from "../components/layout/BottomNav";
@@ -17,6 +18,16 @@ export function ProfilePage() {
   const [token, setToken] = useState(getAdminToken() ?? "");
   const [saved, setSaved] = useState(false);
   const status = useAuthStatus();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+
+  // Защищённые экраны без сессии передают эстафету сюда с ?redirect=… —
+  // после входа возвращаем пользователя туда, куда он шёл.
+  const redirect = searchParams.get("redirect");
+  function handleLoggedIn() {
+    setToken(getAdminToken() ?? "");
+    if (redirect && redirect.startsWith("/")) navigate(redirect);
+  }
 
   async function logout() {
     try {
@@ -81,7 +92,7 @@ export function ProfilePage() {
                   Администратор авторизован
                 </div>
                 <p className="text-[11px] leading-relaxed text-white/35">
-                  Вход запоминается в этом браузере (токен хранится 8 часов),
+                  Вход запоминается в этом браузере (токен хранится 365 дней),
                   поэтому при возвращении на сайт профиль снова авторизован.
                 </p>
                 <Button variant="glass" fullWidth onClick={() => void logout()}>
@@ -97,7 +108,7 @@ export function ProfilePage() {
                   Сохранённая сессия истекла или недействительна. Войдите заново —
                   кнопка «Создать» и панель администрирования снова станут доступны.
                 </p>
-                <AdminLoginForm onSuccess={() => setToken(getAdminToken() ?? "")} />
+                <AdminLoginForm onSuccess={handleLoggedIn} />
               </>
             )}
 
@@ -115,7 +126,7 @@ export function ProfilePage() {
             )}
 
             {status === "anonymous" && (
-              <AdminLoginForm onSuccess={() => setToken(getAdminToken() ?? "")} />
+              <AdminLoginForm onSuccess={handleLoggedIn} />
             )}
 
             <details className="rounded-xl border border-white/10 bg-white/5 p-3">

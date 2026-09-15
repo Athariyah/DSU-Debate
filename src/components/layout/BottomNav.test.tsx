@@ -151,7 +151,7 @@ describe("ProtectedRoute не держит цикл «админ → профи�
     expect(screen.queryByText("PROFILE PAGE")).toBeNull();
   });
 
-  test("с мёртвым токеном без формы входа: подсказка и кнопка в профиль", async () => {
+  test("без сессии защищённый экран тихо передаёт эстафету профилю", async () => {
     mockMe("expired");
     window.localStorage.setItem(TOKEN_KEY, "dead-token");
     resetAuthStoreForTests();
@@ -167,15 +167,12 @@ describe("ProtectedRoute не держит цикл «админ → профи�
       </MemoryRouter>
     );
 
-    // Никуда не редиректит и никакой формы входа на защищённом экране:
-    // только подсказка «только для администраторов» и кнопка в профиль.
-    expect(await screen.findByText("Раздел доступен только администраторам")).toBeTruthy();
-    expect(screen.queryByPlaceholderText("Email администратора")).toBeNull();
-    expect(screen.queryByText("PROFILE PAGE")).toBeNull();
-
-    // Кнопка ведёт в профиль — вход администратора живёт только там.
-    fireEvent.click(screen.getByRole("button", { name: /Открыть профиль/ }));
+    // Ни форм, ни плашек на защищённом экране: после 401 тихо уходим в
+    // профиль (единственное место входа) с адресом возврата.
     expect(await screen.findByText("PROFILE PAGE")).toBeTruthy();
+    expect(screen.queryByText("ADMIN PAGE")).toBeNull();
+    expect(screen.queryByPlaceholderText("Email администратора")).toBeNull();
+    await waitFor(() => expect(getAdminToken()).toBeNull());
   });
 
   test("401 от admin-API при живой сессии: стор сам гасит сессию и показывает вход", async () => {
@@ -213,6 +210,7 @@ describe("ProtectedRoute не держит цикл «админ → профи�
       <MemoryRouter initialEntries={["/protected-admin"]}>
         <Routes>
           <Route path="/protected-admin" element={<ProtectedRoute><Probe /></ProtectedRoute>} />
+          <Route path="/profile" element={<div>PROFILE PAGE</div>} />
         </Routes>
       </MemoryRouter>
     );
@@ -221,7 +219,9 @@ describe("ProtectedRoute не держит цикл «админ → профи�
     expect(await screen.findByText("PROBE")).toBeTruthy();
     // Admin-запрос получил 401 → стор перешёл в expired: токен стёрт (плюс
     // скрыт), экран показал форму входа на месте.
-    expect(await screen.findByText("Раздел доступен только администраторам")).toBeTruthy();
+    // 401 на рабочем запросе гасит сессию: токен стёрт, плюс скрыт,
+    // защищённый экран передаёт эстафету профилю.
+    expect(await screen.findByText("PROFILE PAGE")).toBeTruthy();
     await waitFor(() => expect(getAdminToken()).toBeNull());
     expect(screen.queryByText("PROBE")).toBeNull();
   });
