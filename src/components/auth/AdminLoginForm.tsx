@@ -1,26 +1,27 @@
 import { useState } from "react";
 import { LogIn } from "lucide-react";
 import { Button } from "../ui/Button";
-import { loginAdmin, registerAdmin } from "../../api/debates";
+import { loginAdmin } from "../../api/debates";
 import { setAdminToken } from "../../api/httpClient";
+import { markAuthed } from "../../api/authStore";
 
 interface AdminLoginFormProps {
   title?: string;
   subtitle?: string;
   /** Вызывается после успешного входа (токен уже сохранён). */
-  onSuccess: () => void;
+  onSuccess?: () => void;
 }
 
 /**
  * Форма входа администратора. Используется и на вкладке «Профиль», и прямо
- * внутри защищённых экранов (ProtectedRoute), чтобы просроченная сессия не
- * «выкидывала» пользователя, а предлагала войти на месте и сразу продолжать.
+ * внутри защищённых экранов, чтобы просроченная сессия не «выкидывала»
+ * пользователя, а предлагала войти на месте и сразу продолжать.
+ * Регистрации здесь намеренно нет: новые администраторы создаются только
+ * серверными командами (npm run admin:add), а не из публичной формы.
  */
 export function AdminLoginForm({ title = "Вход администратора", subtitle, onSuccess }: AdminLoginFormProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [registerMode, setRegisterMode] = useState(false);
-  const [registrationKey, setRegistrationKey] = useState("");
   const [loggingIn, setLoggingIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -28,12 +29,11 @@ export function AdminLoginForm({ title = "Вход администратора"
     setError(null);
     setLoggingIn(true);
     try {
-      const response = registerMode
-        ? await registerAdmin(email.trim(), password, registrationKey)
-        : await loginAdmin(email.trim(), password);
+      const response = await loginAdmin(email.trim(), password);
       setAdminToken(response.token);
+      markAuthed();
       setPassword("");
-      onSuccess();
+      onSuccess?.();
     } catch (loginError) {
       setError(loginError instanceof Error ? loginError.message : "Не удалось войти");
     } finally {
@@ -62,35 +62,12 @@ export function AdminLoginForm({ title = "Вход администратора"
         placeholder="Пароль"
         className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-xs text-white placeholder:text-white/25 outline-none focus:border-indigo-400/60"
       />
-      {registerMode && (
-        <input
-          value={registrationKey}
-          onChange={(event) => setRegistrationKey(event.target.value)}
-          type="password"
-          placeholder="Ключ регистрации"
-          className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-xs text-white placeholder:text-white/25 outline-none focus:border-indigo-400/60"
-        />
-      )}
       {error && <p className="text-xs text-rose-400">{error}</p>}
 
-      <Button
-        fullWidth
-        onClick={() => void submit()}
-        disabled={loggingIn || !email || !password || (registerMode && !registrationKey)}
-      >
+      <Button fullWidth onClick={() => void submit()} disabled={loggingIn || !email || !password}>
         <LogIn size={16} />
-        {loggingIn ? "Подождите…" : registerMode ? "Зарегистрироваться" : "Войти"}
+        {loggingIn ? "Подождите…" : "Войти"}
       </Button>
-      <button
-        type="button"
-        onClick={() => {
-          setRegisterMode((current) => !current);
-          setError(null);
-        }}
-        className="w-full text-center text-xs text-white/45 hover:text-white/75"
-      >
-        {registerMode ? "Уже есть аккаунт? Войти" : "Зарегистрировать нового администратора"}
-      </button>
     </div>
   );
 }

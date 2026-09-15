@@ -1,13 +1,14 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { KeyRound, LogOut, RefreshCw, ShieldCheck, UserRound } from "lucide-react";
 import { TopBar } from "../components/layout/TopBar";
 import { BottomNav } from "../components/layout/BottomNav";
 import { Button } from "../components/ui/Button";
 import { getSavedProfileName } from "../utils/votedStore";
 import { getDeviceFingerprint } from "../utils/device";
-import { apiFetch, getAdminToken, isAuthError, setAdminToken } from "../api/httpClient";
+import { getAdminToken, setAdminToken } from "../api/httpClient";
+import { markLoggedOut, verifySession } from "../api/authStore";
 import { logoutAdmin } from "../api/debates";
-import { useAdminAuth } from "../hooks/useAdminAuth";
+import { useAuthStatus } from "../hooks/useAdminAuth";
 import { AdminLoginForm } from "../components/auth/AdminLoginForm";
 
 export function ProfilePage() {
@@ -15,39 +16,14 @@ export function ProfilePage() {
   const fingerprint = getDeviceFingerprint();
   const [token, setToken] = useState(getAdminToken() ?? "");
   const [saved, setSaved] = useState(false);
-  const isAdmin = useAdminAuth();
-  const [session, setSession] = useState<"anonymous" | "checking" | "ok" | "expired" | "error">(
-    getAdminToken() ? "checking" : "anonymous"
-  );
-  const [retryKey, setRetryKey] = useState(0);
-
-  // Честное состояние сессии: токен проверяется на сервере. 401 — «сессия
-  // истекла» с формой входа; ошибка сети — отдельное сообщение с повтором,
-  // чтобы случайный сбой соединения не выглядел как «выкинули из аккаунта».
-  useEffect(() => {
-    if (!isAdmin) {
-      setSession("anonymous");
-      return;
-    }
-    setSession("checking");
-    let mounted = true;
-    apiFetch("/admin/auth/me", { auth: true })
-      .then(() => {
-        if (mounted) setSession("ok");
-      })
-      .catch((error: unknown) => {
-        if (mounted) setSession(isAuthError(error) ? "expired" : "error");
-      });
-    return () => {
-      mounted = false;
-    };
-  }, [isAdmin, retryKey]);
+  const status = useAuthStatus();
 
   async function logout() {
     try {
       await logoutAdmin();
     } finally {
       setAdminToken("");
+      markLoggedOut();
       setToken("");
     }
   }
@@ -92,13 +68,13 @@ export function ProfilePage() {
             Доступ администратора
           </h3>
           <div className="space-y-3">
-            {session === "checking" && (
+            {status === "checking" && (
               <div className="glass-panel rounded-2xl border border-white/10 p-4 text-sm text-white/50">
                 Проверка сессии…
               </div>
             )}
 
-            {session === "ok" && (
+            {status === "authed" && (
               <div className="glass-panel space-y-3 rounded-2xl border border-white/10 p-4">
                 <div className="flex items-center gap-2 text-sm font-medium text-white">
                   <ShieldCheck size={16} className="text-emerald-400" />
@@ -106,7 +82,7 @@ export function ProfilePage() {
                 </div>
                 <p className="text-[11px] leading-relaxed text-white/35">
                   Вход запоминается в этом браузере (токен хранится 8 часов),
-                  поэтому при возвращении на сайт профиль сразу авторизован.
+                  поэтому при возвращении на сайт профиль снова авторизован.
                 </p>
                 <Button variant="glass" fullWidth onClick={() => void logout()}>
                   <LogOut size={16} />
@@ -115,7 +91,7 @@ export function ProfilePage() {
               </div>
             )}
 
-            {session === "expired" && (
+            {status === "expired" && (
               <>
                 <p className="rounded-2xl border border-amber-400/20 bg-amber-400/10 p-3 text-xs leading-relaxed text-amber-300">
                   Сохранённая сессия истекла или недействительна. Войдите заново —
@@ -125,20 +101,20 @@ export function ProfilePage() {
               </>
             )}
 
-            {session === "error" && (
+            {status === "network" && (
               <div className="glass-panel space-y-3 rounded-2xl border border-white/10 p-4">
                 <p className="text-xs leading-relaxed text-rose-300">
                   Не удалось связаться с сервером для проверки сессии. Это не
                   выход из аккаунта — нажмите «Повторить».
                 </p>
-                <Button variant="glass" fullWidth onClick={() => setRetryKey((k) => k + 1)}>
+                <Button variant="glass" fullWidth onClick={() => void verifySession()}>
                   <RefreshCw size={15} />
                   Повторить
                 </Button>
               </div>
             )}
 
-            {session === "anonymous" && (
+            {status === "anonymous" && (
               <AdminLoginForm onSuccess={() => setToken(getAdminToken() ?? "")} />
             )}
 
@@ -158,6 +134,7 @@ export function ProfilePage() {
                   fullWidth
                   onClick={() => {
                     setAdminToken(token.trim());
+                    void verifySession();
                     setSaved(true);
                     setTimeout(() => setSaved(false), 1500);
                   }}
@@ -168,9 +145,9 @@ export function ProfilePage() {
             </details>
 
             <p className="text-[11px] leading-relaxed text-white/35">
-              Администратор может создавать дебаты через кнопку «Создать» в нижней
-              панели. JWT хранится только в этом браузере и передаётся в защищённые
-              admin-запросы.
+              Кнопка «Создать» в нижней панели появляется только после входа
+              администратора. JWT хранится только в этом браузере и передаётся
+              в защищённые admin-запросы.
             </p>
           </div>
         </div>

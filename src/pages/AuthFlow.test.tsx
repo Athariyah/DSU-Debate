@@ -11,6 +11,7 @@ import { ProfilePage } from "./ProfilePage";
 import { AdminPage } from "./AdminPage";
 import { CreateDebatePage } from "./CreateDebatePage";
 import { ProtectedRoute } from "../components/auth/ProtectedRoute";
+import { resetAuthStoreForTests } from "../api/authStore";
 
 vi.stubGlobal(
   "fetch",
@@ -48,6 +49,7 @@ vi.stubGlobal(
 afterEach(() => {
   cleanup();
   window.localStorage.clear();
+  resetAuthStoreForTests();
 });
 
 test("вход в профиле → плюс появляется → клик открывает администрирование", async () => {
@@ -86,6 +88,7 @@ test("вход в профиле → плюс появляется → клик 
 
 test("стрелка «назад» на экране создания возвращает в панель администрирования", async () => {
   window.localStorage.setItem("dsu_admin_jwt", "good-token");
+  resetAuthStoreForTests();
   render(
     <MemoryRouter initialEntries={["/create"]}>
       <Routes>

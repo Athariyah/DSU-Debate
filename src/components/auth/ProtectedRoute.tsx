@@ -1,62 +1,56 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { RefreshCw } from "lucide-react";
-import { apiFetch, isAuthError } from "../../api/httpClient";
+import { verifySession } from "../../api/authStore";
+import { useAuthStatus } from "../../hooks/useAdminAuth";
 import { AdminLoginForm } from "./AdminLoginForm";
 import { Button } from "../ui/Button";
 
 /**
  * Защищённый экран (администрирование, создание).
  *
- * Сессия проверяется на сервере один раз при входе (и по кнопке «Повторить»).
- * Результаты различаются честно:
- *  - 401          → форма входа прямо здесь, после входа экран открывается
- *                    на месте, без выкидывания на профиль;
- *  - ошибка сети  → сообщение «не удалось связаться с сервером» и повтор,
- *                    а НЕ форма входа и НЕ «сессия истекла»;
- *  - успех        → защищённый контент.
+ * Решение о доступе берётся из единого стора сессии: состояние authed
+ * означает, что сервер УЖЕ подтвердил вход (при логине или стартовой
+ * проверке), поэтому навигация не дёргает /me заново и живую сессию
+ * невозможно «выкинуть» случайным сбоем по пути.
+ *
+ *  - checking → «Проверка доступа…»;
+ *  - network  → «Не удалось связаться с сервером» + «Повторить»
+ *               (это НЕ «выкидывание» и НЕ форма входа);
+ *  - anonymous/expired → форма входа прямо здесь, после входа экран
+ *               открывается на месте.
  */
 export function ProtectedRoute({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<"checking" | "authed" | "login" | "error">("checking");
+  const status = useAuthStatus();
 
-  const check = useCallback(() => {
-    setState("checking");
-    apiFetch("/admin/auth/me", { auth: true })
-      .then(() => setState("authed"))
-      .catch((error: unknown) => setState(isAuthError(error) ? "login" : "error"));
-  }, []);
-
-  useEffect(() => {
-    check();
-  }, [check]);
-
-  if (state === "checking") {
-    return <div className="grid h-full place-items-center text-sm text-white/50">Проверка доступа…</div>;
-  }
-
-  if (state === "authed") {
+  if (status === "authed") {
     return <>{children}</>;
   }
 
   return (
     <div className="flex h-full flex-col">
       <div className="no-scrollbar flex-1 overflow-y-auto px-5 pb-8 pt-6">
-        {state === "error" ? (
+        {status === "checking" && (
+          <div className="grid place-items-center py-10 text-sm text-white/50">Проверка доступа…</div>
+        )}
+
+        {status === "network" && (
           <div className="glass-panel space-y-3 rounded-2xl border border-white/10 p-4">
             <p className="text-sm font-semibold text-white">Не удалось связаться с сервером</p>
             <p className="text-xs leading-relaxed text-white/45">
               Проверка сессии не прошла из-за проблемы с соединением — это не
               значит, что сессия истекла. Попробуйте ещё раз.
             </p>
-            <Button variant="glass" fullWidth onClick={check}>
+            <Button variant="glass" fullWidth onClick={() => void verifySession()}>
               <RefreshCw size={15} />
               Повторить
             </Button>
           </div>
-        ) : (
+        )}
+
+        {(status === "anonymous" || status === "expired") && (
           <AdminLoginForm
             title="Вход в панель администрирования"
-            subtitle="Сессия ещё не начата или истекла (токен живёт 8 часов). Войдите — и панель откроется сразу, без перехода на профиль."
-            onSuccess={() => setState("authed")}
+            subtitle="Войдите, чтобы открыть панель — после входа она появится сразу, без перехода на профиль."
           />
         )}
       </div>

@@ -2,7 +2,6 @@ const configuredApiUrl = import.meta.env.VITE_API_URL?.trim();
 export const API_BASE_URL = (configuredApiUrl || "/api").replace(/\/$/, "");
 
 const AUTH_TOKEN_KEY = "dsu_admin_jwt";
-export const AUTH_TOKEN_EVENT = "dsu-admin-token-changed";
 
 // Превью может открываться во встроенном фрейме стороннего сайта, где браузер
 // блокирует localStorage (Safari ITP, жёсткие настройки приватности). Тогда
@@ -35,9 +34,6 @@ export function setAdminToken(token: string) {
       // ignore
     }
   }
-  // Сообщаем всем подписчикам (нижняя панель, профиль), что состояние входа
-  // изменилось — кнопка «Создать» появляется/исчезает без перезагрузки.
-  window.dispatchEvent(new Event(AUTH_TOKEN_EVENT));
 }
 
 interface RequestOptions extends RequestInit {

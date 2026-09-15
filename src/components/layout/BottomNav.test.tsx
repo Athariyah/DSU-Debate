@@ -4,7 +4,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { BottomNav } from "./BottomNav";
 import { ProtectedRoute } from "../auth/ProtectedRoute";
-import { getAdminToken, setAdminToken } from "../../api/httpClient";
+import { getAdminToken } from "../../api/httpClient";
+import { resetAuthStoreForTests } from "../../api/authStore";
 
 const TOKEN_KEY = "dsu_admin_jwt";
 
@@ -58,7 +59,7 @@ function renderNav(initialPath = "/home") {
 afterEach(() => {
   cleanup();
   window.localStorage.clear();
-  setAdminToken("");
+  resetAuthStoreForTests();
   vi.unstubAllGlobals();
 });
 
@@ -73,6 +74,7 @@ describe("кнопка «Создать» в нижней панели", () => {
   test("с живым токеном кнопка есть и ведёт на /admin", async () => {
     mockMe("ok");
     window.localStorage.setItem(TOKEN_KEY, "good-token");
+    resetAuthStoreForTests();
     renderNav();
     const link = await screen.findByLabelText("Создать мероприятие");
     expect(link.getAttribute("href")).toBe("/admin");
@@ -84,6 +86,7 @@ describe("кнопка «Создать» в нижней панели", () => {
   test("с живым токеном кнопка остаётся видимой", async () => {
     mockMe("ok");
     window.localStorage.setItem(TOKEN_KEY, "good-token");
+    resetAuthStoreForTests();
     renderNav();
     const link = await screen.findByLabelText("Создать мероприятие");
     expect(link.getAttribute("href")).toBe("/admin");
@@ -95,6 +98,7 @@ describe("кнопка «Создать» в нижней панели", () => {
   test("с мёртвым токеном кнопка прячется и токен стирается (без висячего плюса)", async () => {
     mockMe("expired");
     window.localStorage.setItem(TOKEN_KEY, "dead-token");
+    resetAuthStoreForTests();
     renderNav();
     await waitFor(() => expect(screen.queryByLabelText("Создать мероприятие")).toBeNull());
     expect(getAdminToken()).toBeNull();
@@ -105,6 +109,7 @@ describe("ProtectedRoute не держит цикл «админ → профи�
   test("с живым токеном /protected-admin рендерит админку", async () => {
     mockMe("ok");
     window.localStorage.setItem(TOKEN_KEY, "good-token");
+    resetAuthStoreForTests();
     render(
       <MemoryRouter initialEntries={["/protected-admin"]}>
         <Routes>
@@ -127,6 +132,7 @@ describe("ProtectedRoute не держит цикл «админ → профи�
       })
     );
     window.localStorage.setItem(TOKEN_KEY, "good-token");
+    resetAuthStoreForTests();
     render(
       <MemoryRouter initialEntries={["/protected-admin"]}>
         <Routes>
@@ -147,6 +153,7 @@ describe("ProtectedRoute не держит цикл «админ → профи�
   test("с мёртвым токеном не выкидывает: вход на месте и сразу админка", async () => {
     mockMe("expired");
     window.localStorage.setItem(TOKEN_KEY, "dead-token");
+    resetAuthStoreForTests();
     render(
       <MemoryRouter initialEntries={["/protected-admin"]}>
         <Routes>
