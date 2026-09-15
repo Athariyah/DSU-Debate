@@ -4,13 +4,37 @@ export const API_BASE_URL = (configuredApiUrl || "/api").replace(/\/$/, "");
 const AUTH_TOKEN_KEY = "dsu_admin_jwt";
 export const AUTH_TOKEN_EVENT = "dsu-admin-token-changed";
 
+// Превью может открываться во встроенном фрейме стороннего сайта, где браузер
+// блокирует localStorage (Safari ITP, жёсткие настройки приватности). Тогда
+// setItem бросает исключение, токен не сохраняется и каждый запрос уходит
+// без Authorization — пользователь застревает в цикле «плюс → профиль».
+// Держим fallback в памяти модуля: сессия живёт хотя бы в пределах страницы.
+let memoryToken: string | null = null;
+
 export function getAdminToken(): string | null {
-  return localStorage.getItem(AUTH_TOKEN_KEY);
+  try {
+    return window.localStorage.getItem(AUTH_TOKEN_KEY) ?? memoryToken;
+  } catch {
+    return memoryToken;
+  }
 }
 
 export function setAdminToken(token: string) {
-  if (token) localStorage.setItem(AUTH_TOKEN_KEY, token);
-  else localStorage.removeItem(AUTH_TOKEN_KEY);
+  if (token) {
+    memoryToken = token;
+    try {
+      window.localStorage.setItem(AUTH_TOKEN_KEY, token);
+    } catch {
+      // localStorage недоступен — остаётся memoryToken.
+    }
+  } else {
+    memoryToken = null;
+    try {
+      window.localStorage.removeItem(AUTH_TOKEN_KEY);
+    } catch {
+      // ignore
+    }
+  }
   // Сообщаем всем подписчикам (нижняя панель, профиль), что состояние входа
   // изменилось — кнопка «Создать» появляется/исчезает без перезагрузки.
   window.dispatchEvent(new Event(AUTH_TOKEN_EVENT));
