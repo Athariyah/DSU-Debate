@@ -11,8 +11,15 @@ const TOKEN_KEY = "dsu_admin_jwt";
 function mockMe(result: "ok" | "expired") {
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (input: unknown, init?: { headers?: Record<string, string> }) => {
+    vi.fn(async (input: unknown, init?: { headers?: Record<string, string>; method?: string }) => {
       const url = String(input);
+      if (url.includes("/admin/auth/login") && init?.method === "POST") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ admin: { id: 1, email: "a@b.c" }, token: "good-token", expiresIn: "8h" }),
+        };
+      }
       if (url.includes("/admin/auth/me")) {
         const auth = init?.headers?.Authorization ?? "";
         if (result === "ok" && auth === "Bearer good-token") {
@@ -105,7 +112,7 @@ describe("ProtectedRoute не держит цикл «админ → профи�
     expect(await screen.findByText("ADMIN PAGE")).toBeTruthy();
   });
 
-  test("с мёртвым токеном уходит на /profile с редиректом обратно", async () => {
+  test("с мёртвым токеном не выкидывает: вход на месте и сразу админка", async () => {
     mockMe("expired");
     window.localStorage.setItem(TOKEN_KEY, "dead-token");
     render(
@@ -119,6 +126,17 @@ describe("ProtectedRoute не держит цикл «админ → профи�
         </Routes>
       </MemoryRouter>
     );
-    expect(await screen.findByText("PROFILE PAGE")).toBeTruthy();
+
+    // Никуда не редиректит: форма входа показана прямо на защищённом экране.
+    expect(await screen.findByText("Вход в панель администрирования")).toBeTruthy();
+    expect(screen.queryByText("PROFILE PAGE")).toBeNull();
+
+    // Вход на месте открывает защищённый экран без перехода на профиль.
+    fireEvent.change(screen.getByPlaceholderText("Email администратора"), {
+      target: { value: "admin@dsu.local" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Пароль"), { target: { value: "ChangeMe123!" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Войти$/ }));
+    expect(await screen.findByText("ADMIN PAGE")).toBeTruthy();
   });
 });
