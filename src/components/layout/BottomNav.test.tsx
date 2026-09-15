@@ -81,16 +81,23 @@ describe("кнопка «Создать» в нижней панели", () => {
     expect(await screen.findByText("ADMIN PAGE")).toBeTruthy();
   });
 
-  test("кнопка не исчезает сама: видима, пока токен лежит в хранилище", async () => {
-    mockMe("expired");
-    window.localStorage.setItem(TOKEN_KEY, "some-token");
+  test("с живым токеном кнопка остаётся видимой", async () => {
+    mockMe("ok");
+    window.localStorage.setItem(TOKEN_KEY, "good-token");
     renderNav();
     const link = await screen.findByLabelText("Создать мероприятие");
     expect(link.getAttribute("href")).toBe("/admin");
-    // Фоновых сбросов больше нет: токен и кнопка остаются на месте.
     await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(getAdminToken()).toBe("some-token");
+    expect(getAdminToken()).toBe("good-token");
     expect(screen.getByLabelText("Создать мероприятие")).toBeTruthy();
+  });
+
+  test("с мёртвым токеном кнопка прячется и токен стирается (без висячего плюса)", async () => {
+    mockMe("expired");
+    window.localStorage.setItem(TOKEN_KEY, "dead-token");
+    renderNav();
+    await waitFor(() => expect(screen.queryByLabelText("Создать мероприятие")).toBeNull());
+    expect(getAdminToken()).toBeNull();
   });
 });
 

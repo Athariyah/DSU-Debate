@@ -68,7 +68,8 @@ export function CreateDebatePage() {
 
   return (
     <div className="flex h-full flex-col">
-      <TopBar showBack title="Создать дебат" rightSlot="menu" />
+      {/* Стрелка «назад» всегда возвращает на панель администрирования. */}
+      <TopBar showBack onBack={() => navigate("/admin")} title="Создать дебат" rightSlot="menu" />
 
       <div className="no-scrollbar flex-1 overflow-y-auto px-5 pb-8 pt-2">
         <section>

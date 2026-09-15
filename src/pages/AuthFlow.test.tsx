@@ -9,6 +9,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { ProfilePage } from "./ProfilePage";
 import { AdminPage } from "./AdminPage";
+import { CreateDebatePage } from "./CreateDebatePage";
 import { ProtectedRoute } from "../components/auth/ProtectedRoute";
 
 vi.stubGlobal(
@@ -81,4 +82,35 @@ test("вход в профиле → плюс появляется → клик 
   fireEvent.click(plus);
   expect(await screen.findByText("Мероприятия", {}, { timeout: 3000 })).toBeTruthy();
   expect(await screen.findByText("Мероприятий пока нет")).toBeTruthy();
+});
+
+test("стрелка «назад» на экране создания возвращает в панель администрирования", async () => {
+  window.localStorage.setItem("dsu_admin_jwt", "good-token");
+  render(
+    <MemoryRouter initialEntries={["/create"]}>
+      <Routes>
+        <Route
+          path="/create"
+          element={
+            <ProtectedRoute>
+              <CreateDebatePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute>
+              <AdminPage />
+            </ProtectedRoute>
+          }
+        />
+      </Routes>
+    </MemoryRouter>
+  );
+
+  // Дождёмся загрузки защищённого экрана создания.
+  await screen.findByText("Создать дебат");
+  fireEvent.click(screen.getByLabelText("Назад"));
+  expect(await screen.findByText("Мероприятия", {}, { timeout: 3000 })).toBeTruthy();
 });

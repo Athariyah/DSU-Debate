@@ -1,19 +1,19 @@
 import { useEffect, useState } from "react";
-import { AUTH_TOKEN_EVENT, getAdminToken } from "../api/httpClient";
+import { apiFetch, ApiError, AUTH_TOKEN_EVENT, getAdminToken, setAdminToken } from "../api/httpClient";
 
 /**
- * Синхронное состояние входа администратора: токен лежит в localStorage
- * (или в memory-fallback, если хранилище заблокировано браузером).
+ * Живое состояние входа администратора для нижней панели и профиля.
  *
- * Хук НЕ обращается к серверу и НИКОГДА сам не сбрасывает токен: любая
- * фоновая «валидация» приводила к тому, что кнопка «Создать» исчезала, а
- * пользователя выкидывало с профиля посреди сессии. Настоящая проверка
- * токена происходит там, где она обязательна, — в ProtectedRoute при входе
- * на /admin: мёртвый токен просто отправляет на форму входа с редиректом
- * обратно, а живая сессия проходит без единого лишнего запроса.
- *
- * Подписка на AUTH_TOKEN_EVENT синхронизирует нижнюю панель и профиль:
- * вход/выход мгновенно показывает/прячет кнопку «Создать».
+ * - видимость кнопки «Создать» стартует синхронно по наличию токена;
+ * - при монтировании токен один раз проверяется на сервере: если сервер
+ *   ответил 401 (сессия истекла — токен живёт 8 часов), токен стирается,
+ *   кнопка прячется, а профиль показывает понятное «Сессия истекла —
+ *   войдите заново» и форму входа. Никакого молчаливого «авторизован» с
+ *   мёртвым JWT и никакой висящей кнопки без входа;
+ * - ошибки сети токен НЕ стирают, чтобы не терять живую сессию из-за
+ *   временного сбоя;
+ * - подписка на AUTH_TOKEN_EVENT: вход/выход в «Профиле» мгновенно
+ *   показывает/прячет кнопку без перезагрузки.
  */
 export function useAdminAuth(): boolean {
   const [isAdmin, setIsAdmin] = useState<boolean>(() => Boolean(getAdminToken()));
@@ -22,6 +22,19 @@ export function useAdminAuth(): boolean {
     const sync = () => setIsAdmin(Boolean(getAdminToken()));
     window.addEventListener(AUTH_TOKEN_EVENT, sync);
     return () => window.removeEventListener(AUTH_TOKEN_EVENT, sync);
+  }, []);
+
+  useEffect(() => {
+    if (!getAdminToken()) return;
+    let mounted = true;
+    apiFetch("/admin/auth/me", { auth: true }).catch((error: unknown) => {
+      if (mounted && error instanceof ApiError && error.status === 401) {
+        setAdminToken("");
+      }
+    });
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   return isAdmin;

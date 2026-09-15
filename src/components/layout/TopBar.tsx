@@ -6,9 +6,11 @@ interface TopBarProps {
   showBack?: boolean;
   rightSlot?: "menu" | "profile" | "none";
   onMenuClick?: () => void;
+  /** Куда ведёт стрелка «назад»; по умолчанию — предыдущая страница истории. */
+  onBack?: () => void;
 }
 
-export function TopBar({ title, showBack, rightSlot = "none", onMenuClick }: TopBarProps) {
+export function TopBar({ title, showBack, rightSlot = "none", onMenuClick, onBack }: TopBarProps) {
   const navigate = useNavigate();
 
   return (
@@ -16,7 +18,7 @@ export function TopBar({ title, showBack, rightSlot = "none", onMenuClick }: Top
       <div className="flex min-w-9 items-center">
         {showBack && (
           <button
-            onClick={() => navigate(-1)}
+            onClick={onBack ?? (() => navigate(-1))}
             className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/80 transition hover:bg-white/10"
             aria-label="Назад"
           >
