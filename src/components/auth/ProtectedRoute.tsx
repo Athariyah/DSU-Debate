@@ -1,26 +1,31 @@
 import type { ReactNode } from "react";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, UserRound } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { verifySession } from "../../api/authStore";
 import { useAuthStatus } from "../../hooks/useAdminAuth";
-import { AdminLoginForm } from "./AdminLoginForm";
 import { Button } from "../ui/Button";
 
 /**
  * Защищённый экран (администрирование, создание).
  *
- * Решение о доступе берётся из единого стора сессии: состояние authed
- * означает, что сервер УЖЕ подтвердил вход (при логине или стартовой
- * проверке), поэтому навигация не дёргает /me заново и живую сессию
- * невозможно «выкинуть» случайным сбоем по пути.
+ * Решение о доступе берётся из единого стора сессии: authed означает, что
+ * сервер УЖЕ подтвердил вход (при логине во вкладке «Профиль» или стартовой
+ * проверке токена), поэтому навигация не дёргает /me заново и живую сессию
+ * нельзя «выкинуть» случайным сбоем.
+ *
+ * Формы входа здесь намеренно НЕТ — вход администратора живёт только во
+ * вкладке «Профиль». Без сессии экран объясняет это и предлагает открыть
+ * профиль, без всяких редиректов и окон.
  *
  *  - checking → «Проверка доступа…»;
  *  - network  → «Не удалось связаться с сервером» + «Повторить»
- *               (это НЕ «выкидывание» и НЕ форма входа);
- *  - anonymous/expired → форма входа прямо здесь, после входа экран
- *               открывается на месте.
+ *               (это НЕ «выкидывание»);
+ *  - anonymous/expired → подсказка «только для администраторов» и кнопка
+ *               в профиль.
  */
 export function ProtectedRoute({ children }: { children: ReactNode }) {
   const status = useAuthStatus();
+  const navigate = useNavigate();
 
   if (status === "authed") {
     return <>{children}</>;
@@ -48,10 +53,20 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
         )}
 
         {(status === "anonymous" || status === "expired") && (
-          <AdminLoginForm
-            title="Вход в панель администрирования"
-            subtitle="Войдите, чтобы открыть панель — после входа она появится сразу, без перехода на профиль."
-          />
+          <div className="glass-panel space-y-3 rounded-2xl border border-white/10 p-4">
+            <p className="text-sm font-semibold text-white">Раздел доступен только администраторам</p>
+            <p className="text-xs leading-relaxed text-white/45">
+              {status === "expired"
+                ? "Сохранённая сессия истекла. "
+                : ""}
+              Войдите как администратор во вкладке «Профиль» — после входа
+              кнопка «Создать» и этот экран станут доступны.
+            </p>
+            <Button variant="glass" fullWidth onClick={() => navigate("/profile")}>
+              <UserRound size={15} />
+              Открыть профиль
+            </Button>
+          </div>
         )}
       </div>
     </div>

@@ -151,7 +151,7 @@ describe("ProtectedRoute не держит цикл «админ → профи�
     expect(screen.queryByText("PROFILE PAGE")).toBeNull();
   });
 
-  test("с мёртвым токеном не выкидывает: вход на месте и сразу админка", async () => {
+  test("с мёртвым токеном без формы входа: подсказка и кнопка в профиль", async () => {
     mockMe("expired");
     window.localStorage.setItem(TOKEN_KEY, "dead-token");
     resetAuthStoreForTests();
@@ -167,17 +167,15 @@ describe("ProtectedRoute не держит цикл «админ → профи�
       </MemoryRouter>
     );
 
-    // Никуда не редиректит: форма входа показана прямо на защищённом экране.
-    expect(await screen.findByText("Вход в панель администрирования")).toBeTruthy();
+    // Никуда не редиректит и никакой формы входа на защищённом экране:
+    // только подсказка «только для администраторов» и кнопка в профиль.
+    expect(await screen.findByText("Раздел доступен только администраторам")).toBeTruthy();
+    expect(screen.queryByPlaceholderText("Email администратора")).toBeNull();
     expect(screen.queryByText("PROFILE PAGE")).toBeNull();
 
-    // Вход на месте открывает защищённый экран без перехода на профиль.
-    fireEvent.change(screen.getByPlaceholderText("Email администратора"), {
-      target: { value: "admin@dsu.local" },
-    });
-    fireEvent.change(screen.getByPlaceholderText("Пароль"), { target: { value: "ChangeMe123!" } });
-    fireEvent.click(screen.getByRole("button", { name: /^Войти$/ }));
-    expect(await screen.findByText("ADMIN PAGE")).toBeTruthy();
+    // Кнопка ведёт в профиль — вход администратора живёт только там.
+    fireEvent.click(screen.getByRole("button", { name: /Открыть профиль/ }));
+    expect(await screen.findByText("PROFILE PAGE")).toBeTruthy();
   });
 
   test("401 от admin-API при живой сессии: стор сам гасит сессию и показывает вход", async () => {
@@ -223,7 +221,7 @@ describe("ProtectedRoute не держит цикл «админ → профи�
     expect(await screen.findByText("PROBE")).toBeTruthy();
     // Admin-запрос получил 401 → стор перешёл в expired: токен стёрт (плюс
     // скрыт), экран показал форму входа на месте.
-    expect(await screen.findByText("Вход в панель администрирования")).toBeTruthy();
+    expect(await screen.findByText("Раздел доступен только администраторам")).toBeTruthy();
     await waitFor(() => expect(getAdminToken()).toBeNull());
     expect(screen.queryByText("PROBE")).toBeNull();
   });
