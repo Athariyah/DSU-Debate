@@ -51,6 +51,17 @@ export function createApp(): Application {
   );
   app.use(express.json({ limit: "1mb" }));
   app.use("/api", apiRateLimit);
+  // Диагностический журнал admin-запросов: метод, путь, статус, время.
+  // Помогает точно видеть, доходят ли запросы браузера и чем отвечают.
+  app.use("/api/admin", (req, res, next) => {
+    const startedAt = Date.now();
+    res.on("finish", () => {
+      console.log(
+        `[http] ${req.method} ${req.originalUrl} -> ${res.statusCode} (${Date.now() - startedAt}ms)`
+      );
+    });
+    next();
+  });
 
   app.get("/api/health/live", (_req, res) => {
     res.status(200).json({ status: "ok", service: "dsu-debate-backend" });

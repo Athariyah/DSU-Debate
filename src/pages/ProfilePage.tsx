@@ -6,7 +6,7 @@ import { BottomNav } from "../components/layout/BottomNav";
 import { Button } from "../components/ui/Button";
 import { getSavedProfileName } from "../utils/votedStore";
 import { getDeviceFingerprint } from "../utils/device";
-import { getAdminToken, setAdminToken } from "../api/httpClient";
+import { API_BASE_URL, getAdminToken, setAdminToken } from "../api/httpClient";
 import { markLoggedOut, verifySession } from "../api/authStore";
 import { logoutAdmin } from "../api/debates";
 import { useAuthStatus } from "../hooks/useAdminAuth";
@@ -159,6 +159,9 @@ export function ProfilePage() {
               Кнопка «Создать» в нижней панели появляется только после входа
               администратора. JWT хранится только в этом браузере и передаётся
               в защищённые admin-запросы.
+            </p>
+            <p className="text-[10px] leading-relaxed text-white/25">
+              Диагностика: сборка diag-b · сессия: {status} · API: {API_BASE_URL}
             </p>
           </div>
         </div>
