@@ -25,6 +25,7 @@ export async function requireAdminAuth(
 ): Promise<void> {
   const token = getBearerOrCookieToken(req);
   if (!token) {
+    console.log(`[auth] 401 ${req.method} ${req.originalUrl} reason=token-missing`);
     next(new ApiError(401, "UNAUTHORIZED", "Требуется авторизация администратора"));
     return;
   }
@@ -41,6 +42,7 @@ export async function requireAdminAuth(
     req.admin = { adminId: admin.rows[0].id, email: admin.rows[0].email };
     next();
   } catch {
+    console.log(`[auth] 401 ${req.method} ${req.originalUrl} reason=token-invalid prefix=${token.slice(0, 12)}…`);
     next(new ApiError(401, "UNAUTHORIZED", "Недействительный или отозванный токен"));
   }
 }

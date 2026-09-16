@@ -40,12 +40,12 @@ interface RequestOptions extends RequestInit {
   auth?: boolean;
 }
 
-// Единая реакция на «сервер сказал, что токена нет/он мёртв» (401 на запросе
-// с auth:true). Регистрируется стором сессии: UI мгновенно переходит в
-// согласованное состояние (плюс скрыт, форма входа на месте) — состояние
-// «выкинуло, а кнопка осталась» невозможно в принципе.
-let unauthorizedHandler: (() => void) | null = null;
-export function setUnauthorizedHandler(handler: () => void): void {
+// Единая реакция на «сервер сказал, что токен мёртв» (401 на запросе с
+// auth:true). Регистрируется стором сессии; передаём ТОКЕН, с которым ушёл
+// запрос, чтобы стор не погасил свежую сессию из-за запоздалого ответа,
+// отправленного ещё со старым токеном.
+let unauthorizedHandler: ((tokenUsed: string) => void) | null = null;
+export function setUnauthorizedHandler(handler: (tokenUsed: string) => void): void {
   unauthorizedHandler = handler;
 }
 
@@ -77,9 +77,10 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   }
 
   if (!response.ok) {
-    // 401 на запросе, который ушёл с токеном, — сессия мертва по мнению
-    // сервера. Сообщаем стору, чтобы UI стал согласованным (см. authStore).
-    if (response.status === 401 && auth) unauthorizedHandler?.();
+    // 401 на запросе, который ушёл с токеном, — сервер считает этот токен
+    // мёртвым. Сообщаем стору ТОЛЬКО про этот токен (см. authStore): если
+    // пользователь уже перелогинился, запоздалый ответ не погасит новую сессию.
+    if (response.status === 401 && auth && token) unauthorizedHandler?.(token);
     let message = `Сервер вернул ошибку ${response.status}`;
     let code: string | undefined;
     let details: string | undefined;

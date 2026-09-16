@@ -64,17 +64,19 @@ export function markLoggedOut(): void {
 }
 
 /**
- * Сервер ответил 401 на запрос с токеном (любой admin-запрос, не только /me):
- * стираем токен и переходим в expired. Плюс прячется и защищённый экран
- * показывает форму входа в тот же момент — рассинхрон «выкинуло, а кнопка
+ * Сервер ответил 401 на запрос с токеном (любой admin-запрос, не только /me).
+ * Гасим сессию, ТОЛЬКО если отвергнутый токен всё ещё текущий: запоздалый
+ * ответ, отправленный ещё со старым токеном (до перелогина), не должен
+ * «выкидывать» свежую сессию. Плюс прячется и защищённый экран передаёт
+ * эстафету профилю в тот же момент — рассинхрон «выкинуло, а кнопка
  * осталась» невозможен.
  */
-export function markExpired(): void {
+setUnauthorizedHandler((tokenUsed) => {
+  if (getAdminToken() !== tokenUsed) return;
   setAdminToken("");
   status = "expired";
   emit();
-}
-setUnauthorizedHandler(markExpired);
+});
 
 /** Одна проверка токена на сервере; результат раскладывается по статусам. */
 export function verifySession(): Promise<void> {
@@ -83,15 +85,19 @@ export function verifySession(): Promise<void> {
     emit();
     return Promise.resolve();
   }
+  const checkedToken = getAdminToken();
   verifyStarted = true;
   status = "checking";
   emit();
   return apiFetch("/admin/auth/me", { auth: true })
     .then(() => {
+      // Если пока летел запрос пользователь перелогинился — не трогаем.
+      if (getAdminToken() !== checkedToken) return;
       status = "authed";
       emit();
     })
     .catch((error: unknown) => {
+      if (getAdminToken() !== checkedToken) return; // сессия уже заменена
       if (isAuthError(error)) {
         setAdminToken("");
         status = "expired";
