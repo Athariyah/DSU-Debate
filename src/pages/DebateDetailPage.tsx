@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   Home,
   Link2,
+  MonitorPlay,
   RefreshCw,
   Settings2,
   Users,
@@ -116,7 +117,15 @@ export function DebateDetailPage() {
             aria-label="Закрыть меню"
             onClick={() => setMenuOpen(false)}
           />
-          <div className="glass-panel absolute right-5 top-16 z-40 w-56 overflow-hidden rounded-2xl border border-white/10 shadow-2xl">
+          <div className="frosted-panel absolute right-5 top-16 z-40 w-60 overflow-hidden rounded-2xl border border-white/15">
+            <MenuItem
+              icon={MonitorPlay}
+              label="Трансляция на экран"
+              onClick={() => {
+                setMenuOpen(false);
+                navigate(`/broadcast/${event.id}`);
+              }}
+            />
             <MenuItem icon={Link2} label="Скопировать ссылку" onClick={copyLink} />
             <MenuItem
               icon={RefreshCw}
@@ -141,7 +150,7 @@ export function DebateDetailPage() {
       )}
 
       {menuNotice && (
-        <div className="glass-panel absolute left-1/2 top-16 z-40 -translate-x-1/2 rounded-full border border-white/10 px-4 py-2 text-xs text-white/80">
+        <div className="frosted-panel absolute left-1/2 top-16 z-40 -translate-x-1/2 rounded-full border border-white/15 px-4 py-2 text-xs text-white/80">
           {menuNotice}
         </div>
       )}

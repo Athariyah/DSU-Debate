@@ -3,6 +3,7 @@ import { Check, ChevronDown, ChevronUp, Plus, Save, Trash2 } from "lucide-react"
 import { Link, useNavigate } from "react-router-dom";
 import { TopBar } from "../components/layout/TopBar";
 import { Button } from "../components/ui/Button";
+import { DateTimeField } from "../components/ui/DateTimeField";
 import {
   createAdminParticipant,
   deleteAdminParticipant,
@@ -15,12 +16,6 @@ import {
   updateDebate,
 } from "../api/debates";
 import type { DebateStatus } from "../types";
-
-function toDateTimeLocal(value: string) {
-  const date = new Date(value);
-  const pad = (number: number) => String(number).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
 
 export function AdminPage() {
   const [events, setEvents] = useState<AdminEventSummary[]>([]);
@@ -189,12 +184,12 @@ export function AdminPage() {
                   </select>
                 </div>
 
-                <input
-                  type="datetime-local"
-                  value={toDateTimeLocal(event.dateTime)}
-                  onChange={(inputEvent) => updateEventLocal(event.id, { dateTime: new Date(inputEvent.target.value).toISOString() })}
-                  className="mt-3 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none"
-                  style={{ colorScheme: "dark" }}
+                {/* Раздельные поля даты и времени: один datetime-local на
+                    телефоне вылезал за рамку карточки. */}
+                <DateTimeField
+                  className="mt-3"
+                  value={event.dateTime}
+                  onChange={(iso) => updateEventLocal(event.id, { dateTime: iso })}
                 />
 
                 <div className="mt-3 flex flex-wrap gap-2">

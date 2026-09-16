@@ -82,7 +82,7 @@ export function HomePage() {
         </div>
 
         <div className="mt-3 space-y-3">
-          {upcoming.map((event) => <UpcomingDebateItem key={event.id} event={event} />)}
+          {upcoming.map((event, index) => <UpcomingDebateItem key={event.id} event={event} index={index} />)}
           {!loading && !error && upcoming.length === 0 && (
             <p className="py-6 text-center text-sm text-white/40">Пока нет запланированных дебатов</p>
           )}
@@ -92,7 +92,7 @@ export function HomePage() {
           <>
             <h3 className="mt-8 text-[15px] font-semibold text-white">Последние завершённые</h3>
             <div className="mt-3 space-y-3">
-              {completed.slice(0, 3).map((event) => <UpcomingDebateItem key={event.id} event={event} />)}
+              {completed.slice(0, 3).map((event, index) => <UpcomingDebateItem key={event.id} event={event} index={index} />)}
             </div>
           </>
         )}
