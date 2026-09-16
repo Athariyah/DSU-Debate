@@ -118,6 +118,30 @@ test("стрелка «назад» на экране создания возв�
   expect(await screen.findByText("Мероприятия", {}, { timeout: 3000 })).toBeTruthy();
 });
 
+test("стрелка «назад» на экране администрирования возвращает на страницу дебатов", async () => {
+  window.localStorage.setItem("dsu_admin_jwt", "good-token");
+  resetAuthStoreForTests();
+  render(
+    <MemoryRouter initialEntries={["/admin"]}>
+      <Routes>
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute>
+              <AdminPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/debates" element={<div>Страница дебатов</div>} />
+      </Routes>
+    </MemoryRouter>
+  );
+
+  await screen.findByText("Мероприятия", {}, { timeout: 3000 });
+  fireEvent.click(screen.getByLabelText("Назад"));
+  expect(await screen.findByText("Страница дебатов", {}, { timeout: 3000 })).toBeTruthy();
+});
+
 describe("гонка: запоздалый 401 со старым токеном не гасит свежую сессию", () => {
   test("перелогин во время проверки не приводит к «выкидыванию»", async () => {
     // /me с good-token отвечает быстро и 200; с любым другим — медленно и 401.
