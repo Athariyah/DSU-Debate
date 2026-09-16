@@ -2,7 +2,8 @@ import { useState } from "react";
 import { LogIn } from "lucide-react";
 import { Button } from "../ui/Button";
 import { loginAdmin } from "../../api/debates";
-import { setAdminToken } from "../../api/httpClient";
+import { getAdminToken, setAdminToken } from "../../api/httpClient";
+import { apiFetch } from "../../api/httpClient";
 import { markAuthed } from "../../api/authStore";
 
 interface AdminLoginFormProps {
@@ -32,6 +33,15 @@ export function AdminLoginForm({ title = "Вход администратора"
       const response = await loginAdmin(email.trim(), password);
       setAdminToken(response.token);
       markAuthed();
+      // Маячок в журнал backend: видно, дошёл ли токен до хранилища браузера.
+      void apiFetch("/_diag", {
+        method: "POST",
+        body: JSON.stringify({
+          step: "after-login",
+          respToken: typeof response.token === "string" && response.token.length > 20,
+          stored: Boolean(getAdminToken()),
+        }),
+      }).catch(() => undefined);
       setPassword("");
       onSuccess?.();
     } catch (loginError) {

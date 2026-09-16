@@ -44,9 +44,19 @@ interface RequestOptions extends RequestInit {
 // auth:true). Регистрируется стором сессии; передаём ТОКЕН, с которым ушёл
 // запрос, чтобы стор не погасил свежую сессию из-за запоздалого ответа,
 // отправленного ещё со старым токеном.
-let unauthorizedHandler: ((tokenUsed: string) => void) | null = null;
-export function setUnauthorizedHandler(handler: (tokenUsed: string) => void): void {
+let unauthorizedHandler: ((tokenUsed: string | null) => void) | null = null;
+export function setUnauthorizedHandler(handler: (tokenUsed: string | null) => void): void {
   unauthorizedHandler = handler;
+}
+
+// Диагностический маячок в журнал backend: помогает увидеть аномалии
+// хранения токена глазами браузера, а не гадать по серверным 401.
+function diag(payload: Record<string, unknown>): void {
+  void fetch(`${API_BASE_URL}/_diag`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  }).catch(() => undefined);
 }
 
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -80,7 +90,10 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
     // 401 на запросе, который ушёл с токеном, — сервер считает этот токен
     // мёртвым. Сообщаем стору ТОЛЬКО про этот токен (см. authStore): если
     // пользователь уже перелогинился, запоздалый ответ не погасит новую сессию.
-    if (response.status === 401 && auth && token) unauthorizedHandler?.(token);
+    if (response.status === 401 && auth) {
+      unauthorizedHandler?.(token ?? null);
+      if (!token) diag({ step: "auth-request-without-token", path });
+    }
     let message = `Сервер вернул ошибку ${response.status}`;
     let code: string | undefined;
     let details: string | undefined;

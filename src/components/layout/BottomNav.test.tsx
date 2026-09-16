@@ -10,7 +10,7 @@ import { resetAuthStoreForTests } from "../../api/authStore";
 
 const TOKEN_KEY = "dsu_admin_jwt";
 
-function mockMe(result: "ok" | "expired") {
+function mockMe(result: "ok" | "expired" | "cookie") {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: unknown, init?: { headers?: Record<string, string>; method?: string }) => {
@@ -25,6 +25,10 @@ function mockMe(result: "ok" | "expired") {
       if (url.includes("/admin/auth/me")) {
         const auth = init?.headers?.Authorization ?? "";
         if (result === "ok" && auth === "Bearer good-token") {
+          return { ok: true, status: 200, json: async () => ({ admin: { id: 1, email: "a@b.c" } }) };
+        }
+        // cookie-сессия: локального токена нет, но сервер узнаёт cookie.
+        if (result === "cookie" && !auth) {
           return { ok: true, status: 200, json: async () => ({ admin: { id: 1, email: "a@b.c" } }) };
         }
         return { ok: false, status: 401, json: async () => ({ message: "unauthorized" }) };
@@ -65,6 +69,13 @@ afterEach(() => {
 });
 
 describe("кнопка «Создать» в нижней панели", () => {
+  test("cookie-сессия без локального токена: плюс виден после проверки /me", async () => {
+    mockMe("cookie");
+    renderNav();
+    // /me ответил 200 за счёт cookie — сессия подхвачена, плюс на месте.
+    expect(await screen.findByLabelText("Создать мероприятие")).toBeTruthy();
+  });
+
   test("без токена админа кнопки нет", async () => {
     mockMe("expired");
     renderNav();

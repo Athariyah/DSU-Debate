@@ -51,6 +51,12 @@ export function createApp(): Application {
   );
   app.use(express.json({ limit: "1mb" }));
   app.use("/api", apiRateLimit);
+  // Клиентский диагностический «маячок»: фронтенд рассказывает, что
+  // произошло с токеном после входа — журнал виден в логах backend.
+  app.post("/api/_diag", (req, res) => {
+    console.log(`[diag] ${JSON.stringify(req.body ?? {})}`);
+    res.status(204).end();
+  });
   // Диагностический журнал admin-запросов: метод, путь, статус, время.
   // Помогает точно видеть, доходят ли запросы браузера и чем отвечают.
   app.use("/api/admin", (req, res, next) => {

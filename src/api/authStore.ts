@@ -3,25 +3,25 @@ import { apiFetch, getAdminToken, isAuthError, setAdminToken, setUnauthorizedHan
 /**
  * Единый источник правды о входе администратора.
  *
- * Раньше видимость кнопки «Создать» (наличие токена) и доступ (проверка на
- * сервере) жили отдельно, из-за чего плюс то мигал при загрузке, то висел при
- * «выкинутой» сессии. Теперь всё состояние — здесь:
+ * Сессия держится на двух носителях: токен в localStorage/памяти (уходит
+ * заголовком Authorization) и HttpOnly-cookie (переживает перезагрузки и
+ * перемонтирования встроенного превью, где localStorage может быть
+ * недоступен). Поэтому проверка /me выполняется ВСЕГДА — даже без локального
+ * токена: если жива cookie, сервер ответит 200 и сессия подхватится.
  *
  *  - anonymous — входа нет, плюс скрыт;
- *  - checking  — токен найден при загрузке, идёт одна проверка /me;
- *  - authed    — администратор реально авторизован (вход или успешная
- *                проверка) — плюс виден, защищённые экраны открываются;
- *  - expired   — сервер ответил 401: токен стёрт, показываем форму входа;
- *  - network   — до сервера не дошли: предлагаем «Повторить», ничего не
- *                стираем и не рисуем «выкидывание».
+ *  - checking  — идёт проверка /me при загрузке;
+ *  - authed    — сервер подтвердил вход (токеном или cookie);
+ *  - expired   — сервер ответил 401 на локальный токен: токен стёрт;
+ *  - network   — до сервера не дошли: «Повторить», ничего не стираем.
  *
- * Проверка выполняется ОДИН раз при старте (и по «Повторить»); навигация по
- * защищённым экранам больше не дёргает /me, поэтому живой сессии невозможно
- * «вылететь» из-за случайного сбоя по пути.
+ * Навигация по защищённым экранам не дёргает /me заново, живую сессию
+ * нельзя «выкинуть» случайным сбоем; 401 обрабатывается токен-зависимо
+ * (запоздалый ответ со старым токеном не гасит свежую сессию).
  */
 export type AuthStatus = "anonymous" | "checking" | "authed" | "expired" | "network";
 
-let status: AuthStatus = getAdminToken() ? "checking" : "anonymous";
+let status: AuthStatus = "checking";
 let verifyStarted = false;
 const listeners = new Set<() => void>();
 
@@ -33,22 +33,22 @@ export function getAuthStatus(): AuthStatus {
   return status;
 }
 
-/**
- * Пересчитать состояние из хранилища и снять флаг «проверка запущена».
- * Используется только тестами для изоляции между кейсами (модуль — синглтон).
- */
-export function resetAuthStoreForTests(): void {
-  status = getAdminToken() ? "checking" : "anonymous";
-  verifyStarted = false;
-  emit();
-}
-
 export function subscribeAuth(listener: () => void): () => void {
   listeners.add(listener);
   if (status === "checking" && !verifyStarted) void verifySession();
   return () => {
     listeners.delete(listener);
   };
+}
+
+/**
+ * Пересчитать состояние и снять флаг «проверка запущена».
+ * Используется только тестами для изоляции между кейсами (модуль — синглтон).
+ */
+export function resetAuthStoreForTests(): void {
+  status = "checking";
+  verifyStarted = false;
+  emit();
 }
 
 /** Успешный вход: сервер уже подтвердил учетку — помечаем авторизованным. */
@@ -64,45 +64,55 @@ export function markLoggedOut(): void {
 }
 
 /**
- * Сервер ответил 401 на запрос с токеном (любой admin-запрос, не только /me).
- * Гасим сессию, ТОЛЬКО если отвергнутый токен всё ещё текущий: запоздалый
- * ответ, отправленный ещё со старым токеном (до перелогина), не должен
- * «выкидывать» свежую сессию. Плюс прячется и защищённый экран передаёт
- * эстафету профилю в тот же момент — рассинхрон «выкинуло, а кнопка
- * осталась» невозможен.
+ * 401 на запросе с токеном гасит сессию, ТОЛЬКО если отвергнутый токен всё
+ * ещё текущий. 401 на запросе без локального токена (cookie-сессия умерла)
+ * возвращает anonymous. Запоздалые ответы со старыми токенами игнорируются.
  */
 setUnauthorizedHandler((tokenUsed) => {
-  if (getAdminToken() !== tokenUsed) return;
-  setAdminToken("");
-  status = "expired";
-  emit();
-});
-
-/** Одна проверка токена на сервере; результат раскладывается по статусам. */
-export function verifySession(): Promise<void> {
-  if (!getAdminToken()) {
+  const current = getAdminToken();
+  if (tokenUsed && current === tokenUsed) {
+    setAdminToken("");
+    status = "expired";
+    emit();
+    return;
+  }
+  if (!tokenUsed && !current) {
     status = "anonymous";
     emit();
-    return Promise.resolve();
   }
-  const checkedToken = getAdminToken();
+});
+
+/**
+ * Одна проверка на сервере. Выполняется даже без локального токена: живую
+ * cookie-сессию сервер увидит сам. Результат раскладывается по статусам.
+ */
+export function verifySession(): Promise<void> {
+  const localToken = getAdminToken();
   verifyStarted = true;
   status = "checking";
   emit();
   return apiFetch("/admin/auth/me", { auth: true })
     .then(() => {
       // Если пока летел запрос пользователь перелогинился — не трогаем.
-      if (getAdminToken() !== checkedToken) return;
+      if (localToken && getAdminToken() !== localToken) return;
       status = "authed";
       emit();
     })
     .catch((error: unknown) => {
-      if (getAdminToken() !== checkedToken) return; // сессия уже заменена
-      if (isAuthError(error)) {
+      if (!isAuthError(error)) {
+        status = "network";
+        emit();
+        return;
+      }
+      const current = getAdminToken();
+      if (localToken && current === localToken) {
         setAdminToken("");
         status = "expired";
+      } else if (!current) {
+        status = "anonymous";
       } else {
-        status = "network";
+        // Сессия заменена свежим входом, пока летел запрос.
+        status = "authed";
       }
       emit();
     });
