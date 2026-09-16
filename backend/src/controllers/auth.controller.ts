@@ -9,20 +9,34 @@ import { env } from "../config/env";
 import { loginSchema, registerSchema } from "../validation/schemas";
 
 const AUTH_COOKIE = "dsu_admin_token";
-const AUTH_COOKIE_MAX_AGE_SECONDS = 8 * 60 * 60;
+const AUTH_COOKIE_MAX_AGE_SECONDS = 365 * 24 * 60 * 60; // в такт токену (365d)
+
+/**
+ * Cookie — второй носитель сессии (наряду с localStorage+Bearer). Встроенное
+ * превью может терять localStorage и память модулей при перемонтировании
+ * фрейма, а SameSite=Lax не отправляется из стороннего iframe. Поэтому при
+ * защищённом соединении ставим SameSite=None; Secure; Partitioned (CHIPS):
+ * такая cookie переживает перезагрузки и работает во встроенном превью.
+ * На чистом http (локальный LAN-хостинг) остаёмся на Lax без Partitioned.
+ */
+function cookieAttrs(): string {
+  const secure = env.cookieSecure || env.nodeEnv !== "production";
+  return secure
+    ? "; SameSite=None; Secure; Partitioned"
+    : "; SameSite=Lax";
+}
 
 function setAuthCookie(res: Response, token: string) {
-  const secure = env.cookieSecure ? "; Secure" : "";
   res.setHeader(
     "Set-Cookie",
-    `${AUTH_COOKIE}=${encodeURIComponent(token)}; Max-Age=${AUTH_COOKIE_MAX_AGE_SECONDS}; Path=/; HttpOnly; SameSite=Lax${secure}`
+    `${AUTH_COOKIE}=${encodeURIComponent(token)}; Max-Age=${AUTH_COOKIE_MAX_AGE_SECONDS}; Path=/; HttpOnly${cookieAttrs()}`
   );
 }
 
 function clearAuthCookie(res: Response) {
   res.setHeader(
     "Set-Cookie",
-    `${AUTH_COOKIE}=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax${env.cookieSecure ? "; Secure" : ""}`
+    `${AUTH_COOKIE}=; Max-Age=0; Path=/; HttpOnly${cookieAttrs()}`
   );
 }
 

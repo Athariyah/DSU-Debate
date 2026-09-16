@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { CalendarDays, Loader2, Plus, Type, X } from "lucide-react";
 import { TopBar } from "../components/layout/TopBar";
 import { Button } from "../components/ui/Button";
-import { cn } from "../utils/cn";
 import { createDebate } from "../api/debates";
 
 interface DraftParticipant {
@@ -19,20 +18,10 @@ function emptyParticipant(): DraftParticipant {
 export function CreateDebatePage() {
   const navigate = useNavigate();
   const [title, setTitle] = useState("");
-  const [format, setFormat] = useState<2 | 3>(2);
   const [participants, setParticipants] = useState<DraftParticipant[]>([emptyParticipant(), emptyParticipant()]);
   const [scheduledAt, setScheduledAt] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  function updateFormat(next: 2 | 3) {
-    setFormat(next);
-    setParticipants((prev) => {
-      if (prev.length === next) return prev;
-      if (prev.length < next) return [...prev, emptyParticipant()];
-      return prev.slice(0, next);
-    });
-  }
 
   function updateParticipant(id: string, patch: Partial<DraftParticipant>) {
     setParticipants((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
@@ -43,8 +32,6 @@ export function CreateDebatePage() {
   }
 
   function addParticipant() {
-    if (participants.length >= 3) return;
-    setFormat(3);
     setParticipants((prev) => [...prev, emptyParticipant()]);
   }
 
@@ -67,13 +54,20 @@ export function CreateDebatePage() {
     try {
       await createDebate({
         title: title.trim(),
-        format,
+        format: participants.length,
         participants: participants.map((p) => ({ name: p.name.trim(), subtitle: p.subtitle.trim() || undefined })),
         scheduledAt: new Date(scheduledAt).toISOString(),
       });
       navigate("/admin");
-    } catch {
-      setError("Не удалось создать дебат. Попробуйте ещё раз.");
+    } catch (createError) {
+      // Показываем реальную причину. Если это 401, стор сам перейдёт в
+      // «expired» и ProtectedRoute покажет вход на месте — несогласованного
+      // состояния «кнопка есть, а доступа нет» не возникает.
+      setError(
+        createError instanceof Error && createError.message
+          ? createError.message
+          : "Не удалось создать дебат. Попробуйте ещё раз."
+      );
     } finally {
       setSubmitting(false);
     }
@@ -81,7 +75,8 @@ export function CreateDebatePage() {
 
   return (
     <div className="flex h-full flex-col">
-      <TopBar showBack title="Создать дебат" rightSlot="menu" />
+      {/* Стрелка «назад» всегда возвращает на панель администрирования. */}
+      <TopBar showBack onBack={() => navigate("/admin")} title="Создать дебат" rightSlot="menu" />
 
       <div className="no-scrollbar flex-1 overflow-y-auto px-5 pb-8 pt-2">
         <section>
@@ -138,34 +133,17 @@ export function CreateDebatePage() {
               </div>
             ))}
 
-            {participants.length < 3 && (
-              <button
-                onClick={addParticipant}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-white/15 px-4 py-3.5 text-sm font-medium text-white/50 transition hover:border-white/30 hover:text-white/80"
-              >
-                <Plus size={16} />
-                Добавить участника
-              </button>
-            )}
+            <button
+              onClick={addParticipant}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-white/15 px-4 py-3.5 text-sm font-medium text-white/50 transition hover:border-white/30 hover:text-white/80"
+            >
+              <Plus size={16} />
+              Добавить участника
+            </button>
           </div>
-        </section>
-
-        <section className="mt-6">
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-white/40">Формат</label>
-          <div className="glass-panel grid grid-cols-2 gap-1 rounded-2xl border border-white/10 p-1">
-            {[2, 3].map((f) => (
-              <button
-                key={f}
-                onClick={() => updateFormat(f as 2 | 3)}
-                className={cn(
-                  "rounded-xl py-3 text-sm font-semibold transition",
-                  format === f ? "bg-white text-slate-900" : "text-white/50 hover:text-white/80"
-                )}
-              >
-                {f} участника
-              </button>
-            ))}
-          </div>
+          <p className="mt-2 text-[11px] leading-relaxed text-white/35">
+            Формат не ограничен: участников может быть сколько угодно (минимум 2).
+          </p>
         </section>
 
         <section className="mt-6">

@@ -1,7 +1,8 @@
 import { Home, MessagesSquare, Plus, UserRound } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import { NavLink } from "react-router-dom";
 import { cn } from "../../utils/cn";
-import { isAdminAuthenticated } from "../../api/debates";
+import { useAdminAuth } from "../../hooks/useAdminAuth";
 
 const items = [
   { to: "/home", label: "Главная", icon: Home },
@@ -11,6 +12,10 @@ const items = [
 const profileItem = { to: "/profile", label: "Профиль", icon: UserRound };
 
 export function BottomNav() {
+  // Кнопка «Создать» видна только администратору с живой сессией (вход через
+  // «Профиль»), ведёт на экран администрирования и сидит ВНУТРИ панели.
+  const isAdmin = useAdminAuth();
+
   return (
     <div className="safe-bottom absolute inset-x-0 bottom-0 z-30 px-5 pb-4">
       <div className="glass-panel flex items-center justify-between rounded-[1.75rem] border border-white/10 px-4 py-3">
@@ -18,18 +23,44 @@ export function BottomNav() {
           <NavItem key={item.to} {...item} />
         ))}
 
-        <NavLink to={isAdminAuthenticated() ? "/admin" : "/profile"} aria-label="Администратор">
-          {({ isActive }) => (
-            <div
-              className={cn(
-                "-mt-8 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/20 bg-gradient-to-br from-indigo-400 via-violet-500 to-sky-400 text-white shadow-[0_10px_25px_-5px_rgba(99,102,241,0.7)] transition-transform active:scale-95",
-                isActive && "scale-105"
-              )}
+        <AnimatePresence initial={false}>
+          {isAdmin && (
+            <motion.div
+              key="admin-create"
+              initial={{ scale: 0, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0, opacity: 0, y: 10 }}
+              transition={{ type: "spring", stiffness: 520, damping: 26, mass: 0.8 }}
             >
-              <Plus size={24} strokeWidth={2.5} />
-            </div>
+              <NavLink
+                to="/admin"
+                className="flex flex-col items-center gap-1 px-2 py-1"
+                aria-label="Создать мероприятие"
+              >
+                {({ isActive }) => (
+                  <>
+                    <span
+                      className={cn(
+                        "flex h-7 w-7 items-center justify-center rounded-[0.7rem] border border-white/25 bg-gradient-to-br from-indigo-400 via-violet-500 to-sky-400 text-white shadow-[0_4px_14px_-4px_rgba(99,102,241,0.65),inset_0_1px_0_rgba(255,255,255,0.35)] transition-all duration-200 active:scale-90",
+                        isActive && "ring-2 ring-white/40"
+                      )}
+                    >
+                      <Plus size={15} strokeWidth={2.75} />
+                    </span>
+                    <span
+                      className={cn(
+                        "text-[10px] font-medium",
+                        isActive ? "text-white" : "text-white/40"
+                      )}
+                    >
+                      Создать
+                    </span>
+                  </>
+                )}
+              </NavLink>
+            </motion.div>
           )}
-        </NavLink>
+        </AnimatePresence>
 
         <NavItem {...profileItem} />
       </div>

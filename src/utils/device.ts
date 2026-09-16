@@ -6,13 +6,22 @@ const DEVICE_UUID_KEY = "device_uuid";
  * Генерируем стабильный UUID один раз на устройство и переиспользуем его.
  */
 export function getDeviceFingerprint(): string {
-  let id = localStorage.getItem(DEVICE_UUID_KEY);
+  let id: string | null = null;
+  try {
+    id = localStorage.getItem(DEVICE_UUID_KEY);
+  } catch {
+    // localStorage недоступен (встроенные фреймы): работаем без персиста.
+  }
   if (!id) {
     id =
       typeof crypto !== "undefined" && "randomUUID" in crypto
         ? crypto.randomUUID()
         : fallbackUUID();
-    localStorage.setItem(DEVICE_UUID_KEY, id);
+    try {
+      localStorage.setItem(DEVICE_UUID_KEY, id);
+    } catch {
+      // остаёмся с одноразовым отпечатком на эту страницу.
+    }
   }
   return id;
 }

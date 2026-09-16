@@ -1,0 +1,60 @@
+# ===========================================================================
+# DSU Debate — конфигурация Caddy для VPS
+# ===========================================================================
+# Это ШАБЛОН: deploy/setup.sh подставляет вместо __...__ реальные значения и
+# кладёт результат в /etc/caddy/Caddyfile. Вручную можно отредактировать
+# уже /etc/caddy/Caddyfile, а затем:
+#
+#   caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+#   systemctl reload caddy
+#
+# Что делает Caddy:
+#   /             -> статика фронтенда (dist/index.html), со SPA-fallback;
+#   /api/*        -> Node-backend на 127.0.0.1:4000;
+#   /socket.io/*  -> туда же, с апгрейдом до WebSocket (Caddy делает сам);
+#   TLS           -> Let's Encrypt автоматически, если адрес — домен.
+# ===========================================================================
+
+__SITE_ADDRESS__ {
+	# Сжатие ответов (index.html ~620 КБ -> ~190 КБ).
+	encode zstd gzip
+
+	log {
+		output file /var/log/caddy/dsu-debate.access.log {
+			roll_size 10MiB
+			roll_keep 5
+		}
+		format json
+	}
+
+	# --- Backend: REST API ------------------------------------------------
+	handle /api/* {
+		reverse_proxy __BACKEND_ADDR__ {
+			header_up X-Real-IP {remote_host}
+		}
+	}
+
+	# --- Backend: Socket.io (realtime-голосование) ------------------------
+	# reverse_proxy сам пробрасывает Upgrade/Connection, дополнительных
+	# настроек для WebSocket не нужно.
+	handle /socket.io/* {
+		reverse_proxy __BACKEND_ADDR__ {
+			header_up X-Real-IP {remote_host}
+		}
+	}
+
+	# --- Фронтенд: статика + SPA-fallback ---------------------------------
+	# Приложение использует BrowserRouter (src/App.tsx), поэтому любой
+	# неизвестный путь должен отдавать index.html, а не 404.
+	handle {
+		root * __WEB_ROOT__
+		try_files {path} /index.html
+		file_server
+
+		header {
+			-Server
+			X-Content-Type-Options nosniff
+			Referrer-Policy strict-origin-when-cross-origin
+		}
+	}
+}

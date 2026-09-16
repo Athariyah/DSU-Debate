@@ -12,9 +12,17 @@ function readCookie(header: string | undefined, name: string): string | null {
   return pair ? decodeURIComponent(pair.slice(name.length + 1)) : null;
 }
 
+/**
+ * Токен принимается тремя каналами: Authorization: Bearer, заголовок
+ * X-Admin-Token и cookie. Запасной заголовок нужен потому, что некоторые
+ * проксирующие слои (встроенные превью) могут вырезать Authorization и
+ * Cookie из проходящих запросов — кастомный заголовок проходит свободно.
+ */
 export function getBearerOrCookieToken(req: Request): string | null {
   const header = req.headers.authorization;
   if (header?.startsWith("Bearer ")) return header.slice("Bearer ".length).trim();
+  const custom = req.headers["x-admin-token"];
+  if (typeof custom === "string" && custom.trim()) return custom.trim();
   return readCookie(req.headers.cookie, "dsu_admin_token");
 }
 
@@ -25,6 +33,7 @@ export async function requireAdminAuth(
 ): Promise<void> {
   const token = getBearerOrCookieToken(req);
   if (!token) {
+    console.log(`[auth] 401 ${req.method} ${req.originalUrl} reason=token-missing`);
     next(new ApiError(401, "UNAUTHORIZED", "Требуется авторизация администратора"));
     return;
   }
@@ -41,6 +50,7 @@ export async function requireAdminAuth(
     req.admin = { adminId: admin.rows[0].id, email: admin.rows[0].email };
     next();
   } catch {
+    console.log(`[auth] 401 ${req.method} ${req.originalUrl} reason=token-invalid prefix=${token.slice(0, 12)}…`);
     next(new ApiError(401, "UNAUTHORIZED", "Недействительный или отозванный токен"));
   }
 }

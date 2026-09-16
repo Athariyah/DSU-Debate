@@ -13,6 +13,11 @@
 Полное руководство (Windows, VS Code, порты, бэкапы, телефоны в Wi-Fi,
 диагностика): **[docs/LOCAL_HOSTING.md](docs/LOCAL_HOSTING.md)**.
 
+> Нужно выложить сайт в интернет (свой домен, HTTPS, доступ с любого телефона)?
+> Смотрите **[docs/VPS_DEPLOY.md](docs/VPS_DEPLOY.md)**: в `deploy/` лежат
+> готовые Caddyfile, systemd-юнит и скрипт, который ставит Node, PostgreSQL и
+> Caddy на VPS одной командой.
+
 ## Быстрый старт
 
 Нужны только Node.js 18+ и расширение Live Server в VS Code
@@ -98,7 +103,8 @@ npm run build:live
 │   │   └── sockets/     # Socket.io: комнаты дебатов, broadcast результатов
 │   └── .localdb/        # данные локальной БД (в .gitignore, создаётся автоматически)
 ├── sql/                 # схема и миграции
-├── docs/                # LOCAL_HOSTING, API_SPEC, PRIVACY
+├── deploy/              # публикация на VPS: Caddyfile, systemd, setup.sh
+├── docs/                # LOCAL_HOSTING, VPS_DEPLOY, API_SPEC, PRIVACY
 └── .vscode/             # настройки Live Server и задачи VS Code
 ```
 
@@ -112,6 +118,7 @@ cd backend && npm run typecheck && npm run test && npm run build
 ## Документация
 
 - [docs/LOCAL_HOSTING.md](docs/LOCAL_HOSTING.md) — локальный хостинг, БД, Live Server, диагностика
+- [docs/VPS_DEPLOY.md](docs/VPS_DEPLOY.md) — публикация в интернет: Caddy + Node + PostgreSQL на VPS
 - [docs/API_SPEC.md](docs/API_SPEC.md) — REST и Socket.io контракт
 - [docs/PRIVACY.md](docs/PRIVACY.md) — обработка данных голосующих
 - [backend/README.md](backend/README.md) — backend и работа с БД

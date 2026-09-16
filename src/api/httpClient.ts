@@ -3,17 +3,68 @@ export const API_BASE_URL = (configuredApiUrl || "/api").replace(/\/$/, "");
 
 const AUTH_TOKEN_KEY = "dsu_admin_jwt";
 
+// Превью может открываться во встроенном фрейме стороннего сайта, где браузер
+// блокирует localStorage. Тогда setItem бросает исключение, и токен живёт
+// только в памяти. Держать его в переменной модуля НЕЛЬЗЯ: автообновление
+// превью (HMR) создаёт вторую копию модуля со своей переменной — вход
+// сохраняет токен в одну копию, а запросы уходят из другой, без токена
+// («вошёл и сразу выкинуло»). Поэтому fallback живёт на window — он общий
+// для всех копий модуля в пределах страницы.
+const MEMORY_TOKEN_KEY = "__dsuAdminToken";
+
+function memoryToken(): string | null {
+  const w = globalThis as typeof globalThis & Record<string, string | undefined>;
+  return w[MEMORY_TOKEN_KEY] ?? null;
+}
+
 export function getAdminToken(): string | null {
-  return localStorage.getItem(AUTH_TOKEN_KEY);
+  try {
+    return window.localStorage.getItem(AUTH_TOKEN_KEY) ?? memoryToken();
+  } catch {
+    return memoryToken();
+  }
 }
 
 export function setAdminToken(token: string) {
-  if (token) localStorage.setItem(AUTH_TOKEN_KEY, token);
-  else localStorage.removeItem(AUTH_TOKEN_KEY);
+  const w = globalThis as typeof globalThis & Record<string, string | undefined>;
+  if (token) {
+    w[MEMORY_TOKEN_KEY] = token;
+    try {
+      window.localStorage.setItem(AUTH_TOKEN_KEY, token);
+    } catch {
+      // localStorage недоступен — остаётся общий fallback на window.
+    }
+  } else {
+    delete w[MEMORY_TOKEN_KEY];
+    try {
+      window.localStorage.removeItem(AUTH_TOKEN_KEY);
+    } catch {
+      // ignore
+    }
+  }
 }
 
 interface RequestOptions extends RequestInit {
   auth?: boolean;
+}
+
+// Единая реакция на «сервер сказал, что токен мёртв» (401 на запросе с
+// auth:true). Регистрируется стором сессии; передаём ТОКЕН, с которым ушёл
+// запрос, чтобы стор не погасил свежую сессию из-за запоздалого ответа,
+// отправленного ещё со старым токеном.
+let unauthorizedHandler: ((tokenUsed: string | null) => void) | null = null;
+export function setUnauthorizedHandler(handler: (tokenUsed: string | null) => void): void {
+  unauthorizedHandler = handler;
+}
+
+// Диагностический маячок в журнал backend: помогает увидеть аномалии
+// хранения токена глазами браузера, а не гадать по серверным 401.
+function diag(payload: Record<string, unknown>): void {
+  void fetch(`${API_BASE_URL}/_diag`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  }).catch(() => undefined);
 }
 
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -27,7 +78,12 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
       credentials: "include",
       headers: {
         "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        // Токен дублируется в кастомный заголовок: проксирующие слои
+        // встроенных превью могут вырезать Authorization/Cookie, а
+        // X-Admin-Token проходит (backend принимает оба канала).
+        ...(token
+          ? { Authorization: `Bearer ${token}`, "X-Admin-Token": token }
+          : {}),
         ...headers,
       },
     });
@@ -44,6 +100,13 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   }
 
   if (!response.ok) {
+    // 401 на запросе, который ушёл с токеном, — сервер считает этот токен
+    // мёртвым. Сообщаем стору ТОЛЬКО про этот токен (см. authStore): если
+    // пользователь уже перелогинился, запоздалый ответ не погасит новую сессию.
+    if (response.status === 401 && auth) {
+      unauthorizedHandler?.(token ?? null);
+      if (!token) diag({ step: "auth-request-without-token", path });
+    }
     let message = `Сервер вернул ошибку ${response.status}`;
     let code: string | undefined;
     let details: string | undefined;
@@ -87,4 +150,14 @@ export class ApiError extends Error {
     this.code = code;
     this.name = "ApiError";
   }
+}
+
+/** Токен отсутствует/протух/подделан — нужна форма входа. */
+export function isAuthError(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 401;
+}
+
+/** Запрос вообще не дошёл до API (сервер выключен, обрыв сети). */
+export function isNetworkError(error: unknown): boolean {
+  return error instanceof ApiError && (error.status === 0 || error.code === "NETWORK_ERROR");
 }
