@@ -1,3 +1,4 @@
+import { motion } from "framer-motion";
 import { ChevronRight, Users } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { DebateEvent } from "../../types";
@@ -6,7 +7,13 @@ const MONTHS_SHORT = [
   "Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек",
 ];
 
-export function UpcomingDebateItem({ event }: { event: DebateEvent }) {
+interface UpcomingDebateItemProps {
+  event: DebateEvent;
+  /** Позиция в списке — для лесенки появления. */
+  index?: number;
+}
+
+export function UpcomingDebateItem({ event, index = 0 }: UpcomingDebateItemProps) {
   const navigate = useNavigate();
   const date = new Date(event.scheduledAt);
   const day = date.getDate();
@@ -14,11 +21,16 @@ export function UpcomingDebateItem({ event }: { event: DebateEvent }) {
   const time = date.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
 
   return (
-    <button
+    <motion.button
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.05 * index, duration: 0.4, ease: "easeOut" }}
+      whileHover={{ y: -2 }}
+      whileTap={{ scale: 0.98 }}
       onClick={() => navigate(`/debate/${event.id}`)}
-      className="glass-panel flex w-full items-center gap-3 rounded-2xl border border-white/10 p-3 text-left transition hover:border-white/20 active:scale-[0.99]"
+      className="glass-panel flex w-full items-center gap-3 rounded-2xl border border-white/10 p-3 text-left transition-colors hover:border-white/25"
     >
-      <div className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-xl border border-white/10 bg-white/5">
+      <div className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-xl border border-white/10 bg-gradient-to-b from-white/[0.09] to-white/[0.03]">
         <span className="text-base font-bold leading-none text-white">{day}</span>
         <span className="mt-1 text-[10px] font-medium uppercase text-white/50">{month}</span>
       </div>
@@ -33,7 +45,7 @@ export function UpcomingDebateItem({ event }: { event: DebateEvent }) {
         </div>
       </div>
 
-      <ChevronRight size={18} className="shrink-0 text-white/30" />
-    </button>
+      <ChevronRight size={18} className="shrink-0 text-white/30 transition-transform group-hover:translate-x-0.5" />
+    </motion.button>
   );
 }
