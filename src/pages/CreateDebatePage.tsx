@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CalendarDays, Loader2, Plus, Type, X } from "lucide-react";
+import { Loader2, Plus, Type, X } from "lucide-react";
 import { TopBar } from "../components/layout/TopBar";
 import { Button } from "../components/ui/Button";
+import { DateTimeField } from "../components/ui/DateTimeField";
 import { createDebate } from "../api/debates";
 
 interface DraftParticipant {
@@ -150,15 +151,8 @@ export function CreateDebatePage() {
           <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-white/40">
             Дата и время
           </label>
-          <div className="glass-panel relative flex items-center gap-3 rounded-2xl border border-white/10 px-4 py-3.5">
-            <CalendarDays size={16} className="pointer-events-none text-white/35" />
-            <input
-              type="datetime-local"
-              value={scheduledAt}
-              onChange={(e) => setScheduledAt(e.target.value)}
-              style={{ colorScheme: "dark" }}
-              className="w-full bg-transparent text-[15px] text-white outline-none [&::-webkit-calendar-picker-indicator]:opacity-60"
-            />
+          <div className="relative">
+            <DateTimeField value={scheduledAt} onChange={setScheduledAt} />
           </div>
         </section>
 
