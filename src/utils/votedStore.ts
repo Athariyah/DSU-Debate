@@ -8,7 +8,12 @@ function key(eventId: string | number) {
 }
 
 export function getVotedParticipant(eventId: string | number): VotedRecord | null {
-  const raw = localStorage.getItem(key(eventId));
+  let raw: string | null = null;
+  try {
+    raw = localStorage.getItem(key(eventId));
+  } catch {
+    return null;
+  }
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as VotedRecord;
@@ -19,10 +24,14 @@ export function getVotedParticipant(eventId: string | number): VotedRecord | nul
 }
 
 export function setVotedParticipant(eventId: string | number, participantId: number) {
-  localStorage.setItem(
-    key(eventId),
-    JSON.stringify({ participantId, votedAt: new Date().toISOString() } satisfies VotedRecord)
-  );
+  try {
+    localStorage.setItem(
+      key(eventId),
+      JSON.stringify({ participantId, votedAt: new Date().toISOString() } satisfies VotedRecord)
+    );
+  } catch {
+    // голос и так уйдёт на сервер; локальная пометка — лишь удобство.
+  }
 }
 
 export function hasVoted(eventId: string | number): boolean {
@@ -32,7 +41,12 @@ export function hasVoted(eventId: string | number): boolean {
 const PROFILE_KEY = "dsu_profile_name";
 
 export function getSavedProfileName(): { firstName: string; lastName: string } | null {
-  const raw = localStorage.getItem(PROFILE_KEY);
+  let raw: string | null = null;
+  try {
+    raw = localStorage.getItem(PROFILE_KEY);
+  } catch {
+    return null;
+  }
   if (!raw) return null;
   try {
     return JSON.parse(raw);
@@ -42,5 +56,9 @@ export function getSavedProfileName(): { firstName: string; lastName: string } |
 }
 
 export function saveProfileName(firstName: string, lastName: string) {
-  localStorage.setItem(PROFILE_KEY, JSON.stringify({ firstName, lastName }));
+  try {
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ firstName, lastName }));
+  } catch {
+    // ignore
+  }
 }

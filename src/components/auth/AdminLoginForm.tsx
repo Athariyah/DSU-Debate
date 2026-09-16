@@ -33,15 +33,25 @@ export function AdminLoginForm({ title = "Вход администратора"
       const response = await loginAdmin(email.trim(), password);
       setAdminToken(response.token);
       markAuthed();
-      // Маячок в журнал backend: видно, дошёл ли токен до хранилища браузера.
-      void apiFetch("/_diag", {
-        method: "POST",
-        body: JSON.stringify({
-          step: "after-login",
-          respToken: typeof response.token === "string" && response.token.length > 20,
-          stored: Boolean(getAdminToken()),
-        }),
-      }).catch(() => undefined);
+      // Маячок в журнал backend: дошёл ли токен до хранилища браузера и
+      // какие auth-каналы видит сервер сквозь прокси (эхо).
+      void (async () => {
+        let echo: unknown = "n/a";
+        try {
+          echo = await apiFetch("/_echo-auth", { auth: true });
+        } catch {
+          echo = "echo-failed";
+        }
+        return apiFetch("/_diag", {
+          method: "POST",
+          body: JSON.stringify({
+            step: "after-login",
+            respToken: typeof response.token === "string" && response.token.length > 20,
+            stored: Boolean(getAdminToken()),
+            echo,
+          }),
+        });
+      })().catch(() => undefined);
       setPassword("");
       onSuccess?.();
     } catch (loginError) {

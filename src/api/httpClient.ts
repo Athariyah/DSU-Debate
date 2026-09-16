@@ -78,7 +78,12 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
       credentials: "include",
       headers: {
         "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        // Токен дублируется в кастомный заголовок: проксирующие слои
+        // встроенных превью могут вырезать Authorization/Cookie, а
+        // X-Admin-Token проходит (backend принимает оба канала).
+        ...(token
+          ? { Authorization: `Bearer ${token}`, "X-Admin-Token": token }
+          : {}),
         ...headers,
       },
     });

@@ -51,6 +51,15 @@ export function createApp(): Application {
   );
   app.use(express.json({ limit: "1mb" }));
   app.use("/api", apiRateLimit);
+  // Эхо auth-каналов: клиент спрашивает «что ты увидел в моём запросе?» —
+  // так из логов видно, режет ли промежуточный прокси Authorization/Cookie.
+  app.get("/api/_echo-auth", (req, res) => {
+    res.json({
+      bearer: Boolean(req.headers.authorization?.startsWith("Bearer ")),
+      custom: Boolean(req.headers["x-admin-token"]),
+      cookie: Boolean((req.headers.cookie ?? "").includes("dsu_admin_token=")),
+    });
+  });
   // Клиентский диагностический «маячок»: фронтенд рассказывает, что
   // произошло с токеном после входа — журнал виден в логах backend.
   app.post("/api/_diag", (req, res) => {
