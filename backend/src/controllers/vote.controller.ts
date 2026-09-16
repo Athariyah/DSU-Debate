@@ -190,9 +190,9 @@ export const castVote = asyncHandler(async (req: Request, res: Response) => {
     }>(
       `SELECT device_fingerprint, ip_address
        FROM votes
-       WHERE event_id = $1 AND (device_fingerprint = $2 OR ip_address = $3::inet)
+       WHERE event_id = $1 AND device_fingerprint = $2
        LIMIT 1`,
-      [eventId, deviceFingerprint, ipAddress]
+      [eventId, deviceFingerprint]
     );
 
     if (duplicateResult.rowCount && duplicateResult.rowCount > 0) {
