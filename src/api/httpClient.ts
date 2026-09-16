@@ -4,30 +4,38 @@ export const API_BASE_URL = (configuredApiUrl || "/api").replace(/\/$/, "");
 const AUTH_TOKEN_KEY = "dsu_admin_jwt";
 
 // Превью может открываться во встроенном фрейме стороннего сайта, где браузер
-// блокирует localStorage (Safari ITP, жёсткие настройки приватности). Тогда
-// setItem бросает исключение, токен не сохраняется и каждый запрос уходит
-// без Authorization — пользователь застревает в цикле «плюс → профиль».
-// Держим fallback в памяти модуля: сессия живёт хотя бы в пределах страницы.
-let memoryToken: string | null = null;
+// блокирует localStorage. Тогда setItem бросает исключение, и токен живёт
+// только в памяти. Держать его в переменной модуля НЕЛЬЗЯ: автообновление
+// превью (HMR) создаёт вторую копию модуля со своей переменной — вход
+// сохраняет токен в одну копию, а запросы уходят из другой, без токена
+// («вошёл и сразу выкинуло»). Поэтому fallback живёт на window — он общий
+// для всех копий модуля в пределах страницы.
+const MEMORY_TOKEN_KEY = "__dsuAdminToken";
+
+function memoryToken(): string | null {
+  const w = globalThis as typeof globalThis & Record<string, string | undefined>;
+  return w[MEMORY_TOKEN_KEY] ?? null;
+}
 
 export function getAdminToken(): string | null {
   try {
-    return window.localStorage.getItem(AUTH_TOKEN_KEY) ?? memoryToken;
+    return window.localStorage.getItem(AUTH_TOKEN_KEY) ?? memoryToken();
   } catch {
-    return memoryToken;
+    return memoryToken();
   }
 }
 
 export function setAdminToken(token: string) {
+  const w = globalThis as typeof globalThis & Record<string, string | undefined>;
   if (token) {
-    memoryToken = token;
+    w[MEMORY_TOKEN_KEY] = token;
     try {
       window.localStorage.setItem(AUTH_TOKEN_KEY, token);
     } catch {
-      // localStorage недоступен — остаётся memoryToken.
+      // localStorage недоступен — остаётся общий fallback на window.
     }
   } else {
-    memoryToken = null;
+    delete w[MEMORY_TOKEN_KEY];
     try {
       window.localStorage.removeItem(AUTH_TOKEN_KEY);
     } catch {
