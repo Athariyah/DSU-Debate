@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Check, ChevronDown, ChevronUp, Plus, Save, Trash2 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { TopBar } from "../components/layout/TopBar";
 import { Button } from "../components/ui/Button";
 import {
@@ -145,9 +145,11 @@ export function AdminPage() {
     }
   }
 
+  const navigate = useNavigate();
+
   return (
     <div className="relative flex h-full flex-col">
-      <TopBar title="Администрирование" showBack rightSlot="profile" />
+      <TopBar title="Администрирование" showBack onBack={() => navigate("/debates")} rightSlot="profile" />
       <div className="no-scrollbar flex-1 overflow-y-auto px-5 pb-28 pt-2">
         <div className="mb-5 flex items-center justify-between">
           <div>
