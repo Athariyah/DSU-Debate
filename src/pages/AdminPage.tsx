@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Award, Check, ChevronDown, ChevronUp, Eye, EyeOff, Filter, LayoutGrid, Pencil, Plus, Save, Timer, Trash2, Trophy, UserX, Users } from "lucide-react";
+import { Award, Check, ChevronDown, ChevronUp, Eye, EyeOff, Filter, LayoutGrid, MonitorPlay, Pencil, Plus, Save, Timer, Trash2, Trophy, UserX, Users } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { TopBar } from "../components/layout/TopBar";
 import { Button } from "../components/ui/Button";
@@ -99,6 +99,7 @@ export function AdminPage() {
         showLeaderboard: (event as any).showLeaderboard ?? true,
         showStandings: (event as any).showStandings ?? true,
         showPodium: (event as any).showPodium ?? true,
+        broadcastMessage: (event as any).broadcastMessage ?? null,
       });
       setEvents((current) => current.map((item) => (item.id === saved.id ? saved : item)));
       if (saved.status === "active") await loadEvents();
@@ -433,6 +434,37 @@ export function AdminPage() {
                       </button>
                     </div>
                   ))}
+                </div>
+
+                <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 p-3">
+                  <p className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-widest text-white/40">Текст на экран трансляции</p>
+                  <p className="mb-2 px-1 text-[11px] leading-relaxed text-white/35">Показывается крупно по центру на большом экране. Можно менять с телефона — обновится мгновенно.</p>
+                  <div className="flex items-center gap-2">
+                    <IconChip icon={MonitorPlay} iconSize={15} />
+                    <input
+                      value={(event as any).broadcastMessage ?? ""}
+                      onChange={(e) => updateEventLocal(event.id, { broadcastMessage: e.target.value } as any)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void saveEvent(event); } }}
+                      placeholder="Например: Голосуем до 18:30!"
+                      maxLength={200}
+                      className="w-full bg-transparent text-sm text-white placeholder:text-white/30 outline-none"
+                    />
+                    {(event as any).broadcastMessage && (
+                      <button
+                        type="button"
+                        onClick={() => updateEventLocal(event.id, { broadcastMessage: "" } as any)}
+                        className="shrink-0 rounded-lg px-2 py-1 text-xs text-white/40 hover:bg-white/10 hover:text-white"
+                      >
+                        Очистить
+                      </button>
+                    )}
+                  </div>
+                  <div className="mt-2 flex gap-2">
+                    <Button variant="glass" onClick={() => void saveEvent(event)} disabled={busyId === event.id} className="py-2 text-xs">
+                      <MonitorPlay size={14} /> Показать на экране
+                    </Button>
+                    <span className="self-center text-[10px] text-white/30">Enter — тоже сохранит</span>
+                  </div>
                 </div>
 
                 <div className="mt-3 flex flex-wrap gap-2">

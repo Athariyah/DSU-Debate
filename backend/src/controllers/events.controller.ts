@@ -5,6 +5,7 @@ import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../middleware/errorHandler";
 import { createEventSchema, eventStatusEnum, updateEventSchema } from "../validation/schemas";
 import {
+  broadcastBroadcastMessageChanged,
   broadcastEventStatusChanged,
   broadcastPublicVisibilityChanged,
   broadcastVoteUpdate,
@@ -13,7 +14,7 @@ import {
 import { votingEndsAt } from "../utils/votingWindow";
 import { computeEventResults, redactEventResults } from "./vote.controller";
 
-function serializeEvent(row: EventRecord & { participants_count?: string; event_type?: string; custom_type_label?: string | null; show_leaderboard?: number | boolean; show_standings?: number | boolean; show_podium?: number | boolean }) {
+function serializeEvent(row: EventRecord & { participants_count?: string; event_type?: string; custom_type_label?: string | null; show_leaderboard?: number | boolean; show_standings?: number | boolean; show_podium?: number | boolean; broadcast_message?: string | null }) {
   return {
     id: row.id,
     title: row.title,
@@ -28,6 +29,7 @@ function serializeEvent(row: EventRecord & { participants_count?: string; event_
     showLeaderboard: row.show_leaderboard === undefined || row.show_leaderboard === null ? true : Boolean(row.show_leaderboard),
     showStandings: row.show_standings === undefined || row.show_standings === null ? true : Boolean(row.show_standings),
     showPodium: row.show_podium === undefined || row.show_podium === null ? true : Boolean(row.show_podium),
+    broadcastMessage: (row as any).broadcast_message ?? (row as any).broadcastMessage ?? null,
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -44,7 +46,7 @@ export const createEvent = asyncHandler(async (req: Request, res: Response) => {
   if (!parsed.success) {
     throw new ApiError(400, "VALIDATION_ERROR", parsed.error.issues[0].message);
   }
-  const { title, dateTime, status, eventType, customTypeLabel, votingDurationMinutes, votesHidden, hiddenFromPublic, showLeaderboard, showStandings, showPodium, participants } = parsed.data;
+  const { title, dateTime, status, eventType, customTypeLabel, votingDurationMinutes, votesHidden, hiddenFromPublic, showLeaderboard, showStandings, showPodium, broadcastMessage, participants } = parsed.data;
   const adminId = req.admin!.adminId;
 
   if (status === "active" && (!participants || participants.length < 2)) {
@@ -66,11 +68,11 @@ export const createEvent = asyncHandler(async (req: Request, res: Response) => {
     const cleanedCustomLabel = eventType === "other" ? (customTypeLabel?.trim() || null) : null;
     const inserted = await client.query<EventRecord>(
       `INSERT INTO events (
-         title, status, event_type, custom_type_label, date_time, voting_duration_minutes, voting_started_at, votes_hidden, hidden_from_public, show_leaderboard, show_standings, show_podium, created_by
+         title, status, event_type, custom_type_label, date_time, voting_duration_minutes, voting_started_at, votes_hidden, hidden_from_public, show_leaderboard, show_standings, show_podium, broadcast_message, created_by
        )
-       VALUES ($1, $2, $3, $4, $5, $6, CASE WHEN $2 = 'active' THEN now() ELSE NULL END, $7, $8, $9, $10, $11, $12)
+       VALUES ($1, $2, $3, $4, $5, $6, CASE WHEN $2 = 'active' THEN now() ELSE NULL END, $7, $8, $9, $10, $11, $12, $13)
        RETURNING *`,
-      [title, status, eventType ?? "debate", cleanedCustomLabel, dateTime, votingDurationMinutes ?? null, votesHidden ?? false, hiddenFromPublic ?? false, showLeaderboard ?? true, showStandings ?? true, showPodium ?? true, adminId]
+      [title, status, eventType ?? "debate", cleanedCustomLabel, dateTime, votingDurationMinutes ?? null, votesHidden ?? false, hiddenFromPublic ?? false, showLeaderboard ?? true, showStandings ?? true, showPodium ?? true, broadcastMessage?.trim() || null, adminId]
     );
 
     if (participants) {
@@ -197,7 +199,7 @@ export const updateEvent = asyncHandler(async (req: Request, res: Response) => {
   if (!parsed.success) {
     throw new ApiError(400, "VALIDATION_ERROR", parsed.error.issues[0].message);
   }
-  const { title, dateTime, status, eventType, customTypeLabel, votingDurationMinutes, votesHidden, hiddenFromPublic, showLeaderboard, showStandings, showPodium } = parsed.data;
+  const { title, dateTime, status, eventType, customTypeLabel, votingDurationMinutes, votesHidden, hiddenFromPublic, showLeaderboard, showStandings, showPodium, broadcastMessage } = parsed.data;
 
   if (
     title === undefined &&
@@ -210,7 +212,8 @@ export const updateEvent = asyncHandler(async (req: Request, res: Response) => {
     hiddenFromPublic === undefined &&
     showLeaderboard === undefined &&
     showStandings === undefined &&
-    showPodium === undefined
+    showPodium === undefined &&
+    broadcastMessage === undefined
   ) {
     throw new ApiError(400, "VALIDATION_ERROR", "Нет полей для обновления");
   }
@@ -218,6 +221,7 @@ export const updateEvent = asyncHandler(async (req: Request, res: Response) => {
   let previousActiveId: number | null = null;
   let previousVotesHidden: boolean | null = null;
   let previousHiddenFromPublic: boolean | null = null;
+  let previousBroadcastMessage: string | null | undefined = undefined;
   const updatedEvent = await withTransaction(async (client) => {
     const existing = await client.query<EventRecord>(
       "SELECT * FROM events WHERE id = $1 FOR UPDATE",
@@ -228,6 +232,7 @@ export const updateEvent = asyncHandler(async (req: Request, res: Response) => {
     }
     previousVotesHidden = Boolean(existing.rows[0].votes_hidden);
     previousHiddenFromPublic = Boolean(existing.rows[0].hidden_from_public);
+    previousBroadcastMessage = (existing.rows[0] as any).broadcast_message ?? null;
 
     if (status === "active") {
       const participantsCount = await client.query<{ count: string }>(
@@ -304,6 +309,10 @@ export const updateEvent = asyncHandler(async (req: Request, res: Response) => {
       values.push(showPodium);
       setClauses.push(`show_podium = $${values.length}`);
     }
+    if (broadcastMessage !== undefined) {
+      values.push(broadcastMessage?.trim() || null);
+      setClauses.push(`broadcast_message = $${values.length}`);
+    }
     // Если переключили тип с "other" на любой другой — чистим кастомный лейбл, даже если он не прислан
     if (eventType !== undefined && eventType !== "other" && customTypeLabel === undefined) {
       values.push(null);
@@ -359,6 +368,10 @@ export const updateEvent = asyncHandler(async (req: Request, res: Response) => {
     hiddenFromPublic !== previousHiddenFromPublic
   ) {
     broadcastPublicVisibilityChanged(eventId, hiddenFromPublic);
+  }
+
+  if (broadcastMessage !== undefined && broadcastMessage?.trim() !== (previousBroadcastMessage ?? "")) {
+    broadcastBroadcastMessageChanged(eventId, broadcastMessage?.trim() || null);
   }
 
   const participantsCount = await pool.query<{ count: string }>(

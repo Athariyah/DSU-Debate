@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS events (
   show_leaderboard INTEGER NOT NULL DEFAULT 1 CHECK (show_leaderboard IN (0,1)),
   show_standings INTEGER NOT NULL DEFAULT 1 CHECK (show_standings IN (0,1)),
   show_podium INTEGER NOT NULL DEFAULT 1 CHECK (show_podium IN (0,1)),
+  broadcast_message TEXT,
   created_by INTEGER NOT NULL REFERENCES admins(id) ON DELETE RESTRICT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),

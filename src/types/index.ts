@@ -39,6 +39,8 @@ export interface DebateEvent {
   showLeaderboard?: boolean;
   showStandings?: boolean;
   showPodium?: boolean;
+  /** Текст для трансляции (крупно по центру) */
+  broadcastMessage?: string | null;
   totalVotes: number;
   participants: Participant[];
   coverGradient?: string;
@@ -128,5 +130,6 @@ export interface CreateDebateInput {
   showLeaderboard?: boolean;
   showStandings?: boolean;
   showPodium?: boolean;
+  broadcastMessage?: string | null;
 }
 export type CreateEventInput = CreateDebateInput;

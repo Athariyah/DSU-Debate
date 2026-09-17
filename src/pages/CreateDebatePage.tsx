@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { Award, EyeOff, Flame, LayoutGrid, Loader2, Plus, Timer, Trophy, Type, UserX, Users, X } from "lucide-react";
@@ -7,7 +7,7 @@ import { TopBar } from "../components/layout/TopBar";
 import { Button } from "../components/ui/Button";
 import { DateTimeField } from "../components/ui/DateTimeField";
 import { IconChip } from "../components/ui/IconChip";
-import { createDebate } from "../api/debates";
+import { createDebate, listAdminDebates } from "../api/debates";
 import { cn } from "../utils/cn";
 
 interface DraftParticipant {
@@ -35,6 +35,30 @@ export function CreateDebatePage() {
   const [showPodium, setShowPodium] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Автоподстановка времени прошлого мероприятия: при открытии формы
+  // подставляем dateTime последнего созданного (для быстроты серий).
+  useEffect(() => {
+    if (scheduledAt) return;
+    const lastLocal = localStorage.getItem("dsu-last-event-datetime");
+    if (lastLocal) {
+      // localStorage хранит ISO, DateTimeField примет его напрямую
+      setScheduledAt(lastLocal);
+      return;
+    }
+    // Фолбэк — тянем последнее мероприятие из админки
+    listAdminDebates()
+      .then((events) => {
+        if (!events.length) return;
+        // Сортируем по дате проведения (самый свежий — первый)
+        const sorted = [...events].sort(
+          (a, b) => new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime()
+        );
+        const last = sorted[0];
+        if (last?.dateTime) setScheduledAt(last.dateTime);
+      })
+      .catch(() => {});
+  }, []);
 
   function updateParticipant(id: string, patch: Partial<DraftParticipant>) {
     setParticipants((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
@@ -87,6 +111,10 @@ export function CreateDebatePage() {
         showStandings,
         showPodium,
       });
+      // Запоминаем время для следующего создания
+      try {
+        localStorage.setItem("dsu-last-event-datetime", new Date(scheduledAt).toISOString());
+      } catch {}
       navigate("/admin");
     } catch (createError) {
       setError(

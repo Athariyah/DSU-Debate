@@ -28,6 +28,9 @@ export interface EventRecord {
   show_leaderboard?: number | boolean;
   show_standings?: number | boolean;
   show_podium?: number | boolean;
+  /** Текст для экрана трансляции (крупно по центру) */
+  broadcast_message?: string | null;
+  broadcast_message_text?: string | null;
   created_by: number;
   created_at: Date;
   updated_at: Date;

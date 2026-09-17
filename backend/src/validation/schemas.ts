@@ -43,6 +43,7 @@ export const createEventSchema = z.object({
   showLeaderboard: z.boolean().optional(),
   showStandings: z.boolean().optional(),
   showPodium: z.boolean().optional(),
+  broadcastMessage: z.string().trim().max(500).optional().nullable(),
   // Optional keeps the CRUD endpoint backwards compatible. When supplied,
   // event and participants are persisted atomically in one transaction.
   // Число участников не ограничено сверху: минимум 2 (дебаты требуют сторон).
@@ -64,6 +65,7 @@ export const updateEventSchema = z.object({
   showLeaderboard: z.boolean().optional(),
   showStandings: z.boolean().optional(),
   showPodium: z.boolean().optional(),
+  broadcastMessage: z.string().trim().max(500).optional().nullable(),
 });
 
 export const createParticipantSchema = z.object({

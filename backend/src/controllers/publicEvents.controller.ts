@@ -24,6 +24,7 @@ function publicEventResponse(event: EventRecord, results: Awaited<ReturnType<typ
       showLeaderboard: (event as any).show_leaderboard === undefined || (event as any).show_leaderboard === null ? true : Boolean((event as any).show_leaderboard),
       showStandings: (event as any).show_standings === undefined || (event as any).show_standings === null ? true : Boolean((event as any).show_standings),
       showPodium: (event as any).show_podium === undefined || (event as any).show_podium === null ? true : Boolean((event as any).show_podium),
+      broadcastMessage: (event as any).broadcast_message ?? null,
     },
     participants: visibleResults.participants.map((participant) => ({
       id: participant.participantId,

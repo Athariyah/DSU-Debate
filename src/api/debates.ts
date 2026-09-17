@@ -23,6 +23,7 @@ interface BackendEvent {
   showLeaderboard?: boolean;
   showStandings?: boolean;
   showPodium?: boolean;
+  broadcastMessage?: string | null;
   participantsCount?: number;
 }
 
@@ -75,6 +76,7 @@ function mapPublicEvent(payload: BackendPublicEventResponse): DebateEvent {
     showLeaderboard: (payload.event as any).showLeaderboard ?? true,
     showStandings: (payload.event as any).showStandings ?? true,
     showPodium: (payload.event as any).showPodium ?? true,
+    broadcastMessage: (payload.event as any).broadcastMessage ?? null,
     totalVotes: Number(payload.totalVotes ?? 0),
     participants,
   };
@@ -194,6 +196,7 @@ export interface AdminEventSummary {
   showLeaderboard: boolean;
   showStandings: boolean;
   showPodium: boolean;
+  broadcastMessage?: string | null;
   participantsCount: number;
 }
 
@@ -211,12 +214,13 @@ export async function listAdminDebates(status?: DebateEvent["status"]): Promise<
     showLeaderboard: (item as any).showLeaderboard ?? true,
     showStandings: (item as any).showStandings ?? true,
     showPodium: (item as any).showPodium ?? true,
+    broadcastMessage: (item as any).broadcastMessage ?? null,
   }));
 }
 
 export async function updateDebate(
   eventId: number,
-  patch: Partial<Pick<AdminEventSummary, "title" | "status" | "eventType" | "customTypeLabel" | "votingDurationMinutes" | "votesHidden" | "hiddenFromPublic" | "showLeaderboard" | "showStandings" | "showPodium">> & {
+  patch: Partial<Pick<AdminEventSummary, "title" | "status" | "eventType" | "customTypeLabel" | "votingDurationMinutes" | "votesHidden" | "hiddenFromPublic" | "showLeaderboard" | "showStandings" | "showPodium" | "broadcastMessage">> & {
     dateTime?: string;
     eventType?: DebateEvent["eventType"];
     customTypeLabel?: string | null;
@@ -297,6 +301,7 @@ export async function createDebate(input: CreateDebateInput): Promise<DebateEven
       showLeaderboard: input.showLeaderboard ?? true,
       showStandings: input.showStandings ?? true,
       showPodium: input.showPodium ?? true,
+      broadcastMessage: input.broadcastMessage ?? null,
       participants: input.participants.map((participant) => ({
         name: participant.name,
         description: participant.subtitle ?? null,

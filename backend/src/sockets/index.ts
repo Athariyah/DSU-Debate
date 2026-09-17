@@ -141,3 +141,8 @@ export function broadcastPodiumUpdate(eventId: number, podium: unknown): void {
   const io = getIO();
   io.to(debateRoom(eventId)).emit("podium:update", { eventId, podium });
 }
+
+export function broadcastBroadcastMessageChanged(eventId: number, message: string | null): void {
+  const io = getIO();
+  io.to(debateRoom(eventId)).emit("broadcast:message", { eventId, message });
+}

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Clock3, Loader2, Maximize2, Minimize2, Pencil, Wifi, WifiOff, X } from "lucide-react";
 import { fetchDebateById } from "../api/debates";
+import { getSocket } from "../lib/socket";
 import { useDebateSocket, type RealtimeStatus } from "../hooks/useDebateSocket";
 import { AnimatedNumber } from "../components/ui/AnimatedNumber";
 import { BroadcastParticipantCard } from "../components/broadcast/BroadcastParticipantCard";
@@ -62,11 +63,32 @@ export function BroadcastPage() {
   const [editorDraft, setEditorDraft] = useState("");
   const revealedRef = useRef(false);
 
-  // Заметка хранится локально по идентификатору дебата: открыли трансляцию —
-  // подтянулся последний сохранённый текст.
+  // Заметка: приоритет — broadcast_message из БД (управляется из админки с телефона),
+  // фолбэк — локальный localStorage (старый способ прямо на трансляции).
   useEffect(() => {
     if (!id) return;
-    setCustomText(localStorage.getItem(noteKeyFor(id)) ?? "");
+    if (event?.broadcastMessage) {
+      setCustomText(event.broadcastMessage);
+    } else {
+      setCustomText(localStorage.getItem(noteKeyFor(id)) ?? "");
+    }
+  }, [id, event?.broadcastMessage]);
+
+  // Live-обновление текста с админки: админ меняет в AdminPage -> сокет -> тут
+  useEffect(() => {
+    if (!id) return;
+    const socket = getSocket();
+    const handler = (payload: { eventId: number; message: string | null }) => {
+      if (String(payload.eventId) !== String(id)) return;
+      setCustomText(payload.message ?? "");
+      // Синхронизируем и локально для перезагрузки без сети
+      if (payload.message) localStorage.setItem(noteKeyFor(String(id)), payload.message);
+      else localStorage.removeItem(noteKeyFor(String(id)));
+    };
+    socket.on("broadcast:message", handler);
+    return () => {
+      socket.off("broadcast:message", handler);
+    };
   }, [id]);
 
   /** Назад в приложение: если экран открыт прямой ссылкой — на страницу дебата. */
@@ -335,9 +357,13 @@ export function BroadcastPage() {
         </p>
 
         {customText && (
-          <p className="mt-[clamp(0.75rem,1.6vw,1.75rem)] inline-block max-w-[60ch] rounded-2xl border border-indigo-300/25 bg-gradient-to-r from-indigo-500/20 via-violet-500/15 to-sky-500/15 px-[clamp(0.9rem,1.6vw,2rem)] py-[clamp(0.5rem,1vw,1.1rem)] text-[clamp(0.85rem,1.5vw,1.9rem)] font-semibold leading-snug text-indigo-100 shadow-[0_16px_40px_-20px_rgba(99,102,241,0.8)]">
-            {customText}
-          </p>
+          <div className="mt-6 flex justify-center lg:hidden">
+            <div className="relative max-w-4xl rounded-[1.5rem] border border-white/15 bg-white/[0.06] px-[clamp(1.2rem,3vw,2.5rem)] py-[clamp(1rem,2.5vw,1.8rem)] text-center shadow-[0_20px_60px_-20px_rgba(0,0,0,0.6)] backdrop-blur-xl">
+              <p className="text-[clamp(1.6rem,4vw,3.2rem)] font-black leading-tight tracking-tight text-white drop-shadow-[0_4px_24px_rgba(0,0,0,0.5)]">
+                {customText}
+              </p>
+            </div>
+          </div>
         )}
       </div>
 
@@ -372,6 +398,15 @@ export function BroadcastPage() {
           <BroadcastQrCard voteUrl={voteUrl} className="w-full" />
         </div>
       </main>
+
+      {/* Крупный текст по центру — поверх участников, когда админ его задал */}
+      {customText && (
+        <div className="pointer-events-none absolute inset-0 z-20 hidden items-center justify-center bg-black/35 p-8 backdrop-blur-[1px] lg:flex">
+          <p className="max-w-5xl text-center text-[clamp(2.2rem,5vw,4.8rem)] font-black leading-none tracking-tight text-white drop-shadow-[0_8px_40px_rgba(0,0,0,0.7)]">
+            {customText}
+          </p>
+        </div>
+      )}
 
       {/* Большой экран: QR-код на голосование виден всегда, справа снизу. */}
       <div className="pointer-events-none absolute bottom-0 right-0 z-20 hidden p-[clamp(1rem,2vw,2.5rem)] lg:block">
