@@ -127,6 +127,7 @@ export const getActiveEvent = asyncHandler(async (_req: Request, res: Response) 
       id: event.id,
       title: event.title,
       status: event.status,
+      eventType: (event as any).event_type ?? (event as any).eventType ?? "debate",
       dateTime: event.date_time,
       votingDurationMinutes: event.voting_duration_minutes ?? null,
       votingEndsAt: votingEndsAt(event)?.toISOString() ?? null,

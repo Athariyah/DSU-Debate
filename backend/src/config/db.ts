@@ -163,6 +163,7 @@ function translateSQL(sql: string): string {
 function mapParams(params: any[]): any[] {
   return params.map((p) => {
     if (p instanceof Date) return p.toISOString();
+    if (typeof p === "boolean") return p ? 1 : 0;
     return p;
   });
 }

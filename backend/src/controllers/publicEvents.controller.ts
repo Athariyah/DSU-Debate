@@ -61,19 +61,63 @@ async function loadPublicEvent(eventId: number) {
   }
 }
 
-/** GET /api/events/upcoming */
+/** Оптимизированная пакетная загрузка: 1 запрос на события + 1 JOIN на всех участников/голоса (вместо N+1). */
+async function batchPublicEvents(eventRows: EventRecord[]) {
+  if (eventRows.length === 0) return [];
+  const ids = eventRows.map((e) => e.id);
+  const placeholders = ids.map((_, idx) => `$${idx + 1}`).join(", ");
+  // Один LEFT JOIN на все события — считаем голоса сразу по всем участникам
+  const agg = await pool.query<{
+    event_id: number;
+    id: number;
+    name: string;
+    description: string | null;
+    votes_count: string;
+  }>(
+    `SELECT p.event_id, p.id, p.name, p.description, COUNT(v.id) AS votes_count
+     FROM participants p
+     LEFT JOIN votes v ON v.participant_id = p.id
+     WHERE p.event_id IN (${placeholders})
+     GROUP BY p.event_id, p.id, p.name, p.description
+     ORDER BY p.event_id ASC, p.id ASC`,
+    ids
+  );
+  const byEvent = new Map<number, typeof agg.rows>();
+  for (const r of agg.rows) {
+    const list = byEvent.get(r.event_id) ?? [];
+    list.push(r);
+    byEvent.set(r.event_id, list as any);
+  }
+  return eventRows.map((event) => {
+    const rows = byEvent.get(event.id) ?? [];
+    const participantsData = rows.map((r) => ({
+      participantId: r.id,
+      name: r.name,
+      description: r.description,
+      votesCount: Number(r.votes_count),
+    }));
+    const totalVotes = participantsData.reduce((sum, p) => sum + p.votesCount, 0);
+    const participants = participantsData.map((p) => ({
+      ...p,
+      percentage: totalVotes === 0 ? 0 : Math.round((p.votesCount / totalVotes) * 1000) / 10,
+    }));
+    const results = { eventId: event.id, totalVotes, participants } as Awaited<ReturnType<typeof computeEventResults>>;
+    return publicEventResponse(event as EventRecord, results);
+  });
+}
+
+/** GET /api/events/upcoming — 2 запроса вместо 1+N */
 export const listUpcomingEvents = asyncHandler(async (_req: Request, res: Response) => {
   const events = await pool.query<EventRecord>(
     `SELECT * FROM events
      WHERE status = 'upcoming' AND ${PUBLIC_EVENT_FILTER}
      ORDER BY date_time ASC`
   );
-
-  const responses = await Promise.all(events.rows.map((event) => loadPublicEvent(event.id)));
+  const responses = await batchPublicEvents(events.rows);
   res.status(200).json(responses);
 });
 
-/** GET /api/events/history?page=1&limit=20 */
+/** GET /api/events/history — 3 запроса (count + events + один JOIN) вместо 2+N */
 export const listCompletedEvents = asyncHandler(async (req: Request, res: Response) => {
   const page = Math.max(parseInt(String(req.query.page ?? "1"), 10) || 1, 1);
   const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? "20"), 10) || 20, 1), 100);
@@ -85,7 +129,7 @@ export const listCompletedEvents = asyncHandler(async (req: Request, res: Respon
      ORDER BY date_time DESC LIMIT $1 OFFSET $2`,
     [limit, offset]
   );
-  const items = await Promise.all(events.rows.map((event) => loadPublicEvent(event.id)));
+  const items = await batchPublicEvents(events.rows);
   res.status(200).json({ items, total: Number(count.rows[0].count), page, limit });
 });
 

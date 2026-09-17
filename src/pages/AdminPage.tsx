@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Check, ChevronDown, ChevronUp, Eye, EyeOff, Pencil, Plus, Save, Timer, Trash2, UserX, Users } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Eye, EyeOff, Filter, Pencil, Plus, Save, Timer, Trash2, Trophy, UserX, Users } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { TopBar } from "../components/layout/TopBar";
 import { Button } from "../components/ui/Button";
@@ -9,6 +9,7 @@ import { IconChip } from "../components/ui/IconChip";
 import { StatusSelect } from "../components/ui/StatusSelect";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import { cn } from "../utils/cn";
+import type { EventType } from "../types";
 import {
   createAdminParticipant,
   deleteAdminParticipant,
@@ -26,18 +27,31 @@ type PendingDelete =
   | { kind: "event"; id: number; title: string }
   | { kind: "participant"; eventId: number; id: number; name: string };
 
+const EVENT_TYPE_LABEL: Record<EventType, string> = {
+  debate: "Дебаты",
+  tournament: "Турнир",
+  poll: "Опрос",
+  competition: "Соревнование",
+  quiz: "Квиз",
+  other: "Другое",
+};
+const EVENT_TYPE_OPTIONS: EventType[] = ["debate", "tournament", "poll", "competition", "quiz", "other"];
+
 export function AdminPage() {
   const [events, setEvents] = useState<AdminEventSummary[]>([]);
   const [participants, setParticipants] = useState<Record<number, AdminParticipant[]>>({});
   const [expanded, setExpanded] = useState<number | null>(null);
-  // Тема в карточке показана сокращённой; редактирование — по клику.
   const [editingTitleId, setEditingTitleId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Вместо системного window.confirm — собственное окно подтверждения
-  // в стилистике приложения (ConfirmDialog).
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
+  const [typeFilter, setTypeFilter] = useState<EventType | "all">("all");
+
+  const filteredEvents = useMemo(() => {
+    if (typeFilter === "all") return events;
+    return events.filter((e) => (e.eventType ?? "debate") === typeFilter);
+  }, [events, typeFilter]);
 
   async function loadEvents() {
     setError(null);
@@ -76,6 +90,7 @@ export function AdminPage() {
       const saved = await updateDebate(event.id, {
         title: event.title,
         status: event.status,
+        eventType: event.eventType ?? "debate",
         dateTime: new Date(event.dateTime).toISOString(),
         votingDurationMinutes: event.votingDurationMinutes ?? null,
         votesHidden: event.votesHidden ?? false,
@@ -149,8 +164,6 @@ export function AdminPage() {
     }
   }
 
-
-
   async function addParticipant(eventId: number) {
     const name = window.prompt("Имя нового участника");
     if (!name?.trim()) return;
@@ -176,12 +189,23 @@ export function AdminPage() {
           <Link to="/create"><Button><Plus size={16} />Создать</Button></Link>
         </div>
 
+        {/* Фильтр по типу мероприятия */}
+        <div className="mb-4 flex flex-wrap items-center gap-1.5 rounded-2xl border border-white/10 bg-black/20 p-1.5">
+          <span className="ml-2 mr-1 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest text-white/40"><Filter size={12} /> Тип</span>
+          {(["all", ...EVENT_TYPE_OPTIONS] as const).map((opt) => (
+            <button key={opt} onClick={() => setTypeFilter(opt as any)} className={cn("rounded-xl px-3 py-1.5 text-xs font-medium transition", typeFilter === opt ? "bg-white text-black shadow" : "text-white/60 hover:text-white hover:bg-white/10")}>
+              {opt === "all" ? "Все" : EVENT_TYPE_LABEL[opt as EventType]}
+            </button>
+          ))}
+          <span className="ml-auto mr-2 text-xs text-white/30">{filteredEvents.length}/{events.length}</span>
+        </div>
+
         {error && <p className="mb-4 rounded-2xl border border-rose-400/20 bg-rose-400/10 p-4 text-sm text-rose-300">{error}</p>}
         {loading && <div className="h-28 animate-pulse rounded-3xl bg-white/5" />}
-        {!loading && events.length === 0 && <p className="rounded-3xl border border-white/10 p-6 text-center text-sm text-white/50">Мероприятий пока нет</p>}
+        {!loading && filteredEvents.length === 0 && <p className="rounded-3xl border border-white/10 p-6 text-center text-sm text-white/50">{events.length===0? "Мероприятий пока нет": "Нет мероприятий этого типа"}</p>}
 
         <div className="space-y-4">
-          {events.map((event) => {
+          {filteredEvents.map((event) => {
             const eventParticipants = participants[event.id] ?? [];
             const isExpanded = expanded === event.id;
             return (
@@ -226,12 +250,29 @@ export function AdminPage() {
                         <Pencil size={14} className="mt-1 shrink-0 text-white opacity-0 transition group-hover:opacity-50" />
                       </button>
                     )}
-                    <p className="mt-1 text-xs text-white/35">ID: {event.id} · участников: {event.participantsCount}</p>
+                    <p className="mt-1 flex items-center gap-2 text-xs text-white/35">
+                      <span>ID: {event.id} · участников: {event.participantsCount}</span>
+                      <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-white/40">
+                        <Trophy size={10} /> {EVENT_TYPE_LABEL[(event.eventType ?? "debate") as EventType]}
+                      </span>
+                    </p>
                   </div>
                   <StatusSelect
                     value={event.status}
                     onChange={(status) => updateEventLocal(event.id, { status })}
                   />
+                </div>
+
+                {/* Тип мероприятия — редактирование */}
+                <div className="mt-3">
+                  <p className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-widest text-white/40">Тип мероприятия</p>
+                  <div className="grid grid-cols-3 gap-1.5 lg:grid-cols-6">
+                    {EVENT_TYPE_OPTIONS.map((opt) => (
+                      <button key={opt} type="button" onClick={() => updateEventLocal(event.id, { eventType: opt })} className={cn("rounded-xl border px-2 py-2 text-[11px] font-medium transition", (event.eventType ?? "debate")===opt ? "border-indigo-400/50 bg-indigo-500/20 text-white shadow" : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10")}>
+                        {EVENT_TYPE_LABEL[opt]}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <DateTimeField
@@ -240,7 +281,6 @@ export function AdminPage() {
                   onChange={(iso) => updateEventLocal(event.id, { dateTime: iso })}
                 />
 
-                {/* Таймер: после интервала голосование закрывается само. */}
                 <div className="mt-3 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
                   <IconChip icon={Timer} iconSize={15} />
                   <div className="min-w-0 flex-1">
@@ -273,9 +313,6 @@ export function AdminPage() {
                   <span className="text-xs text-white/45">мин</span>
                 </div>
 
-                {/* Закрытое голосование: пока флажок включён, зрители видят
-                    участников без голосов и процентов; сервер зануляет цифры
-                    в REST и live-обновлениях. Применяется по «Сохранить». */}
                 <div
                   className={cn(
                     "mt-3 flex items-center gap-3 rounded-2xl border px-3 py-2 transition-colors duration-300",
@@ -315,10 +352,6 @@ export function AdminPage() {
                   </button>
                 </div>
 
-                {/* Скрытый от публики дебат: обычные пользователи не видят его
-                    в списках, на главной и по прямой ссылке (сервер отвечает
-                    404), голосование по нему недоступно. Администраторам дебат
-                    остаётся видимым. Применяется по «Сохранить». */}
                 <div
                   className={cn(
                     "mt-3 flex items-center gap-3 rounded-2xl border px-3 py-2 transition-colors duration-300",
@@ -416,7 +449,6 @@ export function AdminPage() {
         </div>
       </div>
 
-      {/* Собственное окно подтверждения удаления — вместо системного confirm. */}
       <ConfirmDialog
         open={pendingDelete !== null}
         title={pendingDelete?.kind === "participant" ? "Удалить участника?" : "Удалить мероприятие?"}
