@@ -95,9 +95,14 @@ describe("DateTimeField", () => {
     fireEvent.click(screen.getByRole("button", { name: "Дата" }));
     const monthWheel = screen.getByRole("group", { name: "Месяц" });
 
+    // Лента колеса циклическая: значение встречается 3 раза, кликаем
+    // экземпляр из средней («домашней») копии.
+    const augustButtons = within(monthWheel).getAllByRole("button", { name: "Август" });
+    expect(augustButtons.length).toBe(3);
+
     // Сентябрь 2026 без 31-го; в августе он есть — колесо реально листает.
     expect(screen.queryByRole("button", { name: "31" })).toBeNull();
-    fireEvent.click(within(monthWheel).getByRole("button", { name: "Август" }));
+    fireEvent.click(augustButtons[1]);
     expect(screen.getByRole("button", { name: "31" })).toBeTruthy();
 
     // Смена месяца со снятым днём сразу отдаёт обновлённую дату (16.08),
@@ -116,7 +121,9 @@ describe("DateTimeField", () => {
     fireEvent.click(screen.getByRole("button", { name: "Дата" }));
     const yearWheel = screen.getByRole("group", { name: "Год" });
 
-    fireEvent.click(within(yearWheel).getByRole("button", { name: "2027" }));
+    // Средний экземпляр «2027» в циклической ленте.
+    const yearButtons = within(yearWheel).getAllByRole("button", { name: "2027" });
+    fireEvent.click(yearButtons[1]);
     expect(onChange).toHaveBeenCalledTimes(1);
     expect(onChange).toHaveBeenCalledWith(new Date(2027, 8, 16, 17, 30).toISOString());
   });
@@ -129,12 +136,34 @@ describe("DateTimeField", () => {
     const hours = screen.getByRole("group", { name: "Часы" });
     const scroller = hours.querySelector(".wheel-scroller") as HTMLElement;
 
-    // Доводим скролл до центра 9-го часа (17 → 9) и «отпускаем».
-    scroller.scrollTop = 9 * 44;
+    // Доводим скролл до центра 9-го часа в средней копии (17 → 9) и отпускаем.
+    scroller.scrollTop = (24 + 9) * 44;
     fireEvent.scroll(scroller);
 
     expect(onChange).toHaveBeenCalledTimes(1);
     expect(onChange).toHaveBeenLastCalledWith(new Date(2026, 8, 16, 9, 30).toISOString());
+  });
+
+  test("колесо минут крутится в обе стороны: за «00» идёт «59»", () => {
+    const onChange = vi.fn();
+    render(<DateTimeField value={LOCAL_DATE.toISOString()} onChange={onChange} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Время" }));
+    const minutes = screen.getByRole("group", { name: "Минуты" });
+    const scroller = minutes.querySelector(".wheel-scroller") as HTMLElement;
+
+    // Уводим центр выше «00» (в верхнюю копию) — лента переносится,
+    // и в центр встаёт «59», а не «тупик».
+    scroller.scrollTop = (60 - 1) * 44;
+    fireEvent.scroll(scroller);
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenLastCalledWith(new Date(2026, 8, 16, 17, 59).toISOString());
+
+    // И в обратную сторону: за «59» вниз идёт «00».
+    scroller.scrollTop = (2 * 60) * 44;
+    fireEvent.scroll(scroller);
+    expect(onChange).toHaveBeenLastCalledWith(new Date(2026, 8, 16, 17, 0).toISOString());
   });
 
   test("выбор часа и минут отдаёт наружу валидный ISO", () => {
@@ -145,10 +174,11 @@ describe("DateTimeField", () => {
     const hours = screen.getByRole("group", { name: "Часы" });
     const minutes = screen.getByRole("group", { name: "Минуты" });
 
-    fireEvent.click(within(hours).getByRole("button", { name: "09" }));
+    // Циклическая лента: кликаем экземпляр из средней копии.
+    fireEvent.click(within(hours).getAllByRole("button", { name: "09" })[1]);
     expect(onChange).toHaveBeenLastCalledWith(new Date(2026, 8, 16, 9, 30).toISOString());
 
-    fireEvent.click(within(minutes).getByRole("button", { name: "05" }));
+    fireEvent.click(within(minutes).getAllByRole("button", { name: "05" })[1]);
     expect(onChange).toHaveBeenLastCalledWith(new Date(2026, 8, 16, 9, 5).toISOString());
   });
 

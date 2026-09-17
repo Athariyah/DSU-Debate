@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { CalendarDays, Check, ChevronDown, Clock, type LucideIcon } from "lucide-react";
 import { cn } from "../../utils/cn";
@@ -24,6 +24,7 @@ const MONTHS = [
 const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
 const MINUTES = Array.from({ length: 60 }, (_, minute) => minute);
+const MONTHS_BY_INDEX = Array.from({ length: 12 }, (_, month) => month);
 
 /** Высота одного значения в колесе времени, px. */
 const WHEEL_ITEM_HEIGHT = 44;
@@ -37,6 +38,15 @@ const WHEEL_HEIGHT = 120;
  * значения ровно на `i * WHEEL_ITEM_HEIGHT`.
  */
 const WHEEL_INSET = (WHEEL_HEIGHT - WHEEL_ITEM_HEIGHT) / 2;
+/**
+ * Копий списка в ленте колеса. Лента циклическая: когда «центр» уходит
+ * за среднюю копию, скролл мгновенно переносят на один список — визуально
+ * ничего не меняется (значения одинаковые), а крутить можно в обе
+ * стороны без тупиков: 00 → 59 → 00, декабрь → январь, годы — без границ.
+ */
+const WHEEL_COPIES = 3;
+/** Диапазон лет в колесе «Год»: ±50 от года открытия панели. */
+const YEAR_SPAN = 101;
 
 /**
  * Разбирает ISO-строку на локальные части для полей `date` и `time`.
@@ -147,9 +157,15 @@ export function DateTimeField({ value, onChange, className }: DateTimeFieldProps
     update({ date: `${year}-${pad(month + 1)}-${pad(day)}` });
   }
 
-  // Окно лет: два назад и три вперёд от текущего взгляда — дебаты обычно
-  // планируют в ближайшем будущем, но и прошлое доступно.
-  const yearOptions = Array.from({ length: 5 }, (_, i) => view.year - 2 + i);
+  // Диапазон лет для колеса «Год»: фиксируем при открытии панели
+  // (от года события или текущего), дальше колесо крутится циклически
+  // в обе стороны. Массив живёт один — при каждом рендере новый список
+  // ломал бы связь «индекс → год».
+  const yearValues = useMemo(() => {
+    const base = view.year;
+    return Array.from({ length: YEAR_SPAN }, (_, i) => base - 50 + i);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div
@@ -198,14 +214,14 @@ export function DateTimeField({ value, onChange, className }: DateTimeFieldProps
                   <div className="mb-2 flex gap-2">
                     <TimeWheel
                       label="Месяц"
-                      values={Array.from({ length: 12 }, (_, month) => month)}
+                      values={MONTHS_BY_INDEX}
                       selected={view.month}
                       onPick={(month) => applyCalendarShift(view.year, month)}
                       format={(month) => MONTHS[month]}
                     />
                     <TimeWheel
                       label="Год"
-                      values={yearOptions}
+                      values={yearValues}
                       selected={view.year}
                       onPick={(year) => applyCalendarShift(year, view.month)}
                       format={(year) => String(year)}
@@ -352,9 +368,14 @@ function PanelHeader({ title, onDone }: { title: string; onDone: () => void }) {
  * Нативный touch-скролл телефона + scroll-snap даёт «родное» ощущение,
  * на десктопе работает колесом мыши и кликами по значениям.
  *
+ * Лента циклическая: значений WHEEL_COPIES копий подряд, «домой» —
+ * средняя. Когда центр уходит в крайнюю копию, скролл мгновенно переносят
+ * на один список — значения одинаковые, визуально прыжок незаметен, а
+ * крутить колесо можно в обе стороны без тупиков.
+ *
  * Скроллер имеет симметричные вертикальные отступы (WHEEL_INSET), поэтому
- * центр i-го значения ровно на `i * WHEEL_ITEM_HEIGHT` от начала скролла —
- * и первому, и последнему значению доступно идеальное центрирование.
+ * центр i-го элемента ленты ровно на `i * WHEEL_ITEM_HEIGHT` от начала
+ * скролла — расчёт «что в центре» честный для любого значения.
  */
 function TimeWheel({
   label,
@@ -371,29 +392,30 @@ function TimeWheel({
   format?: (value: number) => string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  // Значение, стоящее в центре в этот момент (может опережать committed
-  // `selected` на время прокрутки).
-  const [center, setCenter] = useState(selected);
+  const count = values.length;
+  const total = count * WHEEL_COPIES;
+  // Абсолютный индекс в ленте, стоящий в центре (средняя копия — «дом»).
+  const [centerIdx, setCenterIdx] = useState(() => count + Math.max(0, values.indexOf(selected)));
   // Последнее значение, отправленное наружу этим колесом (скроллом или
   // кликом). Эффект-синхронизация его пропускает: иначе каждый onPick
   // возвращал бы ре-рендер родителя, и тот «дотягивал» scrollTop обратно
   // к committed-значению — колесо прыгало бы назад посреди жеста.
   const lastEmittedRef = useRef<number | null>(null);
 
-  const offsetFor = (value: number) =>
-    Math.max(0, values.indexOf(value)) * WHEEL_ITEM_HEIGHT;
+  const homeIndexFor = (value: number) => count + Math.max(0, values.indexOf(value));
 
   // Внешняя смена значения (загрузка события, правка в другом месте) —
-  // мгновенно доводим колесо до него. При монтировании lastEmitted ещё
-  // null, поэтому колесо сразу встаёт на своё значение.
+  // мгновенно доводим колесо до него в средней копии. При монтировании
+  // lastEmitted ещё null, поэтому колесо сразу встаёт на своё значение.
   useEffect(() => {
     if (selected === lastEmittedRef.current) return;
     lastEmittedRef.current = selected;
+    const target = homeIndexFor(selected) * WHEEL_ITEM_HEIGHT;
     const el = containerRef.current;
-    const target = offsetFor(selected);
     if (el && Math.abs(el.scrollTop - target) > 1) el.scrollTop = target;
-    setCenter(values[Math.max(0, values.indexOf(selected))] ?? selected);
-    // values — константа на время жизни панели, учитывать её не нужно.
+    setCenterIdx(homeIndexFor(selected));
+    // values — стабильный массив на время жизни панели, учитывать его
+    // в зависимостях не нужно.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected]);
 
@@ -406,11 +428,20 @@ function TimeWheel({
   function syncFromScroll() {
     const el = containerRef.current;
     if (!el) return;
-    const raw = Math.round(el.scrollTop / WHEEL_ITEM_HEIGHT);
-    const index = Math.max(0, Math.min(values.length - 1, raw));
-    const value = values[index];
+    let index = Math.round(el.scrollTop / WHEEL_ITEM_HEIGHT);
+    index = Math.max(0, Math.min(total - 1, index));
+    // Держим «центр» в средней копии: ушли в край — переносим скролл на
+    // один список. Лента зациклена, тупиков нет — обе стороны работают.
+    if (index < count) {
+      el.scrollTop += count * WHEEL_ITEM_HEIGHT;
+      index += count;
+    } else if (index >= count * 2) {
+      el.scrollTop -= count * WHEEL_ITEM_HEIGHT;
+      index -= count;
+    }
+    const value = values[index % count];
     if (value === undefined) return;
-    setCenter(value);
+    setCenterIdx(index);
     pick(value);
   }
 
@@ -434,26 +465,33 @@ function TimeWheel({
           className="no-scrollbar wheel-scroller h-full snap-y snap-mandatory overflow-y-auto"
           style={{ paddingTop: WHEEL_INSET, paddingBottom: WHEEL_INSET }}
         >
-          {values.map((value) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => {
-                pick(value);
-                const el = containerRef.current;
-                // jsdom не реализует Element.scrollTo — прокидываем без ошибок.
-                if (el && typeof el.scrollTo === "function") {
-                  el.scrollTo({ top: offsetFor(value), behavior: "smooth" });
-                }
-              }}
-              className={cn(
-                "flex h-11 w-full snap-center items-center justify-center text-lg tabular-nums transition-colors duration-150",
-                value === center ? "font-bold text-indigo-200" : "text-white/35 hover:text-white/60"
-              )}
-            >
-              {format(value)}
-            </button>
-          ))}
+          {Array.from({ length: WHEEL_COPIES }, (_, copy) =>
+            values.map((value, i) => {
+              const absoluteIndex = copy * count + i;
+              return (
+                <button
+                  key={`${copy}-${i}`}
+                  type="button"
+                  onClick={() => {
+                    pick(value);
+                    const el = containerRef.current;
+                    // jsdom не реализует Element.scrollTo — прокидываем без ошибок.
+                    if (el && typeof el.scrollTo === "function") {
+                      el.scrollTo({ top: homeIndexFor(value) * WHEEL_ITEM_HEIGHT, behavior: "smooth" });
+                    }
+                  }}
+                  className={cn(
+                    "flex h-11 w-full snap-center items-center justify-center text-lg tabular-nums transition-colors duration-150",
+                    absoluteIndex === centerIdx
+                      ? "font-bold text-indigo-200"
+                      : "text-white/35 hover:text-white/60"
+                  )}
+                >
+                  {format(value)}
+                </button>
+              );
+            })
+          )}
         </div>
       </div>
       <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/40">{label}</span>
