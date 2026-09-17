@@ -51,10 +51,10 @@ export function HomePage() {
   }
 
   return (
-    <div className="relative flex h-full flex-col">
+    <div className="relative flex h-full flex-col lg:pl-64">
       <TopBar title="DSU Debate" rightSlot="profile" />
 
-      <div className="no-scrollbar flex-1 overflow-y-auto px-5 pb-32 pt-2">
+      <div className="no-scrollbar mx-auto flex-1 w-full max-w-5xl overflow-y-auto px-5 pb-32 pt-2 lg:px-10 lg:pb-10 lg:pt-6">
         {loading && (
           <div className="h-52 animate-pulse rounded-[1.75rem] bg-white/5" />
         )}
@@ -75,13 +75,13 @@ export function HomePage() {
           <h3 className="text-[15px] font-semibold text-white">Ближайшие дебаты</h3>
           <button
             onClick={() => navigate("/debates")}
-            className="inline-flex items-center gap-0.5 text-sm text-white/45 hover:text-white/70"
+            className="inline-flex items-center gap-0.5 text-sm text-white/45 transition hover:text-white/70"
           >
-            Все <ChevronRight size={14} />
+            Все <ChevronRight size={14} className="text-white opacity-45" />
           </button>
         </div>
 
-        <div className="mt-3 space-y-3">
+        <div className="mt-3 space-y-3 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0">
           {upcoming.map((event, index) => <UpcomingDebateItem key={event.id} event={event} index={index} />)}
           {!loading && !error && upcoming.length === 0 && (
             <p className="py-6 text-center text-sm text-white/40">Пока нет запланированных дебатов</p>
@@ -91,7 +91,7 @@ export function HomePage() {
         {!loading && !error && completed.length > 0 && (
           <>
             <h3 className="mt-8 text-[15px] font-semibold text-white">Последние завершённые</h3>
-            <div className="mt-3 space-y-3">
+            <div className="mt-3 space-y-3 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0">
               {completed.slice(0, 3).map((event, index) => <UpcomingDebateItem key={event.id} event={event} index={index} />)}
             </div>
           </>

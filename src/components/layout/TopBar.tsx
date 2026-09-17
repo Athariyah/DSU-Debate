@@ -1,5 +1,6 @@
 import { ChevronLeft, MoreVertical, UserRound } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { cn } from "../../utils/cn";
 
 interface TopBarProps {
   title?: string;
@@ -10,45 +11,48 @@ interface TopBarProps {
   onBack?: () => void;
 }
 
+/**
+ * Шапка страницы: заголовок по центру и круглые «стеклянные» кнопки.
+ * Отступ сверху увеличен, кнопки 44px — удобно попадать пальцем, ничего
+ * не прижато к краю экрана.
+ */
 export function TopBar({ title, showBack, rightSlot = "none", onMenuClick, onBack }: TopBarProps) {
   const navigate = useNavigate();
 
+  const slotButtonClass = cn(
+    "glass-panel flex h-11 w-11 items-center justify-center rounded-full",
+    "border border-white/10 text-white shadow-[0_6px_20px_-8px_rgba(0,0,0,0.6)]",
+    "transition-all duration-200 hover:border-white/25 hover:bg-white/10 active:scale-95"
+  );
+
   return (
-    <div className="safe-top flex items-center justify-between px-5 pb-2 pt-5">
-      <div className="flex min-w-9 items-center">
+    <header className="safe-top z-20 flex items-center justify-between gap-3 px-4 pb-4 pt-6 sm:px-6">
+      <div className="flex min-w-11 items-center">
         {showBack && (
-          <button
-            onClick={onBack ?? (() => navigate(-1))}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/80 transition hover:bg-white/10"
-            aria-label="Назад"
-          >
-            <ChevronLeft size={18} />
+          <button onClick={onBack ?? (() => navigate(-1))} className={slotButtonClass} aria-label="Назад">
+            <ChevronLeft size={20} />
           </button>
         )}
       </div>
 
-      {title && <h1 className="text-[17px] font-semibold text-white">{title}</h1>}
+      {title && (
+        <h1 className="min-w-0 truncate bg-gradient-to-b from-white to-white/65 bg-clip-text text-center text-[19px] font-bold tracking-tight text-transparent">
+          {title}
+        </h1>
+      )}
 
-      <div className="flex min-w-9 items-center justify-end">
+      <div className="flex min-w-11 items-center justify-end">
         {rightSlot === "menu" && (
-          <button
-            onClick={onMenuClick}
-            className="flex h-9 w-9 items-center justify-center rounded-full text-white/70 transition hover:bg-white/10"
-            aria-label="Меню"
-          >
-            <MoreVertical size={18} />
+          <button onClick={onMenuClick} className={slotButtonClass} aria-label="Меню">
+            <MoreVertical size={20} />
           </button>
         )}
         {rightSlot === "profile" && (
-          <button
-            onClick={() => navigate("/profile")}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/80 transition hover:bg-white/10"
-            aria-label="Профиль"
-          >
-            <UserRound size={18} />
+          <button onClick={() => navigate("/profile")} className={slotButtonClass} aria-label="Профиль">
+            <UserRound size={20} />
           </button>
         )}
       </div>
-    </div>
+    </header>
   );
 }

@@ -7,6 +7,7 @@ import { describeDatabaseConfig } from "./config/database";
 import { pool, waitForDatabase } from "./config/db";
 import { runMigrations } from "./db/migrate";
 import { ensureSeedAdmin } from "./config/bootstrap";
+import { startVotingTimer } from "./jobs/votingTimer";
 import {
   ensureLocalDatabase,
   shutdownLocalDatabase,
@@ -32,6 +33,9 @@ async function bootstrap(): Promise<void> {
   const app = createApp();
   const httpServer = http.createServer(app);
   const io = initSocketServer(httpServer);
+
+  // Фоновый таймер: сам закрывает голосование, когда истёк интервал события.
+  const stopVotingTimer = startVotingTimer();
 
   httpServer.listen(env.port, () => {
     // eslint-disable-next-line no-console
@@ -70,6 +74,7 @@ async function bootstrap(): Promise<void> {
     const timer = setTimeout(() => void finish(), 5000);
     timer.unref();
 
+    stopVotingTimer();
     io.close();
     httpServer.close(() => void finish());
   };

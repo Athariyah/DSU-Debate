@@ -43,10 +43,10 @@ export function ProfilePage() {
   const initials = profile ? `${profile.firstName[0]}${profile.lastName[0]}`.toUpperCase() : "?";
 
   return (
-    <div className="relative flex h-full flex-col">
+    <div className="relative flex h-full flex-col lg:pl-64">
       <TopBar title="Профиль" />
 
-      <div className="no-scrollbar flex-1 overflow-y-auto px-5 pb-32 pt-2">
+      <div className="no-scrollbar mx-auto flex-1 w-full max-w-2xl overflow-y-auto px-5 pb-32 pt-2 lg:px-10 lg:pb-10 lg:pt-6">
         <div className="glass-panel flex items-center gap-4 rounded-3xl border border-white/10 p-5">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-400 via-violet-500 to-sky-400 text-lg font-bold text-white">
             {initials === "?" ? <UserRound size={22} /> : initials}
@@ -162,6 +162,10 @@ export function ProfilePage() {
             </p>
           </div>
         </div>
+
+        <p className="mt-10 border-t border-white/5 pt-5 text-center text-[11px] leading-relaxed text-white/30">
+          Платформа DSU Debate разработана для СНО ДГУ · от СНО ФИиИТ
+        </p>
       </div>
 
       <BottomNav />

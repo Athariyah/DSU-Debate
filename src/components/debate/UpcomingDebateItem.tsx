@@ -38,14 +38,14 @@ export function UpcomingDebateItem({ event, index = 0 }: UpcomingDebateItemProps
       <div className="min-w-0 flex-1">
         <p className="line-clamp-2 text-sm font-semibold leading-snug text-white">{event.title}</p>
         <div className="mt-1.5 flex items-center gap-1.5 text-xs text-white/45">
-          <Users size={13} />
+          <Users size={13} className="text-white opacity-45" />
           <span>{event.participantsCount} участника</span>
           <span className="mx-0.5">·</span>
           <span>{time}</span>
         </div>
       </div>
 
-      <ChevronRight size={18} className="shrink-0 text-white/30 transition-transform group-hover:translate-x-0.5" />
+      <ChevronRight size={18} className="shrink-0 text-white opacity-30 transition-transform group-hover:translate-x-0.5" />
     </motion.button>
   );
 }

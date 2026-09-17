@@ -74,12 +74,12 @@ export function ActiveDebateCard({ event, voted, onVoteClick }: ActiveDebateCard
 
       <div className="relative mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-white/65">
         <span className="inline-flex items-center gap-1.5">
-          <Users size={14} className="text-white/40" />
+          <Users size={14} className="text-white opacity-40" />
           {event.participantsCount} участника
         </span>
         <span className="text-white/25">·</span>
         <span className="inline-flex items-center gap-1.5">
-          <CalendarClock size={14} className="text-white/40" />
+          <CalendarClock size={14} className="text-white opacity-40" />
           {timeLabel}
         </span>
       </div>

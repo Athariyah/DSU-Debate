@@ -23,6 +23,10 @@ export interface DebateEvent {
   participantsCount: number;
   /** ISO timestamp; backend calls this `dateTime`. */
   scheduledAt: string;
+  /** Длительность таймера голосования в минутах (null/отсутствует — выключен). */
+  votingDurationMinutes?: number | null;
+  /** Дедлайн голосования (ISO): scheduledAt + длительность. */
+  votingEndsAt?: string | null;
   totalVotes: number;
   participants: Participant[];
   coverGradient?: string;
@@ -55,4 +59,6 @@ export interface CreateDebateInput {
   format: number;
   participants: { name: string; subtitle?: string }[];
   scheduledAt: string;
+  /** Опциональный таймер голосования, минуты. */
+  votingDurationMinutes?: number | null;
 }

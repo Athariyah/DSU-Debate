@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 /**
- * Поле даты/времени: два раздельных нативных виджета вместо одного
- * datetime-local (на телефоне он вылезал за рамку карточки) + корректная
- * конвертация в ISO, который ждёт backend.
+ * Поле даты/времени без системных виджетов: две кнопки-переключатели,
+ * каждое первое нажатие открывает свою панель (календарь / часы-минуты),
+ * второе закрывает + корректная конвертация в ISO, который ждёт backend.
  */
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { DateTimeField, combineDateTime, splitDateTime } from "./DateTimeField";
 
 // 16 сентября 2026, 17:30 по локальному времени — тест не зависит от TZ.
@@ -38,40 +38,100 @@ describe("конвертация даты", () => {
 });
 
 describe("DateTimeField", () => {
-  test("показывает дату и время отдельными полями, без datetime-local", () => {
+  test("показывает дату и время как кнопки-переключатели, без нативных инпутов", () => {
     const { container } = render(<DateTimeField value={LOCAL_DATE.toISOString()} onChange={() => {}} />);
 
-    expect(container.querySelector('input[type="datetime-local"]')).toBeNull();
-    expect(screen.getByLabelText("Дата")).toBeTruthy();
-    expect(screen.getByLabelText("Время")).toBeTruthy();
-    expect((screen.getByLabelText("Дата") as HTMLInputElement).value).toBe("2026-09-16");
-    expect((screen.getByLabelText("Время") as HTMLInputElement).value).toBe("17:30");
+    // Ни одного системного виджета (а с ними и системных иконок-дублёров).
+    expect(container.querySelector("input")).toBeNull();
+
+    const dateButton = screen.getByRole("button", { name: "Дата" });
+    const timeButton = screen.getByRole("button", { name: "Время" });
+    expect(dateButton.textContent).toContain("16.09.2026");
+    expect(timeButton.textContent).toContain("17:30");
   });
 
-  test("смена даты отдаёт наружу валидный ISO", () => {
+  test("первое нажатие открывает календарь, второе закрывает", async () => {
+    render(<DateTimeField value={LOCAL_DATE.toISOString()} onChange={() => {}} />);
+    const dateButton = screen.getByRole("button", { name: "Дата" });
+
+    expect(screen.queryByText("Сентябрь 2026")).toBeNull();
+    fireEvent.click(dateButton);
+    expect(screen.getByText("Сентябрь 2026")).toBeTruthy();
+    expect(dateButton.getAttribute("aria-expanded")).toBe("true");
+
+    fireEvent.click(dateButton);
+    expect(dateButton.getAttribute("aria-expanded")).toBe("false");
+    await waitFor(() => expect(screen.queryByText("Сентябрь 2026")).toBeNull());
+  });
+
+  test("панель времени тоже работает как переключатель", async () => {
+    render(<DateTimeField value={LOCAL_DATE.toISOString()} onChange={() => {}} />);
+    const timeButton = screen.getByRole("button", { name: "Время" });
+
+    fireEvent.click(timeButton);
+    expect(screen.getByRole("group", { name: "Часы" })).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Минуты" })).toBeTruthy();
+
+    fireEvent.click(timeButton);
+    await waitFor(() => expect(screen.queryByRole("group", { name: "Часы" })).toBeNull());
+  });
+
+  test("выбор дня в календаре отдаёт наружу валидный ISO", () => {
     const onChange = vi.fn();
     render(<DateTimeField value={LOCAL_DATE.toISOString()} onChange={onChange} />);
 
-    fireEvent.change(screen.getByLabelText("Дата"), { target: { value: "2026-09-20" } });
+    fireEvent.click(screen.getByRole("button", { name: "Дата" }));
+    fireEvent.click(screen.getByRole("button", { name: "20" }));
 
     expect(onChange).toHaveBeenCalledTimes(1);
     expect(onChange).toHaveBeenCalledWith(new Date(2026, 8, 20, 17, 30).toISOString());
   });
 
-  test("смена времени отдаёт наружу валидный ISO", () => {
+  test("смена месяца листает календарь и сохраняет выбранный день", () => {
     const onChange = vi.fn();
     render(<DateTimeField value={LOCAL_DATE.toISOString()} onChange={onChange} />);
 
-    fireEvent.change(screen.getByLabelText("Время"), { target: { value: "09:05" } });
+    fireEvent.click(screen.getByRole("button", { name: "Дата" }));
+    expect(screen.getByText("Сентябрь 2026")).toBeTruthy();
 
-    expect(onChange).toHaveBeenCalledWith(new Date(2026, 8, 16, 9, 5).toISOString());
+    fireEvent.click(screen.getByRole("button", { name: "Предыдущий месяц" }));
+    expect(screen.getByText("Август 2026")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "31" }));
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith(new Date(2026, 7, 31, 17, 30).toISOString());
   });
 
-  test("пустое значение не отправляет ISO наружу", () => {
+  test("выбор часа и минут отдаёт наружу валидный ISO", () => {
+    const onChange = vi.fn();
+    render(<DateTimeField value={LOCAL_DATE.toISOString()} onChange={onChange} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Время" }));
+    const hours = screen.getByRole("group", { name: "Часы" });
+    const minutes = screen.getByRole("group", { name: "Минуты" });
+
+    fireEvent.click(within(hours).getByRole("button", { name: "09" }));
+    expect(onChange).toHaveBeenLastCalledWith(new Date(2026, 8, 16, 9, 30).toISOString());
+
+    fireEvent.click(within(minutes).getByRole("button", { name: "05" }));
+    expect(onChange).toHaveBeenLastCalledWith(new Date(2026, 8, 16, 9, 5).toISOString());
+  });
+
+  test("пустое значение: плейсхолдер, а выбор дня отправляет ISO", () => {
     const onChange = vi.fn();
     render(<DateTimeField value="" onChange={onChange} />);
 
-    fireEvent.change(screen.getByLabelText("Дата"), { target: { value: "" } });
-    expect(onChange).not.toHaveBeenCalled();
+    const dateButton = screen.getByRole("button", { name: "Дата" });
+    expect(dateButton.textContent).toContain("Выбрать дату");
+
+    // Календарь открывается на текущем месяце.
+    const now = new Date();
+    fireEvent.click(dateButton);
+    fireEvent.click(screen.getByRole("button", { name: String(now.getDate()) }));
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith(
+      new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0).toISOString()
+    );
   });
 });

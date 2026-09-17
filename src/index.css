@@ -66,35 +66,9 @@ body {
     #03040a;
 }
 
-/* Поля даты и времени. Нативные виджеты iOS/Android любят вылезать за
-   границы карточки, а iOS дополнительно зумит страницу, если шрифт поля
-   меньше 16px. Поэтому: жёсткие min/max по ширине, шрифт 16px, тёмная
-   системная схема и overflow:hidden на контейнере. */
-.date-field {
-  min-width: 0;
-  max-width: 100%;
-  overflow: hidden;
-}
-
-.date-field input {
-  font-size: 16px; /* iOS не увеличивает страницу при фокусе */
-  min-width: 0;
-  max-width: 100%;
-  width: 100%;
-  color-scheme: dark;
-}
-
-.date-field input::-webkit-calendar-picker-indicator {
-  flex: none;
-  margin-left: 0.25rem;
-  opacity: 0.55;
-}
-
-.date-field input::-webkit-datetime-edit,
-.date-field input::-webkit-date-and-time-value {
-  white-space: nowrap;
-  text-align: left;
-}
+/* Поля даты и времени больше не используют нативные виджеты
+   (свои календарь и часы внутри DateTimeField), поэтому старое
+   подстрахование от системных инпутов здесь не нужно. */
 
 .glow-btn {
   box-shadow: 0 10px 30px -8px rgba(255, 255, 255, 0.35);

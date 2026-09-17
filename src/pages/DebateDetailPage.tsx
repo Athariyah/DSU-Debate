@@ -8,6 +8,7 @@ import {
   MonitorPlay,
   RefreshCw,
   Settings2,
+  Timer,
   Users,
   Wifi,
   WifiOff,
@@ -20,9 +21,21 @@ import { VoteModal } from "../components/debate/VoteModal";
 import { fetchDebateById, isAdminAuthenticated } from "../api/debates";
 import { useDebateSocket } from "../hooks/useDebateSocket";
 import { getVotedParticipant } from "../utils/votedStore";
+import { cn } from "../utils/cn";
 import type { DebateEvent, Participant } from "../types";
 
 const EMPTY_PARTICIPANTS: Participant[] = [];
+
+/** «12:34» / «1:02:03» из миллисекунд — подпись таймера. */
+function formatCountdown(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const mm = String(minutes).padStart(2, "0");
+  const ss = String(seconds).padStart(2, "0");
+  return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
+}
 
 export function DebateDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -67,6 +80,18 @@ export function DebateDetailPage() {
     initialTotalVotes: event?.totalVotes ?? 0,
   });
 
+  // Таймер голосования: тикаем раз в секунду, пока дебат активен и есть
+  // дедлайн. Когда интервал истекает — кнопка блокируется (бэкенд в этот же
+  // момент переводит событие в completed и рассылает смену статуса).
+  // ВАЖНО: хуки — до всех ранних return ниже.
+  const endsAtMs = event?.votingEndsAt ? new Date(event.votingEndsAt).getTime() : null;
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    if (eventStatus !== "active" || endsAtMs === null) return;
+    const timer = window.setInterval(() => setNowTick(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [eventStatus, endsAtMs]);
+
   async function copyLink() {
     setMenuOpen(false);
     try {
@@ -104,7 +129,13 @@ export function DebateDetailPage() {
     minute: "2-digit",
   })}`;
   const voted = Boolean(justVotedFor);
-  const canVote = eventStatus === "active";
+
+  // Таймер голосования: тикаем раз в секунду, пока дебат активен и есть
+  // дедлайн. Когда интервал истекает — кнопка блокируется (бэкенд в этот же
+  // момент переводит событие в completed и рассылает смену статуса).
+  const msLeft = endsAtMs === null ? null : endsAtMs - nowTick;
+  const timerExpired = msLeft !== null && msLeft <= 0;
+  const canVote = eventStatus === "active" && !timerExpired;
 
   return (
     <div className="relative flex h-full flex-col">
@@ -155,7 +186,7 @@ export function DebateDetailPage() {
         </div>
       )}
 
-      <div className="no-scrollbar flex-1 overflow-y-auto px-5 pb-8">
+      <div className="no-scrollbar mx-auto flex-1 w-full max-w-2xl overflow-y-auto px-5 pb-8 lg:px-8">
         <Badge tone={eventStatus === "active" ? "active" : "neutral"}>
           {eventStatus === "active" ? "Активный дебат" : eventStatus === "completed" ? "Завершён" : "Скоро"}
         </Badge>
@@ -185,6 +216,20 @@ export function DebateDetailPage() {
           </span>
         </div>
 
+        {eventStatus === "active" && endsAtMs !== null && (
+          <div
+            className={cn(
+              "mt-3 inline-flex items-center gap-2 self-start rounded-full border px-3.5 py-1.5 text-[13px] font-semibold tabular-nums",
+              timerExpired
+                ? "border-rose-400/30 bg-rose-500/10 text-rose-300"
+                : "border-indigo-300/30 bg-indigo-400/10 text-indigo-200 shadow-[0_6px_20px_-8px_rgba(99,102,241,0.6)]"
+            )}
+          >
+            <Timer size={14} />
+            {timerExpired ? "Таймер истёк — голосование закрывается" : `Осталось ${formatCountdown(msLeft!)}`}
+          </div>
+        )}
+
         <div className="mt-6 space-y-3">
           {participants.map((p, idx) => (
             <ParticipantResult key={p.id} participant={p} index={idx} highlighted={p.id === justVotedFor} />
@@ -194,7 +239,7 @@ export function DebateDetailPage() {
         <p className="mt-4 text-center text-xs text-white/30">Всего голосов: {totalVotes}</p>
       </div>
 
-      <div className="safe-bottom space-y-2 px-5 pb-5 pt-2">
+      <div className="safe-bottom mx-auto w-full max-w-2xl space-y-2 px-5 pb-5 pt-2 lg:px-8">
         {voted ? (
           <>
             <div className="glass-panel flex items-center justify-center gap-2 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-6 py-4 text-sm font-semibold text-emerald-300">
@@ -208,7 +253,11 @@ export function DebateDetailPage() {
           </>
         ) : (
           <Button fullWidth disabled={!canVote} onClick={() => setVoteModalOpen(true)}>
-            {canVote ? "Голосовать" : "Голосование ещё не началось"}
+            {canVote
+              ? "Голосовать"
+              : timerExpired
+                ? "Время голосования истекло"
+                : "Голосование ещё не началось"}
           </Button>
         )}
       </div>
@@ -240,7 +289,7 @@ function MenuItem({
       onClick={onClick}
       className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-white/80 transition hover:bg-white/10"
     >
-      <Icon size={16} className="text-white/50" />
+      <Icon size={16} className="text-white opacity-50" />
       {label}
     </button>
   );

@@ -76,9 +76,12 @@ test("вход в профиле → плюс появляется → клик 
   fireEvent.change(password, { target: { value: "ChangeMe123!" } });
   fireEvent.click(screen.getByRole("button", { name: /^Войти$/ }));
 
-  // После входа в панели появляется плюс.
-  const plus = await screen.findByLabelText("Создать мероприятие", {}, { timeout: 3000 });
-  expect(plus.getAttribute("href")).toBe("/admin");
+  // После входа в панели появляется плюс (мобильная пилюля + боковая
+  // панель для компьютера — ищем обе и проверяем каждую).
+  const plusLinks = await screen.findAllByLabelText("Создать мероприятие", {}, { timeout: 3000 });
+  expect(plusLinks.length).toBeGreaterThan(0);
+  const plus = plusLinks[0];
+  expect(plusLinks.every((item) => item.getAttribute("href") === "/admin")).toBe(true);
 
   // Клик по плюсу открывает экран администрирования.
   fireEvent.click(plus);

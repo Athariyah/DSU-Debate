@@ -15,6 +15,14 @@ export const loginSchema = z.object({
 
 export const eventStatusEnum = z.enum(["upcoming", "active", "completed"]);
 
+// Длительность таймера голосования в минутах: 1..1440 (сутки).
+// null/отсутствие — таймер выключен, голосование идёт до смены статуса.
+export const votingDurationSchema = z
+  .number()
+  .int("Таймер задаётся целым числом минут")
+  .min(1, "Таймер должен быть не меньше 1 минуты")
+  .max(1440, "Таймер не может быть больше суток");
+
 const participantDraftSchema = z.object({
   name: z.string().trim().min(1).max(255),
   description: z.string().trim().max(2000).optional().nullable(),
@@ -24,6 +32,7 @@ export const createEventSchema = z.object({
   title: z.string().trim().min(3).max(500),
   dateTime: z.string().datetime({ offset: true }),
   status: eventStatusEnum.optional().default("upcoming"),
+  votingDurationMinutes: votingDurationSchema.nullable().optional(),
   // Optional keeps the CRUD endpoint backwards compatible. When supplied,
   // event and participants are persisted atomically in one transaction.
   // Число участников не ограничено сверху: минимум 2 (дебаты требуют сторон).
@@ -34,6 +43,8 @@ export const updateEventSchema = z.object({
   title: z.string().trim().min(3).max(500).optional(),
   dateTime: z.string().datetime({ offset: true }).optional(),
   status: eventStatusEnum.optional(),
+  // null — явное выключение таймера (в отличие от «поле не передано»).
+  votingDurationMinutes: votingDurationSchema.nullable().optional(),
 });
 
 export const createParticipantSchema = z.object({

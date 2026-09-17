@@ -72,15 +72,18 @@ async function loginThroughForm() {
 
 async function openAdminPanel() {
   // Кликаем плюс в нижней панели и ждём рабочую админку без auth-ошибок.
-  fireEvent.click(await screen.findByLabelText("Создать мероприятие", undefined, { timeout: 5000 }));
+  // «Создать» есть и в мобильной пилюле, и в боковой панели для компьютера.
+  const plusLinks = await screen.findAllByLabelText("Создать мероприятие", undefined, { timeout: 5000 });
+  fireEvent.click(plusLinks[0]);
   expect(await screen.findByText("Мероприятия", undefined, { timeout: 5000 })).toBeTruthy();
   expect(screen.queryByText("Требуется авторизация администратора")).toBeNull();
-  // Список доехал: либо карточки событий (названия в полях), либо пустое
-  // состояние — данные в базе пользователь может менять, тест от них не
-  // зависит.
+  // Список доехал: либо карточки событий (тема — сокращённый текст +
+  // поле таймера), либо пустое состояние — данные в базе пользователь
+  // может менять, тест от них не зависит.
   await waitFor(() => {
     const loaded =
       screen.queryAllByDisplayValue(/./).length > 0 ||
+      screen.queryAllByLabelText("Длительность таймера в минутах").length > 0 ||
       Boolean(screen.queryByText("Мероприятий пока нет"));
     expect(loaded).toBeTruthy();
   }, { timeout: 8000 });

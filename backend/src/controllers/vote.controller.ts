@@ -7,6 +7,7 @@ import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../middleware/errorHandler";
 import { castVoteSchema } from "../validation/schemas";
 import { broadcastVoteUpdate } from "../sockets";
+import { isVotingWindowOpen, votingEndsAt } from "../utils/votingWindow";
 
 /**
  * Извлекает реальный IP-адрес клиента из запроса.
@@ -98,6 +99,8 @@ export const getActiveEvent = asyncHandler(async (_req: Request, res: Response) 
       title: event.title,
       status: event.status,
       dateTime: event.date_time,
+      votingDurationMinutes: event.voting_duration_minutes ?? null,
+      votingEndsAt: votingEndsAt(event)?.toISOString() ?? null,
       participantsCount: results.participants.length,
     },
     participants: results.participants.map((p) => ({
@@ -168,6 +171,16 @@ export const castVote = asyncHandler(async (req: Request, res: Response) => {
         409,
         "EVENT_NOT_ACTIVE",
         "Голосование недоступно: мероприятие сейчас не активно"
+      );
+    }
+
+    // Таймер голосования: если интервал по длительности истёк — голос
+    // отклоняем, даже если статус ещё не успел перевести фоновый обработчик.
+    if (!isVotingWindowOpen(event)) {
+      throw new ApiError(
+        409,
+        "VOTING_CLOSED",
+        "Время голосования по этому дебату истекло"
       );
     }
 
