@@ -26,7 +26,7 @@ export function TopBar({ title, showBack, rightSlot = "none", onMenuClick, onBac
   );
 
   return (
-    <header className="safe-top z-20 flex items-center justify-between gap-3 px-4 pb-4 pt-6 sm:px-6">
+    <header className="z-20 flex items-center justify-between gap-3 px-4 pb-4 pt-[calc(env(safe-area-inset-top,0px)+1.5rem)] sm:px-6 lg:pt-[calc(env(safe-area-inset-top,0px)+2rem)]">
       <div className="flex min-w-11 items-center">
         {showBack && (
           <button onClick={onBack ?? (() => navigate(-1))} className={slotButtonClass} aria-label="Назад">

@@ -9,6 +9,7 @@ import { BroadcastParticipantCard } from "../components/broadcast/BroadcastParti
 import { WinnerReveal } from "../components/broadcast/WinnerReveal";
 import { computeStandings } from "../components/broadcast/standings";
 import { cn } from "../utils/cn";
+import { formatCountdown } from "../utils/formatCountdown";
 import type { DebateEvent, DebateStatus, Participant } from "../types";
 
 const EMPTY_PARTICIPANTS: Participant[] = [];
@@ -304,16 +305,9 @@ export function BroadcastPage() {
   );
 }
 
-/** «12:34» / «1:02:03» из миллисекунд — таймер на большом экране. */
-function formatBroadcastCountdown(ms: number): string {
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  const mm = String(minutes).padStart(2, "0");
-  const ss = String(seconds).padStart(2, "0");
-  return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
-}
+/** Таймер на большом экране использует общий человекочитаемый формат
+ * (для длинных интервалов — «N дн. H ч» вместо гигантского числа часов). */
+const formatBroadcastCountdown = formatCountdown;
 
 /** Число колонок сетки: на телевизоре — по количеству участников, на узком экране — одна. */
 function columnsFor(count: number, width: number): number {

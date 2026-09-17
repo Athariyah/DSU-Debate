@@ -8,7 +8,22 @@ html,
 body,
 #root {
   height: 100%;
-  background-color: #05060a;
+}
+
+/* Фон документа повторяет градиент оболочки приложения: зона «резинового»
+   оверскролла на телефоне и область под статус-баром в PWA-режиме
+   окрашены в тему, а не остаются чёрной дырой. */
+html,
+body {
+  background:
+    radial-gradient(120% 60% at 15% 0%, rgba(99, 102, 241, 0.28) 0%, rgba(99, 102, 241, 0) 55%),
+    radial-gradient(90% 50% at 100% 15%, rgba(139, 92, 246, 0.22) 0%, rgba(139, 92, 246, 0) 55%),
+    radial-gradient(100% 60% at 50% 100%, rgba(56, 189, 248, 0.14) 0%, rgba(56, 189, 248, 0) 60%),
+    #05060a;
+}
+
+html {
+  overscroll-behavior: none;
 }
 
 body {
@@ -81,13 +96,9 @@ body {
     inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
-.safe-bottom {
-  padding-bottom: env(safe-area-inset-bottom);
-}
-
-.safe-top {
-  padding-top: env(safe-area-inset-top);
-}
+/* Отступы под safe-area задаются в разметке через calc(env(...)+Nrem),
+   чтобы дизайнерский отступ не обнулялся и не съедался инсетом:
+   например pt-[calc(env(safe-area-inset-top,0px)+1.5rem)]. */
 
 /* Медленный дрейф фоновых орбов стартового экрана. */
 @keyframes drift {

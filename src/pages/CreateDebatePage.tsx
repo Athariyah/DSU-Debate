@@ -194,7 +194,7 @@ export function CreateDebatePage() {
         {error && <p className="mt-4 text-sm text-rose-400">{error}</p>}
       </div>
 
-      <div className="safe-bottom mx-auto w-full max-w-3xl px-5 pb-5 pt-2 lg:px-8">
+      <div className="mx-auto w-full max-w-3xl px-5 pb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] pt-2 lg:px-8">
         <Button fullWidth onClick={handleSubmit} disabled={submitting}>
           {submitting ? <Loader2 size={18} className="animate-spin" /> : "Создать"}
         </Button>

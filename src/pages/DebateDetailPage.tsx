@@ -24,18 +24,9 @@ import { getVotedParticipant } from "../utils/votedStore";
 import { cn } from "../utils/cn";
 import type { DebateEvent, Participant } from "../types";
 
-const EMPTY_PARTICIPANTS: Participant[] = [];
+import { formatCountdown } from "../utils/formatCountdown";
 
-/** «12:34» / «1:02:03» из миллисекунд — подпись таймера. */
-function formatCountdown(ms: number): string {
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  const mm = String(minutes).padStart(2, "0");
-  const ss = String(seconds).padStart(2, "0");
-  return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
-}
+const EMPTY_PARTICIPANTS: Participant[] = [];
 
 export function DebateDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -239,7 +230,7 @@ export function DebateDetailPage() {
         <p className="mt-4 text-center text-xs text-white/30">Всего голосов: {totalVotes}</p>
       </div>
 
-      <div className="safe-bottom mx-auto w-full max-w-2xl space-y-2 px-5 pb-5 pt-2 lg:px-8">
+      <div className="mx-auto w-full max-w-2xl space-y-2 px-5 pb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] pt-2 lg:px-8">
         {voted ? (
           <>
             <div className="glass-panel flex items-center justify-center gap-2 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-6 py-4 text-sm font-semibold text-emerald-300">
