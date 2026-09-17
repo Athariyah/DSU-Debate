@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Loader2, Maximize2, Minimize2, Wifi, WifiOff, X } from "lucide-react";
+import { Clock3, Loader2, Maximize2, Minimize2, Wifi, WifiOff, X } from "lucide-react";
 import { fetchDebateById } from "../api/debates";
 import { useDebateSocket, type RealtimeStatus } from "../hooks/useDebateSocket";
 import { AnimatedNumber } from "../components/ui/AnimatedNumber";
@@ -149,6 +149,13 @@ export function BroadcastPage() {
     [participants.length, viewportWidth]
   );
 
+  // Таймер голосования на большом экране: сколько осталось до автостопа.
+  const votingEndsAtMs = event?.votingEndsAt ? new Date(event.votingEndsAt).getTime() : null;
+  const votingMsLeft =
+    votingEndsAtMs !== null && eventStatus === "active"
+      ? votingEndsAtMs - clock.getTime()
+      : null;
+
   async function toggleFullscreen() {
     try {
       if (document.fullscreenElement) await document.exitFullscreen();
@@ -167,7 +174,7 @@ export function BroadcastPage() {
     return (
       <BroadcastFallback
         text="Загрузка трансляции…"
-        icon={<Loader2 size={28} className="animate-spin text-white/50" />}
+        icon={<Loader2 size={28} className="animate-spin text-white opacity-50" />}
         onBack={goBack}
       />
     );
@@ -199,6 +206,23 @@ export function BroadcastPage() {
               всего голосов
             </span>
           </div>
+
+          {votingMsLeft !== null && (
+            <div className="hidden text-right md:block">
+              <span
+                className={cn(
+                  "flex items-center justify-end gap-2 text-[clamp(1.1rem,2.1vw,2.5rem)] font-bold leading-none tabular-nums",
+                  votingMsLeft <= 0 ? "text-rose-300" : "text-indigo-200"
+                )}
+              >
+                <Clock3 size="1em" className="opacity-70" />
+                {votingMsLeft > 0 ? formatBroadcastCountdown(votingMsLeft) : "00:00"}
+              </span>
+              <span className="mt-1 block text-[clamp(0.55rem,0.85vw,1rem)] uppercase tracking-[0.2em] text-white/35">
+                {votingMsLeft > 0 ? "до конца голосования" : "таймер истёк"}
+              </span>
+            </div>
+          )}
 
           <span className="text-[clamp(0.9rem,1.6vw,1.9rem)] font-semibold tabular-nums text-white/70">
             {clock.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
@@ -278,6 +302,17 @@ export function BroadcastPage() {
       />
     </div>
   );
+}
+
+/** «12:34» / «1:02:03» из миллисекунд — таймер на большом экране. */
+function formatBroadcastCountdown(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const mm = String(minutes).padStart(2, "0");
+  const ss = String(seconds).padStart(2, "0");
+  return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
 /** Число колонок сетки: на телевизоре — по количеству участников, на узком экране — одна. */

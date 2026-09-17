@@ -42,9 +42,9 @@ export function DebatesPage() {
   }
 
   return (
-    <div className="relative flex h-full flex-col">
+    <div className="relative flex h-full flex-col lg:pl-64">
       <TopBar title="Дебаты" rightSlot="profile" />
-      <div className="no-scrollbar flex-1 overflow-y-auto px-5 pb-32 pt-2">
+      <div className="no-scrollbar mx-auto flex-1 w-full max-w-5xl overflow-y-auto px-5 pb-32 pt-2 lg:px-10 lg:pb-10 lg:pt-6">
         {loading && <div className="h-24 animate-pulse rounded-2xl bg-white/5" />}
         {error && <p className="rounded-2xl border border-rose-400/20 bg-rose-400/10 p-4 text-sm text-rose-300">{error}</p>}
 
@@ -53,13 +53,13 @@ export function DebatesPage() {
         {!loading && !error && (
           <>
             <h3 className="mb-3 mt-6 text-[15px] font-semibold text-white">Ближайшие</h3>
-            <div className="space-y-3">
+            <div className="space-y-3 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0">
               {upcoming.map((event) => <UpcomingDebateItem key={event.id} event={event} />)}
               {upcoming.length === 0 && <p className="py-6 text-center text-sm text-white/40">Пока нет запланированных дебатов</p>}
             </div>
 
             <h3 className="mb-3 mt-8 text-[15px] font-semibold text-white">Завершённые</h3>
-            <div className="space-y-3">
+            <div className="space-y-3 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0">
               {completed.map((event) => <UpcomingDebateItem key={event.id} event={event} />)}
               {completed.length === 0 && <p className="py-6 text-center text-sm text-white/40">История пока пуста</p>}
               {completed.length < completedTotal && (

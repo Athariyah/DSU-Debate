@@ -72,8 +72,10 @@ describe("кнопка «Создать» в нижней панели", () => {
   test("cookie-сессия без локального токена: плюс виден после проверки /me", async () => {
     mockMe("cookie");
     renderNav();
-    // /me ответил 200 за счёт cookie — сессия подхвачена, плюс на месте.
-    expect(await screen.findByLabelText("Создать мероприятие")).toBeTruthy();
+    // /me ответил 200 за счёт cookie — сессия подхвачена, плюс на месте
+    // (в мобильной пилюле и в боковой панели для компьютера).
+    const links = await screen.findAllByLabelText("Создать мероприятие");
+    expect(links.length).toBeGreaterThan(0);
   });
 
   test("без токена админа кнопки нет", async () => {
@@ -88,10 +90,11 @@ describe("кнопка «Создать» в нижней панели", () => {
     window.localStorage.setItem(TOKEN_KEY, "good-token");
     resetAuthStoreForTests();
     renderNav();
-    const link = await screen.findByLabelText("Создать мероприятие");
-    expect(link.getAttribute("href")).toBe("/admin");
+    const links = await screen.findAllByLabelText("Создать мероприятие");
+    expect(links.length).toBeGreaterThan(0);
+    expect(links.every((item) => item.getAttribute("href") === "/admin")).toBe(true);
 
-    fireEvent.click(link);
+    fireEvent.click(links[0]);
     expect(await screen.findByText("ADMIN PAGE")).toBeTruthy();
   });
 
@@ -100,11 +103,12 @@ describe("кнопка «Создать» в нижней панели", () => {
     window.localStorage.setItem(TOKEN_KEY, "good-token");
     resetAuthStoreForTests();
     renderNav();
-    const link = await screen.findByLabelText("Создать мероприятие");
-    expect(link.getAttribute("href")).toBe("/admin");
+    const links = await screen.findAllByLabelText("Создать мероприятие");
+    expect(links.length).toBeGreaterThan(0);
+    expect(links.every((item) => item.getAttribute("href") === "/admin")).toBe(true);
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(getAdminToken()).toBe("good-token");
-    expect(screen.getByLabelText("Создать мероприятие")).toBeTruthy();
+    expect(screen.getAllByLabelText("Создать мероприятие").length).toBeGreaterThan(0);
   });
 
   test("с мёртвым токеном кнопка прячется и токен стирается (без висячего плюса)", async () => {

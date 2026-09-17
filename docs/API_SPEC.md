@@ -73,6 +73,8 @@ Authorization: Bearer <token>
     "title": "ИИ: угроза или возможность?",
     "status": "active",
     "dateTime": "2026-09-14T16:00:00.000Z",
+    "votingDurationMinutes": 60,
+    "votingEndsAt": "2026-09-14T17:00:00.000Z",
     "participantsCount": 2
   },
   "participants": [
@@ -88,6 +90,12 @@ Authorization: Bearer <token>
   "totalVotes": 100
 }
 ```
+
+`votingDurationMinutes` — длительность голосования в минутах после начала дебата
+(или `null`, если таймер не задан). `votingEndsAt` — ISO-дедлайн, равный
+`dateTime + votingDurationMinutes` (или `null`). Та же пара полей есть в
+ответах `GET /events/active`, `GET /events/upcoming`, `GET /events/history`
+и в админских списках/карточках мероприятий.
 
 ### `POST /events/:id/vote`
 
@@ -105,8 +113,16 @@ Authorization: Bearer <token>
 учётом только настроенного количества доверенных прокси, проверяет уникальность
 голоса и выполняет вставку с пересчётом результатов в одной транзакции.
 
-Повторный голос возвращает `409 DUPLICATE_VOTE`. Запросы голосования дополнительно
-ограничиваются rate limit.
+Ошибки:
+
+- `404 EVENT_NOT_FOUND` / `404 PARTICIPANT_NOT_FOUND` — неверные id;
+- `409 EVENT_NOT_ACTIVE` — событие не в статусе `active`;
+- `409 DUPLICATE_VOTE` — голос уже учтён (по устройству и IP);
+- `409 VOTING_CLOSED` — задан таймер голосования и дедлайн `votingEndsAt`
+  уже прошёл (даже если фоновый обработчик ещё не успел перевести событие
+  в `completed`).
+
+Запросы голосования дополнительно ограничиваются rate limit.
 
 ## Административные мероприятия
 
@@ -121,12 +137,16 @@ Authorization: Bearer <token>
   "title": "ИИ: угроза или возможность?",
   "dateTime": "2026-09-14T16:00:00.000Z",
   "status": "upcoming",
+  "votingDurationMinutes": 60,
   "participants": [
     { "name": "Алексей Петров", "description": "За ограничения" },
     { "name": "Мария Иванова", "description": "Против ограничений" }
   ]
 }
 ```
+
+`votingDurationMinutes` — необязательное поле, целое от 1 до 1440; `null`
+или отсутствие — таймер выключен.
 
 ### `GET /admin/events`
 
@@ -136,6 +156,13 @@ Authorization: Bearer <token>
 
 CRUD отдельного мероприятия. При переводе в `active` backend проверяет минимум двух
 участников и автоматически завершает предыдущий active event.
+
+Таймер голосования: `PUT` принимает `votingDurationMinutes` (1–1440) и
+явно переданное `null` (сброс). У активного события с истёкшим таймером
+(`dateTime + длительность <= now`) фоновый обработчик раз в 15 секунд
+автоматически ставит `status = 'completed'` и рассылает `event:status_changed`;
+до момента срабатывания обработчика голос принимается, но отклоняется
+защитой `409 VOTING_CLOSED`.
 
 ### `/admin/participants`
 
@@ -158,7 +185,8 @@ Frontend подключается к тому же origin (`npm run dev` и `npm
 Сервер → клиент:
 
 - `vote:update` — `{ eventId, totalVotes, participants }` после успешного голоса;
-- `event:status_changed` — `{ eventId, status }` после изменения статуса дебата.
+- `event:status_changed` — `{ eventId, status }` после изменения статуса дебата
+  (включая автоматический перевод в `completed` по таймеру голосования).
 
 Экран трансляции `/broadcast/:id` (большие экраны) подписывается на те же два
 события через `join_debate` и обновляет голоса, проценты и статус без

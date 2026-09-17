@@ -14,6 +14,8 @@ interface BackendEvent {
   title: string;
   status: "upcoming" | "active" | "completed";
   dateTime: string;
+  votingDurationMinutes?: number | null;
+  votingEndsAt?: string | null;
   participantsCount?: number;
 }
 
@@ -57,6 +59,8 @@ function mapPublicEvent(payload: BackendPublicEventResponse): DebateEvent {
     status: payload.event.status,
     participantsCount: Number(payload.event.participantsCount ?? participants.length),
     scheduledAt: payload.event.dateTime,
+    votingDurationMinutes: payload.event.votingDurationMinutes ?? null,
+    votingEndsAt: payload.event.votingEndsAt ?? null,
     totalVotes: Number(payload.totalVotes ?? 0),
     participants,
   };
@@ -162,18 +166,26 @@ export interface AdminEventSummary {
   title: string;
   status: DebateEvent["status"];
   dateTime: string;
+  /** Таймер голосования в минутах (null — выключен). */
+  votingDurationMinutes: number | null;
   participantsCount: number;
 }
 
 export async function listAdminDebates(status?: DebateEvent["status"]): Promise<AdminEventSummary[]> {
   const query = status ? `?status=${encodeURIComponent(status)}` : "";
   const response = await apiFetch<{ items: AdminEventSummary[] }>(`/admin/events${query}`, { auth: true });
-  return response.items;
+  // Старый backend мог не отдавать поле — нормализуем в null.
+  return response.items.map((item) => ({
+    ...item,
+    votingDurationMinutes: item.votingDurationMinutes ?? null,
+  }));
 }
 
 export async function updateDebate(
   eventId: number,
-  patch: Partial<Pick<AdminEventSummary, "title" | "status">> & { dateTime?: string }
+  patch: Partial<Pick<AdminEventSummary, "title" | "status" | "votingDurationMinutes">> & {
+    dateTime?: string;
+  }
 ): Promise<AdminEventSummary> {
   const response = await apiFetch<{ event: AdminEventSummary }>(`/admin/events/${eventId}`, {
     method: "PUT",
@@ -242,6 +254,7 @@ export async function createDebate(input: CreateDebateInput): Promise<DebateEven
       title: input.title,
       dateTime: input.scheduledAt,
       status: "upcoming",
+      votingDurationMinutes: input.votingDurationMinutes ?? null,
       participants: input.participants.map((participant) => ({
         name: participant.name,
         description: participant.subtitle ?? null,

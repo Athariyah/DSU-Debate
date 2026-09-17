@@ -3,6 +3,7 @@ import { pool } from "../config/db";
 import { EventRecord } from "../types";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../middleware/errorHandler";
+import { votingEndsAt } from "../utils/votingWindow";
 import { computeEventResults } from "./vote.controller";
 
 function publicEventResponse(event: EventRecord, results: Awaited<ReturnType<typeof computeEventResults>>) {
@@ -12,6 +13,8 @@ function publicEventResponse(event: EventRecord, results: Awaited<ReturnType<typ
       title: event.title,
       status: event.status,
       dateTime: event.date_time,
+      votingDurationMinutes: event.voting_duration_minutes ?? null,
+      votingEndsAt: votingEndsAt(event)?.toISOString() ?? null,
       participantsCount: results.participants.length,
     },
     participants: results.participants.map((participant) => ({

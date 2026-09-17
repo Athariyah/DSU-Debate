@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Loader2, Plus, Type, X } from "lucide-react";
+import { Loader2, Plus, Timer, Type, X } from "lucide-react";
 import { TopBar } from "../components/layout/TopBar";
 import { Button } from "../components/ui/Button";
 import { DateTimeField } from "../components/ui/DateTimeField";
+import { IconChip } from "../components/ui/IconChip";
 import { createDebate } from "../api/debates";
 
 interface DraftParticipant {
@@ -21,6 +22,8 @@ export function CreateDebatePage() {
   const [title, setTitle] = useState("");
   const [participants, setParticipants] = useState<DraftParticipant[]>([emptyParticipant(), emptyParticipant()]);
   const [scheduledAt, setScheduledAt] = useState("");
+  /** Опциональный таймер голосования, минуты (пусто — выключен). */
+  const [durationMinutes, setDurationMinutes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,11 +56,16 @@ export function CreateDebatePage() {
 
     setSubmitting(true);
     try {
+      const parsedDuration = durationMinutes.trim() === "" ? null : Number(durationMinutes);
       await createDebate({
         title: title.trim(),
         format: participants.length,
         participants: participants.map((p) => ({ name: p.name.trim(), subtitle: p.subtitle.trim() || undefined })),
         scheduledAt: new Date(scheduledAt).toISOString(),
+        votingDurationMinutes:
+          parsedDuration === null || !Number.isFinite(parsedDuration)
+            ? null
+            : Math.min(1440, Math.max(1, Math.round(parsedDuration))),
       });
       navigate("/admin");
     } catch (createError) {
@@ -79,13 +87,13 @@ export function CreateDebatePage() {
       {/* Стрелка «назад» всегда возвращает на панель администрирования. */}
       <TopBar showBack onBack={() => navigate("/admin")} title="Создать дебат" rightSlot="menu" />
 
-      <div className="no-scrollbar flex-1 overflow-y-auto px-5 pb-8 pt-2">
+      <div className="no-scrollbar mx-auto flex-1 w-full max-w-3xl overflow-y-auto px-5 pb-8 pt-2 lg:px-8 lg:pt-6">
         <section>
           <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-white/40">
             Тема дебата
           </label>
           <div className="glass-panel flex items-center gap-3 rounded-2xl border border-white/10 px-4 py-3.5">
-            <Type size={16} className="text-white/35" />
+            <IconChip icon={Type} iconSize={15} />
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -125,10 +133,10 @@ export function CreateDebatePage() {
                 {participants.length > 2 && (
                   <button
                     onClick={() => removeParticipant(p.id)}
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-white/30 hover:bg-white/10 hover:text-white/70"
+                    className="group flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition hover:bg-white/10"
                     aria-label="Удалить участника"
                   >
-                    <X size={14} />
+                    <X size={14} className="text-white opacity-30 transition group-hover:opacity-70" />
                   </button>
                 )}
               </div>
@@ -156,10 +164,37 @@ export function CreateDebatePage() {
           </div>
         </section>
 
+        <section className="mt-6">
+          <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-white/40">
+            Таймер голосования
+          </label>
+          <div className="glass-panel flex items-center gap-3 rounded-2xl border border-white/10 px-4 py-3">
+            <IconChip icon={Timer} iconSize={15} />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-white">Автостоп голосования</p>
+              <p className="text-[11px] leading-relaxed text-white/35">
+                Опционально: после интервала голосование закроется само
+              </p>
+            </div>
+            <input
+              type="number"
+              min={1}
+              max={1440}
+              inputMode="numeric"
+              value={durationMinutes}
+              onChange={(event) => setDurationMinutes(event.target.value)}
+              placeholder="—"
+              aria-label="Длительность таймера в минутах"
+              className="w-16 rounded-xl border border-white/10 bg-black/25 px-2 py-2 text-center text-sm font-semibold tabular-nums text-white outline-none transition focus:border-indigo-300/50 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+            />
+            <span className="text-xs text-white/45">мин</span>
+          </div>
+        </section>
+
         {error && <p className="mt-4 text-sm text-rose-400">{error}</p>}
       </div>
 
-      <div className="safe-bottom px-5 pb-5 pt-2">
+      <div className="safe-bottom mx-auto w-full max-w-3xl px-5 pb-5 pt-2 lg:px-8">
         <Button fullWidth onClick={handleSubmit} disabled={submitting}>
           {submitting ? <Loader2 size={18} className="animate-spin" /> : "Создать"}
         </Button>

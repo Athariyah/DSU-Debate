@@ -5,6 +5,7 @@ import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../middleware/errorHandler";
 import { createEventSchema, eventStatusEnum, updateEventSchema } from "../validation/schemas";
 import { broadcastEventStatusChanged } from "../sockets";
+import { votingEndsAt } from "../utils/votingWindow";
 
 function serializeEvent(row: EventRecord & { participants_count?: string }) {
   return {
@@ -12,6 +13,8 @@ function serializeEvent(row: EventRecord & { participants_count?: string }) {
     title: row.title,
     status: row.status,
     dateTime: row.date_time,
+    votingDurationMinutes: row.voting_duration_minutes ?? null,
+    votingEndsAt: votingEndsAt(row)?.toISOString() ?? null,
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -28,7 +31,7 @@ export const createEvent = asyncHandler(async (req: Request, res: Response) => {
   if (!parsed.success) {
     throw new ApiError(400, "VALIDATION_ERROR", parsed.error.issues[0].message);
   }
-  const { title, dateTime, status, participants } = parsed.data;
+  const { title, dateTime, status, votingDurationMinutes, participants } = parsed.data;
   const adminId = req.admin!.adminId;
 
   if (status === "active" && (!participants || participants.length < 2)) {
@@ -48,10 +51,10 @@ export const createEvent = asyncHandler(async (req: Request, res: Response) => {
     }
 
     const inserted = await client.query<EventRecord>(
-      `INSERT INTO events (title, status, date_time, created_by)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO events (title, status, date_time, voting_duration_minutes, created_by)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [title, status, dateTime, adminId]
+      [title, status, dateTime, votingDurationMinutes ?? null, adminId]
     );
 
     if (participants) {
@@ -178,9 +181,14 @@ export const updateEvent = asyncHandler(async (req: Request, res: Response) => {
   if (!parsed.success) {
     throw new ApiError(400, "VALIDATION_ERROR", parsed.error.issues[0].message);
   }
-  const { title, dateTime, status } = parsed.data;
+  const { title, dateTime, status, votingDurationMinutes } = parsed.data;
 
-  if (title === undefined && dateTime === undefined && status === undefined) {
+  if (
+    title === undefined &&
+    dateTime === undefined &&
+    status === undefined &&
+    votingDurationMinutes === undefined
+  ) {
     throw new ApiError(400, "VALIDATION_ERROR", "Нет полей для обновления");
   }
 
@@ -213,14 +221,30 @@ export const updateEvent = asyncHandler(async (req: Request, res: Response) => {
       );
     }
 
+    // SET собираем динамически: votingDurationMinutes = null — это явное
+    // выключение таймера, и COALESCE его не отличит от «поле не прислано».
+    const setClauses: string[] = [];
+    const values: unknown[] = [];
+    if (title !== undefined) {
+      values.push(title);
+      setClauses.push(`title = $${values.length}`);
+    }
+    if (dateTime !== undefined) {
+      values.push(dateTime);
+      setClauses.push(`date_time = $${values.length}`);
+    }
+    if (status !== undefined) {
+      values.push(status);
+      setClauses.push(`status = $${values.length}`);
+    }
+    if (votingDurationMinutes !== undefined) {
+      values.push(votingDurationMinutes);
+      setClauses.push(`voting_duration_minutes = $${values.length}`);
+    }
+    values.push(eventId);
     const updated = await client.query<EventRecord>(
-      `UPDATE events
-       SET title = COALESCE($1, title),
-           date_time = COALESCE($2, date_time),
-           status = COALESCE($3, status)
-       WHERE id = $4
-       RETURNING *`,
-      [title ?? null, dateTime ?? null, status ?? null, eventId]
+      `UPDATE events SET ${setClauses.join(", ")} WHERE id = $${values.length} RETURNING *`,
+      values
     );
     return updated.rows[0];
   });
