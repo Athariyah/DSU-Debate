@@ -342,7 +342,7 @@ describe("маршрутизация", () => {
     window.history.pushState({}, "", "/");
     render(<App />);
 
-    expect(await screen.findByText("DSU Debate")).toBeTruthy();
+    expect(await screen.findByText("DSU Event")).toBeTruthy();
     expect(document.querySelector(".app-shell-bg")).toBeTruthy();
   });
 });

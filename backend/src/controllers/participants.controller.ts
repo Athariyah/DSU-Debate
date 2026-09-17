@@ -153,7 +153,7 @@ export const deleteParticipant = asyncHandler(async (req: Request, res: Response
         throw new ApiError(
           409,
           "ACTIVE_EVENT_MIN_PARTICIPANTS",
-          "У активного дебата должно оставаться минимум два участника"
+          "У активного мероприятия должно оставаться минимум два участника"
         );
       }
     }

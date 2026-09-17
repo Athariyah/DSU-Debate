@@ -14,11 +14,15 @@ interface BackendEvent {
   title: string;
   status: "upcoming" | "active" | "completed";
   eventType?: string;
+  customTypeLabel?: string | null;
   dateTime: string;
   votingDurationMinutes?: number | null;
   votingEndsAt?: string | null;
   votesHidden?: boolean;
   hiddenFromPublic?: boolean;
+  showLeaderboard?: boolean;
+  showStandings?: boolean;
+  showPodium?: boolean;
   participantsCount?: number;
 }
 
@@ -61,12 +65,16 @@ function mapPublicEvent(payload: BackendPublicEventResponse): DebateEvent {
     title: payload.event.title,
     status: payload.event.status,
     eventType: (payload.event.eventType as any) ?? "debate",
+    customTypeLabel: (payload.event as any).customTypeLabel ?? null,
     participantsCount: Number(payload.event.participantsCount ?? participants.length),
     scheduledAt: payload.event.dateTime,
     votingDurationMinutes: payload.event.votingDurationMinutes ?? null,
     votingEndsAt: payload.event.votingEndsAt ?? null,
     votesHidden: Boolean(payload.event.votesHidden),
     hiddenFromPublic: Boolean(payload.event.hiddenFromPublic),
+    showLeaderboard: (payload.event as any).showLeaderboard ?? true,
+    showStandings: (payload.event as any).showStandings ?? true,
+    showPodium: (payload.event as any).showPodium ?? true,
     totalVotes: Number(payload.totalVotes ?? 0),
     participants,
   };
@@ -175,13 +183,17 @@ export interface AdminEventSummary {
   title: string;
   status: DebateEvent["status"];
   eventType: DebateEvent["eventType"];
+  customTypeLabel?: string | null;
   dateTime: string;
   /** Таймер голосования в минутах (null — выключен). */
   votingDurationMinutes: number | null;
   /** true — зрители не видят голоса и проценты (закрытое голосование). */
   votesHidden: boolean;
-  /** true — дебат скрыт от обычных пользователей (виден только в админке). */
+  /** true — мероприятие скрыто от обычных пользователей (виден только в админке). */
   hiddenFromPublic: boolean;
+  showLeaderboard: boolean;
+  showStandings: boolean;
+  showPodium: boolean;
   participantsCount: number;
 }
 
@@ -192,17 +204,22 @@ export async function listAdminDebates(status?: DebateEvent["status"]): Promise<
   return response.items.map((item) => ({
     ...item,
     eventType: (item as any).eventType ?? "debate",
+    customTypeLabel: (item as any).customTypeLabel ?? null,
     votingDurationMinutes: item.votingDurationMinutes ?? null,
     votesHidden: item.votesHidden ?? false,
     hiddenFromPublic: item.hiddenFromPublic ?? false,
+    showLeaderboard: (item as any).showLeaderboard ?? true,
+    showStandings: (item as any).showStandings ?? true,
+    showPodium: (item as any).showPodium ?? true,
   }));
 }
 
 export async function updateDebate(
   eventId: number,
-  patch: Partial<Pick<AdminEventSummary, "title" | "status" | "eventType" | "votingDurationMinutes" | "votesHidden" | "hiddenFromPublic">> & {
+  patch: Partial<Pick<AdminEventSummary, "title" | "status" | "eventType" | "customTypeLabel" | "votingDurationMinutes" | "votesHidden" | "hiddenFromPublic" | "showLeaderboard" | "showStandings" | "showPodium">> & {
     dateTime?: string;
     eventType?: DebateEvent["eventType"];
+    customTypeLabel?: string | null;
   }
 ): Promise<AdminEventSummary> {
   const response = await apiFetch<{ event: AdminEventSummary }>(`/admin/events/${eventId}`, {
@@ -262,7 +279,7 @@ export async function createAdminParticipant(
 
 export async function createDebate(input: CreateDebateInput): Promise<DebateEvent> {
   if (!getAdminToken()) {
-    throw new Error("Для создания дебата требуется токен администратора");
+    throw new Error("Для создания мероприятия требуется токен администратора");
   }
 
   const created = await apiFetch<{ event: BackendEvent }>("/admin/events", {
@@ -273,8 +290,13 @@ export async function createDebate(input: CreateDebateInput): Promise<DebateEven
       dateTime: input.scheduledAt,
       status: "upcoming",
       eventType: input.eventType ?? "debate",
+      customTypeLabel: input.customTypeLabel ?? null,
       votingDurationMinutes: input.votingDurationMinutes ?? null,
+      votesHidden: input.votesHidden ?? false,
       hiddenFromPublic: input.hiddenFromPublic ?? false,
+      showLeaderboard: input.showLeaderboard ?? true,
+      showStandings: input.showStandings ?? true,
+      showPodium: input.showPodium ?? true,
       participants: input.participants.map((participant) => ({
         name: participant.name,
         description: participant.subtitle ?? null,
@@ -284,7 +306,7 @@ export async function createDebate(input: CreateDebateInput): Promise<DebateEven
 
   const eventId = Number(created.event.id);
   const event = await fetchDebateById(String(eventId));
-  if (!event) throw new Error("Созданный дебат не найден после сохранения");
+  if (!event) throw new Error("Созданное мероприятие не найдено после сохранения");
   return event;
 }
 

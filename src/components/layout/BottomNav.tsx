@@ -7,7 +7,7 @@ import { BrandMark } from "../brand/BrandLogo";
 
 const items = [
   { to: "/home", label: "Главная", icon: Home },
-  { to: "/debates", label: "Дебаты", icon: MessagesSquare },
+  { to: "/debates", label: "Мероприятия", icon: MessagesSquare },
 ];
 
 const profileItem = { to: "/profile", label: "Профиль", icon: UserRound };
@@ -52,7 +52,7 @@ export function BottomNav() {
                       </span>
                       <span
                         className={cn(
-                          "text-[10px] font-medium",
+                          "text-[10px] font-medium leading-none translate-y-[0.5px]",
                           isActive ? "text-white" : "text-white/40"
                         )}
                       >
@@ -78,7 +78,7 @@ export function BottomNav() {
               <BrandMark className="h-full w-full" />
             </span>
             <div className="min-w-0">
-              <p className="truncate text-[15px] font-extrabold leading-5 tracking-tight text-white">DSU Debate</p>
+              <p className="truncate text-[15px] font-extrabold leading-5 tracking-tight text-white">DSU Event</p>
               {/* Явный leading-4 (16px при 10px шрифта): строка не может
                   «срезаться» снизу ни при каком рендере. */}
               <p className="block text-[10px] font-medium uppercase leading-4 tracking-[0.18em] text-white/35">
@@ -106,15 +106,13 @@ export function BottomNav() {
                     aria-label="Создать мероприятие"
                     className={({ isActive }) =>
                       cn(
-                        "mt-2 flex items-center justify-center gap-2 rounded-2xl border border-white/25 bg-gradient-to-r from-indigo-500 via-violet-500 to-indigo-500 px-4 py-3 text-sm font-bold text-white shadow-[0_10px_28px_-10px_rgba(99,102,241,0.9),inset_0_1px_0_rgba(255,255,255,0.3)] transition-all duration-200 hover:brightness-110 active:scale-[0.98]",
+                        "mt-2 flex items-center justify-center gap-1.5 rounded-2xl border border-white/25 bg-gradient-to-r from-indigo-500 via-violet-500 to-indigo-500 px-4 py-3 text-sm font-bold leading-none text-white shadow-[0_10px_28px_-10px_rgba(99,102,241,0.9),inset_0_1px_0_rgba(255,255,255,0.3)] transition-all duration-200 hover:brightness-110 active:scale-[0.98]",
                         isActive && "ring-2 ring-white/40"
                       )
                     }
                   >
-                    {/* leading-none у подписи: строка текста равна кеглю, и
-                        плюс встаёт ровно по оптическому центру надписи. */}
                     <Plus size={16} strokeWidth={2.75} className="shrink-0" />
-                    <span className="leading-none">Создать</span>
+                    <span className="leading-none translate-y-[0.5px]">Создать</span>
                   </NavLink>
                 </motion.div>
               )}

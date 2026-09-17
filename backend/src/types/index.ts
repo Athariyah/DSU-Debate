@@ -13,6 +13,8 @@ export interface EventRecord {
   title: string;
   status: EventStatus;
   event_type: EventType;
+  /** Кастомное название когда event_type = "other" */
+  custom_type_label?: string | null;
   date_time: Date;
   /** Длительность голосования в минутах (NULL — таймер выключен). */
   voting_duration_minutes: number | null;
@@ -20,8 +22,12 @@ export interface EventRecord {
   voting_started_at: Date | null;
   /** TRUE — результаты скрыты от зрителей (закрытое голосование). */
   votes_hidden: boolean;
-  /** TRUE — дебат скрыт от обычных пользователей (виден только администраторам). */
+  /** TRUE — мероприятие скрыто от обычных пользователей (виден только администраторам). */
   hidden_from_public: boolean;
+  /** Гибкие вкладки: показывать ли лидеры/таблицу/пьедестал (голосование всегда) */
+  show_leaderboard?: number | boolean;
+  show_standings?: number | boolean;
+  show_podium?: number | boolean;
   created_by: number;
   created_at: Date;
   updated_at: Date;

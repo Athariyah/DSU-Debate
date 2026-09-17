@@ -13,17 +13,21 @@ import {
 import { votingEndsAt } from "../utils/votingWindow";
 import { computeEventResults, redactEventResults } from "./vote.controller";
 
-function serializeEvent(row: EventRecord & { participants_count?: string; event_type?: string }) {
+function serializeEvent(row: EventRecord & { participants_count?: string; event_type?: string; custom_type_label?: string | null; show_leaderboard?: number | boolean; show_standings?: number | boolean; show_podium?: number | boolean }) {
   return {
     id: row.id,
     title: row.title,
     status: row.status,
     eventType: (row as any).event_type ?? row.event_type ?? "debate",
+    customTypeLabel: (row as any).custom_type_label ?? (row as any).customTypeLabel ?? null,
     dateTime: row.date_time,
     votingDurationMinutes: row.voting_duration_minutes ?? null,
     votingEndsAt: votingEndsAt(row)?.toISOString() ?? null,
     votesHidden: Boolean(row.votes_hidden),
     hiddenFromPublic: Boolean(row.hidden_from_public),
+    showLeaderboard: row.show_leaderboard === undefined || row.show_leaderboard === null ? true : Boolean(row.show_leaderboard),
+    showStandings: row.show_standings === undefined || row.show_standings === null ? true : Boolean(row.show_standings),
+    showPodium: row.show_podium === undefined || row.show_podium === null ? true : Boolean(row.show_podium),
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -40,11 +44,11 @@ export const createEvent = asyncHandler(async (req: Request, res: Response) => {
   if (!parsed.success) {
     throw new ApiError(400, "VALIDATION_ERROR", parsed.error.issues[0].message);
   }
-  const { title, dateTime, status, eventType, votingDurationMinutes, hiddenFromPublic, participants } = parsed.data;
+  const { title, dateTime, status, eventType, customTypeLabel, votingDurationMinutes, votesHidden, hiddenFromPublic, showLeaderboard, showStandings, showPodium, participants } = parsed.data;
   const adminId = req.admin!.adminId;
 
   if (status === "active" && (!participants || participants.length < 2)) {
-    throw new ApiError(400, "VALIDATION_ERROR", "Активный дебат должен иметь минимум двух участников");
+    throw new ApiError(400, "VALIDATION_ERROR", "Активное мероприятие должно иметь минимум двух участников");
   }
 
   let previousActiveId: number | null = null;
@@ -59,13 +63,14 @@ export const createEvent = asyncHandler(async (req: Request, res: Response) => {
       await client.query(`UPDATE events SET status = 'completed' WHERE status = 'active'`);
     }
 
+    const cleanedCustomLabel = eventType === "other" ? (customTypeLabel?.trim() || null) : null;
     const inserted = await client.query<EventRecord>(
       `INSERT INTO events (
-         title, status, event_type, date_time, voting_duration_minutes, voting_started_at, hidden_from_public, created_by
+         title, status, event_type, custom_type_label, date_time, voting_duration_minutes, voting_started_at, votes_hidden, hidden_from_public, show_leaderboard, show_standings, show_podium, created_by
        )
-       VALUES ($1, $2, $3, $4, $5, CASE WHEN $2 = 'active' THEN now() ELSE NULL END, $6, $7)
+       VALUES ($1, $2, $3, $4, $5, $6, CASE WHEN $2 = 'active' THEN now() ELSE NULL END, $7, $8, $9, $10, $11, $12)
        RETURNING *`,
-      [title, status, eventType ?? "debate", dateTime, votingDurationMinutes ?? null, hiddenFromPublic ?? false, adminId]
+      [title, status, eventType ?? "debate", cleanedCustomLabel, dateTime, votingDurationMinutes ?? null, votesHidden ?? false, hiddenFromPublic ?? false, showLeaderboard ?? true, showStandings ?? true, showPodium ?? true, adminId]
     );
 
     if (participants) {
@@ -192,16 +197,20 @@ export const updateEvent = asyncHandler(async (req: Request, res: Response) => {
   if (!parsed.success) {
     throw new ApiError(400, "VALIDATION_ERROR", parsed.error.issues[0].message);
   }
-  const { title, dateTime, status, eventType, votingDurationMinutes, votesHidden, hiddenFromPublic } = parsed.data;
+  const { title, dateTime, status, eventType, customTypeLabel, votingDurationMinutes, votesHidden, hiddenFromPublic, showLeaderboard, showStandings, showPodium } = parsed.data;
 
   if (
     title === undefined &&
     dateTime === undefined &&
     status === undefined &&
     eventType === undefined &&
+    customTypeLabel === undefined &&
     votingDurationMinutes === undefined &&
     votesHidden === undefined &&
-    hiddenFromPublic === undefined
+    hiddenFromPublic === undefined &&
+    showLeaderboard === undefined &&
+    showStandings === undefined &&
+    showPodium === undefined
   ) {
     throw new ApiError(400, "VALIDATION_ERROR", "Нет полей для обновления");
   }
@@ -226,7 +235,7 @@ export const updateEvent = asyncHandler(async (req: Request, res: Response) => {
         [eventId]
       );
       if (Number(participantsCount.rows[0].count) < 2) {
-        throw new ApiError(400, "VALIDATION_ERROR", "Активный дебат должен иметь минимум двух участников");
+        throw new ApiError(400, "VALIDATION_ERROR", "Активное мероприятие должно иметь минимум двух участников");
       }
       const previous = await client.query<{ id: number }>(
         "SELECT id FROM events WHERE status = 'active' AND id <> $1 FOR UPDATE",
@@ -275,6 +284,30 @@ export const updateEvent = asyncHandler(async (req: Request, res: Response) => {
     if (eventType !== undefined) {
       values.push(eventType);
       setClauses.push(`event_type = $${values.length}`);
+    }
+    if (customTypeLabel !== undefined) {
+      const cleaned = eventType === "other" || (eventType === undefined && (existing.rows[0] as any).event_type === "other") ? (customTypeLabel?.trim() || null) : null;
+      // если меняем на other без лейбла — очищаем, если меняем с other на другой тип — тоже очищаем
+      const finalLabel = eventType !== undefined ? (eventType === "other" ? (customTypeLabel?.trim() || null) : null) : (customTypeLabel?.trim() || null);
+      values.push(finalLabel);
+      setClauses.push(`custom_type_label = $${values.length}`);
+    }
+    if (showLeaderboard !== undefined) {
+      values.push(showLeaderboard);
+      setClauses.push(`show_leaderboard = $${values.length}`);
+    }
+    if (showStandings !== undefined) {
+      values.push(showStandings);
+      setClauses.push(`show_standings = $${values.length}`);
+    }
+    if (showPodium !== undefined) {
+      values.push(showPodium);
+      setClauses.push(`show_podium = $${values.length}`);
+    }
+    // Если переключили тип с "other" на любой другой — чистим кастомный лейбл, даже если он не прислан
+    if (eventType !== undefined && eventType !== "other" && customTypeLabel === undefined) {
+      values.push(null);
+      setClauses.push(`custom_type_label = $${values.length}`);
     }
     if (votingDurationMinutes !== undefined) {
       values.push(votingDurationMinutes);

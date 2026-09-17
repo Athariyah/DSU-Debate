@@ -105,7 +105,7 @@ export const getActiveEvent = asyncHandler(async (_req: Request, res: Response) 
   );
 
   if (eventResult.rowCount === 0) {
-    throw new ApiError(404, "NO_ACTIVE_EVENT", "Сейчас нет активного дебата");
+    throw new ApiError(404, "NO_ACTIVE_EVENT", "Сейчас нет активного мероприятия");
   }
 
   const event = eventResult.rows[0];
@@ -128,11 +128,15 @@ export const getActiveEvent = asyncHandler(async (_req: Request, res: Response) 
       title: event.title,
       status: event.status,
       eventType: (event as any).event_type ?? (event as any).eventType ?? "debate",
+      customTypeLabel: (event as any).custom_type_label ?? null,
       dateTime: event.date_time,
       votingDurationMinutes: event.voting_duration_minutes ?? null,
       votingEndsAt: votingEndsAt(event)?.toISOString() ?? null,
       votesHidden,
       participantsCount: results.participants.length,
+      showLeaderboard: (event as any).show_leaderboard === undefined || (event as any).show_leaderboard === null ? true : Boolean((event as any).show_leaderboard),
+      showStandings: (event as any).show_standings === undefined || (event as any).show_standings === null ? true : Boolean((event as any).show_standings),
+      showPodium: (event as any).show_podium === undefined || (event as any).show_podium === null ? true : Boolean((event as any).show_podium),
     },
     participants: visibleResults.participants.map((p) => ({
       id: p.participantId,
@@ -220,7 +224,7 @@ export const castVote = asyncHandler(async (req: Request, res: Response) => {
       throw new ApiError(
         409,
         "VOTING_CLOSED",
-        "Время голосования по этому дебату истекло"
+        "Время голосования по этому мероприятию истекло"
       );
     }
 
@@ -256,7 +260,7 @@ export const castVote = asyncHandler(async (req: Request, res: Response) => {
         );
       } catch (err: unknown) {
         if (typeof err === "object" && err !== null && "code" in err && (err as { code?: string }).code === "23505") {
-          throw new ApiError(409, "DUPLICATE_VOTE", "Вы уже голосовали в этом дебате");
+          throw new ApiError(409, "DUPLICATE_VOTE", "Вы уже голосовали в этом мероприятии");
         }
         throw err;
       }
@@ -279,7 +283,7 @@ export const castVote = asyncHandler(async (req: Request, res: Response) => {
           "code" in err &&
           (err as { code?: string }).code === "23505"
         ) {
-          throw new ApiError(409, "DUPLICATE_VOTE", "Вы уже голосовали в этом дебате");
+          throw new ApiError(409, "DUPLICATE_VOTE", "Вы уже голосовали в этом мероприятии");
         }
         throw err;
       }

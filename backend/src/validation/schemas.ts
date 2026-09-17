@@ -34,9 +34,15 @@ export const createEventSchema = z.object({
   dateTime: z.string().datetime({ offset: true }),
   status: eventStatusEnum.optional().default("upcoming"),
   eventType: eventTypeEnum.optional().default("debate"),
+  customTypeLabel: z.string().trim().min(1).max(50).optional().nullable(),
   votingDurationMinutes: votingDurationSchema.nullable().optional(),
-  // TRUE — дебат скрыт от обычных пользователей (виден только администраторам).
+  // TRUE — результаты скрыты от зрителей (закрытое голосование)
+  votesHidden: z.boolean().optional(),
+  // TRUE — мероприятие скрыто от обычных пользователей (виден только администраторам).
   hiddenFromPublic: z.boolean().optional(),
+  showLeaderboard: z.boolean().optional(),
+  showStandings: z.boolean().optional(),
+  showPodium: z.boolean().optional(),
   // Optional keeps the CRUD endpoint backwards compatible. When supplied,
   // event and participants are persisted atomically in one transaction.
   // Число участников не ограничено сверху: минимум 2 (дебаты требуют сторон).
@@ -48,12 +54,16 @@ export const updateEventSchema = z.object({
   dateTime: z.string().datetime({ offset: true }).optional(),
   status: eventStatusEnum.optional(),
   eventType: eventTypeEnum.optional(),
+  customTypeLabel: z.string().trim().min(1).max(50).optional().nullable(),
   // null — явное выключение таймера (в отличие от «поле не передано»).
   votingDurationMinutes: votingDurationSchema.nullable().optional(),
   // true — закрытое голосование: зрители не видят голоса и проценты.
   votesHidden: z.boolean().optional(),
-  // true — дебат скрыт от обычных пользователей (виден только администраторам).
+  // true — мероприятие скрыто от обычных пользователей (виден только администраторам).
   hiddenFromPublic: z.boolean().optional(),
+  showLeaderboard: z.boolean().optional(),
+  showStandings: z.boolean().optional(),
+  showPodium: z.boolean().optional(),
 });
 
 export const createParticipantSchema = z.object({

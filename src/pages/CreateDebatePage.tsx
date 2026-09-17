@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { Flame, Loader2, Plus, Timer, Trophy, Type, UserX, Users, X } from "lucide-react";
+import { Award, EyeOff, Flame, LayoutGrid, Loader2, Plus, Timer, Trophy, Type, UserX, Users, X } from "lucide-react";
 import type { EventType } from "../types";
 import { TopBar } from "../components/layout/TopBar";
 import { Button } from "../components/ui/Button";
@@ -24,12 +24,15 @@ export function CreateDebatePage() {
   const navigate = useNavigate();
   const [title, setTitle] = useState("");
   const [eventType, setEventType] = useState<EventType>("debate");
+  const [customTypeLabel, setCustomTypeLabel] = useState("");
   const [participants, setParticipants] = useState<DraftParticipant[]>([emptyParticipant(), emptyParticipant()]);
   const [scheduledAt, setScheduledAt] = useState("");
-  /** Опциональный таймер голосования, минуты (пусто — выключен). */
   const [durationMinutes, setDurationMinutes] = useState("");
-  /** Флажок: дебат не показывать обычным пользователям. */
   const [hiddenFromPublic, setHiddenFromPublic] = useState(false);
+  const [votesHidden, setVotesHidden] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(true);
+  const [showStandings, setShowStandings] = useState(true);
+  const [showPodium, setShowPodium] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,7 +51,11 @@ export function CreateDebatePage() {
   async function handleSubmit() {
     setError(null);
     if (title.trim().length < 4) {
-      setError("Введите тему дебата (минимум 4 символа)");
+      setError("Введите тему мероприятия (минимум 4 символа)");
+      return;
+    }
+    if (eventType === "other" && customTypeLabel.trim().length > 0 && customTypeLabel.trim().length < 2) {
+      setError("Название типа мероприятия — минимум 2 символа");
       return;
     }
     if (participants.some((p) => p.name.trim().length < 2)) {
@@ -56,7 +63,7 @@ export function CreateDebatePage() {
       return;
     }
     if (!scheduledAt) {
-      setError("Выберите дату и время дебата");
+      setError("Выберите дату и время мероприятия");
       return;
     }
 
@@ -67,23 +74,25 @@ export function CreateDebatePage() {
         title: title.trim(),
         format: participants.length,
         eventType,
+        customTypeLabel: eventType === "other" ? (customTypeLabel.trim() || null) : null,
         participants: participants.map((p) => ({ name: p.name.trim(), subtitle: p.subtitle.trim() || undefined })),
         scheduledAt: new Date(scheduledAt).toISOString(),
         votingDurationMinutes:
           parsedDuration === null || !Number.isFinite(parsedDuration)
             ? null
             : Math.min(1440, Math.max(1, Math.round(parsedDuration))),
+        votesHidden,
         hiddenFromPublic,
+        showLeaderboard,
+        showStandings,
+        showPodium,
       });
       navigate("/admin");
     } catch (createError) {
-      // Показываем реальную причину. Если это 401, стор сам перейдёт в
-      // «expired» и ProtectedRoute покажет вход на месте — несогласованного
-      // состояния «кнопка есть, а доступа нет» не возникает.
       setError(
         createError instanceof Error && createError.message
           ? createError.message
-          : "Не удалось создать дебат. Попробуйте ещё раз."
+          : "Не удалось создать мероприятие. Попробуйте ещё раз."
       );
     } finally {
       setSubmitting(false);
@@ -92,8 +101,7 @@ export function CreateDebatePage() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Стрелка «назад» всегда возвращает на панель администрирования. */}
-      <TopBar showBack onBack={() => navigate("/admin")} title="Создать дебат" rightSlot="menu" />
+      <TopBar showBack onBack={() => navigate("/admin")} title="Создать мероприятие" rightSlot="menu" />
 
       <div className="styled-scrollbar mx-auto flex-1 w-full max-w-3xl overflow-y-auto px-5 pb-8 pt-2 lg:px-8 lg:pt-6">
         <section>
@@ -115,7 +123,19 @@ export function CreateDebatePage() {
               </button>
             ))}
           </div>
-          <p className="mt-2 text-[11px] text-white/30">Дебаты, турниры и опросы используют одинаковые голосования, но трансляция и таблицы адаптируются.</p>
+          {eventType === "other" && (
+            <div className="mt-3 glass-panel flex items-center gap-3 rounded-2xl border border-white/10 px-4 py-3.5">
+              <IconChip icon={Type} iconSize={15} />
+              <input
+                value={customTypeLabel}
+                onChange={(e) => setCustomTypeLabel(e.target.value)}
+                placeholder="Название типа — например: Хакатон"
+                maxLength={50}
+                className="w-full bg-transparent text-[15px] text-white placeholder:text-white/30 outline-none"
+              />
+            </div>
+          )}
+          <p className="mt-2 text-[11px] text-white/30">Мероприятия, турниры и опросы используют одинаковые голосования, но трансляция и таблицы адаптируются.</p>
         </section>
 
         <section className="mt-6">
@@ -223,45 +243,123 @@ export function CreateDebatePage() {
 
         <section className="mt-6">
           <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-white/40">
-            Видимость
+            Видимость и доступ
           </label>
-          <div
-            className={cn(
-              "flex items-center gap-3 rounded-2xl border px-4 py-3 transition-colors duration-300",
-              hiddenFromPublic
-                ? "border-amber-300/30 bg-amber-400/[0.08]"
-                : "glass-panel border-white/10"
-            )}
-          >
-            <IconChip icon={hiddenFromPublic ? UserX : Users} iconSize={15} tone={hiddenFromPublic ? "accent" : "neutral"} />
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-white">Скрыть от публики</p>
-              <p className="text-[11px] leading-relaxed text-white/35">
-                {hiddenFromPublic
-                  ? "Дебат будет виден только администраторам"
-                  : "Дебат будет виден обычным пользователям"}
-              </p>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={hiddenFromPublic}
-              aria-label="Скрыть дебат от обычных пользователей"
-              onClick={() => setHiddenFromPublic((value) => !value)}
+          <div className="space-y-2.5">
+            <div
               className={cn(
-                "relative h-[26px] w-11 shrink-0 rounded-full border transition-colors duration-300",
+                "flex items-center gap-3 rounded-2xl border px-4 py-3 transition-colors duration-300",
                 hiddenFromPublic
-                  ? "border-amber-300/50 bg-gradient-to-r from-amber-500/80 via-orange-500/70 to-amber-400/80 shadow-[0_4px_16px_-4px_rgba(245,158,11,0.75),inset_0_1px_0_rgba(255,255,255,0.25)]"
-                  : "border-white/15 bg-black/30 shadow-[inset_0_2px_6px_rgba(0,0,0,0.35)]"
+                  ? "border-amber-300/30 bg-amber-400/[0.08]"
+                  : "glass-panel border-white/10"
               )}
             >
-              <motion.span
-                aria-hidden
-                className="absolute left-1 top-1 h-[18px] w-[18px] rounded-full bg-white shadow-[0_2px_6px_rgba(0,0,0,0.45)]"
-                animate={{ x: hiddenFromPublic ? 18 : 0 }}
-                transition={{ type: "spring", stiffness: 500, damping: 30 }}
-              />
-            </button>
+              <IconChip icon={hiddenFromPublic ? UserX : Users} iconSize={15} tone={hiddenFromPublic ? "accent" : "neutral"} />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-white">Скрыть от публики</p>
+                <p className="text-[11px] leading-relaxed text-white/35">
+                  {hiddenFromPublic
+                    ? "Мероприятие будет видно только администраторам"
+                    : "Мероприятие будет видно обычным пользователям"}
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={hiddenFromPublic}
+                aria-label="Скрыть мероприятие от обычных пользователей"
+                onClick={() => setHiddenFromPublic((value) => !value)}
+                className={cn(
+                  "relative h-[26px] w-11 shrink-0 rounded-full border transition-colors duration-300",
+                  hiddenFromPublic
+                    ? "border-amber-300/50 bg-gradient-to-r from-amber-500/80 via-orange-500/70 to-amber-400/80 shadow-[0_4px_16px_-4px_rgba(245,158,11,0.75),inset_0_1px_0_rgba(255,255,255,0.25)]"
+                    : "border-white/15 bg-black/30 shadow-[inset_0_2px_6px_rgba(0,0,0,0.35)]"
+                )}
+              >
+                <motion.span
+                  aria-hidden
+                  className="absolute left-1 top-1 h-[18px] w-[18px] rounded-full bg-white shadow-[0_2px_6px_rgba(0,0,0,0.45)]"
+                  animate={{ x: hiddenFromPublic ? 18 : 0 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                />
+              </button>
+            </div>
+
+            <div
+              className={cn(
+                "flex items-center gap-3 rounded-2xl border px-4 py-3 transition-colors duration-300",
+                votesHidden ? "border-violet-300/30 bg-violet-400/[0.08]" : "glass-panel border-white/10"
+              )}
+            >
+              <IconChip icon={EyeOff} iconSize={15} tone={votesHidden ? "accent" : "neutral"} />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-white">Скрыть голоса</p>
+                <p className="text-[11px] leading-relaxed text-white/35">
+                  {votesHidden ? "Зрители не видят голоса и проценты до раскрытия" : "Голоса и проценты видны всем"}
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={votesHidden}
+                aria-label="Скрыть голоса"
+                onClick={() => setVotesHidden((v) => !v)}
+                className={cn(
+                  "relative h-[26px] w-11 shrink-0 rounded-full border transition-colors duration-300",
+                  votesHidden
+                    ? "border-violet-300/50 bg-gradient-to-r from-violet-500/80 via-indigo-500/70 to-violet-400/80 shadow-[0_4px_16px_-4px_rgba(124,58,237,0.75),inset_0_1px_0_rgba(255,255,255,0.25)]"
+                    : "border-white/15 bg-black/30 shadow-[inset_0_2px_6px_rgba(0,0,0,0.35)]"
+                )}
+              >
+                <motion.span
+                  aria-hidden
+                  className="absolute left-1 top-1 h-[18px] w-[18px] rounded-full bg-white shadow-[0_2px_6px_rgba(0,0,0,0.45)]"
+                  animate={{ x: votesHidden ? 18 : 0 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                />
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section className="mt-6">
+          <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-white/40">
+            Отображение вкладок
+          </label>
+          <p className="mb-2 text-[11px] leading-relaxed text-white/35">Голосование показывается всегда. Остальные вкладки можно скрыть.</p>
+          <div className="space-y-2.5">
+            {[
+              { key: "leaderboard", label: "Лидеры", desc: "Вкладка с топом участников", icon: Trophy, value: showLeaderboard, setter: setShowLeaderboard },
+              { key: "standings", label: "Таблица", desc: "Турнирная таблица по очкам", icon: LayoutGrid, value: showStandings, setter: setShowStandings },
+              { key: "podium", label: "Пьедестал", desc: "Пьедестал призёров", icon: Award, value: showPodium, setter: setShowPodium },
+            ].map((item) => (
+              <div key={item.key} className={cn("flex items-center gap-3 rounded-2xl border px-4 py-3 transition-colors", item.value ? "glass-panel border-white/10" : "border-white/5 bg-black/20 opacity-70")}>
+                <IconChip icon={item.icon} iconSize={15} tone={item.value ? "neutral" : "neutral"} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-white">{item.label}</p>
+                  <p className="text-[11px] leading-relaxed text-white/35">{item.desc}</p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={item.value}
+                  onClick={() => item.setter((v) => !v)}
+                  className={cn(
+                    "relative h-[26px] w-11 shrink-0 rounded-full border transition-colors duration-300",
+                    item.value
+                      ? "border-indigo-300/50 bg-gradient-to-r from-indigo-500/80 via-violet-500/70 to-indigo-400/80 shadow-[0_4px_16px_-4px_rgba(99,102,241,0.75),inset_0_1px_0_rgba(255,255,255,0.25)]"
+                      : "border-white/15 bg-black/30 shadow-[inset_0_2px_6px_rgba(0,0,0,0.35)]"
+                  )}
+                >
+                  <motion.span
+                    aria-hidden
+                    className="absolute left-1 top-1 h-[18px] w-[18px] rounded-full bg-white shadow-[0_2px_6px_rgba(0,0,0,0.45)]"
+                    animate={{ x: item.value ? 18 : 0 }}
+                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                  />
+                </button>
+              </div>
+            ))}
           </div>
         </section>
 
@@ -269,8 +367,8 @@ export function CreateDebatePage() {
       </div>
 
       <div className="mx-auto w-full max-w-3xl px-5 pb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] pt-2 lg:px-8">
-        <Button fullWidth onClick={handleSubmit} disabled={submitting}>
-          {submitting ? <Loader2 size={18} className="animate-spin" /> : "Создать"}
+        <Button fullWidth onClick={handleSubmit} disabled={submitting} className="inline-flex items-center justify-center gap-2 leading-none">
+          {submitting ? <Loader2 size={18} className="animate-spin" /> : <span className="translate-y-[0.5px] leading-none">Создать мероприятие</span>}
         </Button>
       </div>
     </div>

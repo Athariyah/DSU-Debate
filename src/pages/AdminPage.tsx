@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Check, ChevronDown, ChevronUp, Eye, EyeOff, Filter, Pencil, Plus, Save, Timer, Trash2, Trophy, UserX, Users } from "lucide-react";
+import { Award, Check, ChevronDown, ChevronUp, Eye, EyeOff, Filter, LayoutGrid, Pencil, Plus, Save, Timer, Trash2, Trophy, UserX, Users } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { TopBar } from "../components/layout/TopBar";
 import { Button } from "../components/ui/Button";
@@ -91,10 +91,14 @@ export function AdminPage() {
         title: event.title,
         status: event.status,
         eventType: event.eventType ?? "debate",
+        customTypeLabel: (event as any).customTypeLabel ?? null,
         dateTime: new Date(event.dateTime).toISOString(),
         votingDurationMinutes: event.votingDurationMinutes ?? null,
         votesHidden: event.votesHidden ?? false,
         hiddenFromPublic: event.hiddenFromPublic ?? false,
+        showLeaderboard: (event as any).showLeaderboard ?? true,
+        showStandings: (event as any).showStandings ?? true,
+        showPodium: (event as any).showPodium ?? true,
       });
       setEvents((current) => current.map((item) => (item.id === saved.id ? saved : item)));
       if (saved.status === "active") await loadEvents();
@@ -186,7 +190,7 @@ export function AdminPage() {
             <p className="text-xs uppercase tracking-wide text-white/40">Protected admin area</p>
             <h1 className="mt-1 text-xl font-bold text-white">Мероприятия</h1>
           </div>
-          <Link to="/create"><Button><Plus size={16} />Создать</Button></Link>
+          <Link to="/create"><Button className="inline-flex items-center justify-center gap-1.5 leading-none"><Plus size={16} strokeWidth={2.7} className="shrink-0" /><span className="leading-none translate-y-[0.5px]">Создать</span></Button></Link>
         </div>
 
         {/* Фильтр по типу мероприятия */}
@@ -253,7 +257,7 @@ export function AdminPage() {
                     <p className="mt-1 flex items-center gap-2 text-xs text-white/35">
                       <span>ID: {event.id} · участников: {event.participantsCount}</span>
                       <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-white/40">
-                        <Trophy size={10} /> {EVENT_TYPE_LABEL[(event.eventType ?? "debate") as EventType]}
+                        <Trophy size={10} /> {(event.eventType === "other" && (event as any).customTypeLabel) ? (event as any).customTypeLabel : EVENT_TYPE_LABEL[(event.eventType ?? "debate") as EventType]}
                       </span>
                     </p>
                   </div>
@@ -365,15 +369,15 @@ export function AdminPage() {
                     <p className="text-xs font-semibold text-white">Скрыть от публики</p>
                     <p className="truncate text-[11px] text-white/35">
                       {event.hiddenFromPublic
-                        ? "Включено — дебат виден только администраторам"
-                        : "Выключено — дебат виден всем"}
+                        ? "Включено — мероприятие видно только администраторам"
+                        : "Выключено — мероприятие видно всем"}
                     </p>
                   </div>
                   <button
                     type="button"
                     role="switch"
                     aria-checked={event.hiddenFromPublic}
-                    aria-label="Скрыть дебат от обычных пользователей"
+                    aria-label="Скрыть мероприятие от обычных пользователей"
                     onClick={() => updateEventLocal(event.id, { hiddenFromPublic: !event.hiddenFromPublic })}
                     className={cn(
                       "relative h-[26px] w-11 shrink-0 rounded-full border transition-colors duration-300",
@@ -389,6 +393,46 @@ export function AdminPage() {
                       transition={{ type: "spring", stiffness: 500, damping: 30 }}
                     />
                   </button>
+                </div>
+
+                {(event.eventType === "other") && (
+                  <div className="mt-3 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
+                    <IconChip icon={Trophy} iconSize={15} />
+                    <input
+                      value={(event as any).customTypeLabel ?? ""}
+                      onChange={(e) => updateEventLocal(event.id, { customTypeLabel: e.target.value } as any)}
+                      placeholder="Название типа — например: Хакатон"
+                      maxLength={50}
+                      className="w-full bg-transparent text-sm text-white placeholder:text-white/30 outline-none"
+                    />
+                  </div>
+                )}
+
+                <div className="mt-3 space-y-2">
+                  <p className="px-1 text-[11px] font-semibold uppercase tracking-widest text-white/40">Вкладки</p>
+                  <p className="px-1 text-[11px] leading-relaxed text-white/35">Голосование всегда видно. Остальные можно скрыть.</p>
+                  {[
+                    { key: "showLeaderboard", label: "Лидеры", icon: Trophy, val: (event as any).showLeaderboard ?? true },
+                    { key: "showStandings", label: "Таблица", icon: LayoutGrid, val: (event as any).showStandings ?? true },
+                    { key: "showPodium", label: "Пьедестал", icon: Award, val: (event as any).showPodium ?? true },
+                  ].map((tab) => (
+                    <div key={tab.key} className={cn("flex items-center gap-3 rounded-2xl border px-3 py-2 transition-colors", tab.val ? "border-white/10 bg-white/5" : "border-white/5 bg-black/20 opacity-70")}>
+                      <IconChip icon={tab.icon} iconSize={15} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold text-white">{tab.label}</p>
+                        <p className="text-[11px] text-white/35">{tab.val ? "Показывается" : "Скрыта"}</p>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={tab.val}
+                        onClick={() => updateEventLocal(event.id, { [tab.key]: !tab.val } as any)}
+                        className={cn("relative h-[26px] w-11 shrink-0 rounded-full border transition-colors", tab.val ? "border-indigo-300/50 bg-gradient-to-r from-indigo-500/80 via-violet-500/70 to-indigo-400/80" : "border-white/15 bg-black/30")}
+                      >
+                        <motion.span aria-hidden className="absolute left-1 top-1 h-[18px] w-[18px] rounded-full bg-white" animate={{ x: tab.val ? 18 : 0 }} transition={{ type: "spring", stiffness: 500, damping: 30 }} />
+                      </button>
+                    </div>
+                  ))}
                 </div>
 
                 <div className="mt-3 flex flex-wrap gap-2">

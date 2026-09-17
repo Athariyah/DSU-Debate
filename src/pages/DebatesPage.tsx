@@ -33,7 +33,7 @@ export function DebatesPage() {
       setCompletedPage(1);
       setError(null);
     } catch {
-      if (initial) setError("Не удалось загрузить список дебатов");
+      if (initial) setError("Не удалось загрузить список мероприятий");
     } finally {
       if (initial) setLoading(false);
     }
@@ -61,7 +61,7 @@ export function DebatesPage() {
     <div className="relative flex h-full flex-col lg:pl-64">
       {/* Кнопку профиля справа в шапке убрали (см. HomePage): переход на
           профиль — через вкладку нижней панели. */}
-      <TopBar title="Дебаты" />
+      <TopBar title="Мероприятия" />
       {/* Pull-to-refresh: тянем список вниз — все три секции обновляются. */}
       <PullToRefresh
         onRefresh={() => load(false)}
@@ -77,7 +77,7 @@ export function DebatesPage() {
             <h3 className="mb-3 mt-6 text-[15px] font-semibold text-white">Ближайшие</h3>
             <div className="space-y-3 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0">
               {upcoming.map((event) => <UpcomingDebateItem key={event.id} event={event} />)}
-              {upcoming.length === 0 && <p className="py-6 text-center text-sm text-white/40">Пока нет запланированных дебатов</p>}
+              {upcoming.length === 0 && <p className="py-6 text-center text-sm text-white/40">Пока нет запланированных мероприятий</p>}
             </div>
 
             <h3 className="mb-3 mt-8 text-[15px] font-semibold text-white">Завершённые</h3>

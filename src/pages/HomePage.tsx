@@ -36,7 +36,7 @@ export function HomePage() {
       setCompleted(completedResult.items);
       setError(null);
     } catch {
-      if (initial) setError("Не удалось загрузить данные дебатов");
+      if (initial) setError("Не удалось загрузить данные мероприятий");
     } finally {
       if (initial) setLoading(false);
     }
@@ -62,7 +62,7 @@ export function HomePage() {
       {/* Кнопку профиля в шапке убрали: за переход на профиль отвечает
           оригинальная вкладка в нижней панели, дублировать не нужно.
           Круглая кнопка в углу остаётся только в администрировании. */}
-      <TopBar title="DSU Debate" />
+      <TopBar title="DSU Event" />
 
       {/* Pull-to-refresh: тянем список вниз — главная обновляется. */}
       <PullToRefresh
@@ -81,12 +81,12 @@ export function HomePage() {
 
         {!loading && !error && !activeEvent && (
           <div className="glass-panel rounded-3xl border border-white/10 p-6 text-center text-sm text-white/50">
-            Сейчас нет активных дебатов. Загляните позже!
+            Сейчас нет активных мероприятий. Загляните позже!
           </div>
         )}
 
         <div className="mt-7 flex items-center justify-between">
-          <h3 className="text-[15px] font-semibold text-white">Ближайшие дебаты</h3>
+          <h3 className="text-[15px] font-semibold text-white">Ближайшие мероприятия</h3>
           <button
             onClick={() => navigate("/debates")}
             className="inline-flex items-center gap-0.5 text-sm text-white/45 transition hover:text-white/70"
@@ -98,7 +98,7 @@ export function HomePage() {
         <div className="mt-3 space-y-3 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0">
           {upcoming.map((event, index) => <UpcomingDebateItem key={event.id} event={event} index={index} />)}
           {!loading && !error && upcoming.length === 0 && (
-            <p className="py-6 text-center text-sm text-white/40">Пока нет запланированных дебатов</p>
+            <p className="py-6 text-center text-sm text-white/40">Пока нет запланированных мероприятий</p>
           )}
         </div>
 

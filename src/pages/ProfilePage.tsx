@@ -63,7 +63,7 @@ export function ProfilePage() {
             </div>
             <div className="min-w-0">
               <p className="truncate text-lg font-bold tracking-tight text-white lg:text-xl">{fullName}</p>
-              <p className="mt-0.5 text-xs text-white/50 lg:mt-1 lg:text-sm">Зритель DSU Debate</p>
+              <p className="mt-0.5 text-xs text-white/50 lg:mt-1 lg:text-sm">Зритель DSU Event</p>
             </div>
           </section>
 
@@ -82,7 +82,7 @@ export function ProfilePage() {
                 </p>
                 <p className="mt-3 text-xs leading-relaxed text-white/45 lg:text-sm">
                   Уникальный идентификатор устройства, который вместе с IP-адресом
-                  не позволяет проголосовать в одном дебате дважды.
+                  не позволяет проголосовать в одном мероприятии дважды.
                 </p>
               </div>
             </section>
@@ -183,7 +183,7 @@ export function ProfilePage() {
           </div>
 
           <p className="profile-footer mt-3 shrink-0 border-t border-white/10 pt-3 text-center text-xs leading-relaxed text-white/35 lg:mt-4 lg:pt-4 lg:text-sm">
-            Платформа DSU Debate разработана для СНО ДГУ от СНО ФиИИТ
+            Платформа DSU Event разработана для СНО ДГУ от СНО ФиИИТ
           </p>
         </div>
       </div>

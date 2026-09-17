@@ -40,7 +40,9 @@ function PhoneApp() {
           <Route path="/" element={<SplashPage />} />
           <Route path="/home" element={<HomePage />} />
           <Route path="/debates" element={<DebatesPage />} />
+          <Route path="/events" element={<DebatesPage />} />
           <Route path="/debate/:id" element={<DebateDetailPage />} />
+          <Route path="/event/:id" element={<DebateDetailPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
           <Route path="/create" element={<ProtectedRoute><CreateDebatePage /></ProtectedRoute>} />

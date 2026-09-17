@@ -86,7 +86,7 @@ export function BroadcastPage() {
       try {
         const data = await fetchDebateById(id);
         if (!data) {
-          setError("Дебат не найден");
+          setError("Мероприятие не найдено");
           return;
         }
         setEvent(data);
@@ -94,7 +94,7 @@ export function BroadcastPage() {
       } catch {
         // На уже открытом экране ошибку показываем, но данные не стираем:
         // трансляция продолжает показывать последние известные результаты.
-        if (!silent) setError("Не удалось загрузить дебат");
+        if (!silent) setError("Не удалось загрузить мероприятие");
       } finally {
         if (!silent) setLoading(false);
       }
@@ -231,11 +231,11 @@ export function BroadcastPage() {
   }
 
   if (!event) {
-    return <BroadcastFallback text={error ?? "Дебат не найден"} onBack={goBack} />;
+    return <BroadcastFallback text={error ?? "Мероприятие не найдено"} onBack={goBack} />;
   }
 
   if (hiddenFromPublic) {
-    return <BroadcastFallback text="Дебат скрыт организатором" onBack={goBack} />;
+    return <BroadcastFallback text="Мероприятие скрыто организатором" onBack={goBack} />;
   }
 
   const finished = eventStatus === "completed";
@@ -252,7 +252,7 @@ export function BroadcastPage() {
             {event.eventType === "tournament" ? "Турнир" : event.eventType === "poll" ? "Опрос" : event.eventType === "competition" ? "Соревнование" : event.eventType === "quiz" ? "Квиз" : event.eventType === "other" ? "Мероприятие" : "Дебаты"}
           </span>
           <span className="hidden text-[clamp(0.65rem,0.95vw,1.1rem)] font-semibold uppercase tracking-[0.35em] text-white/30 sm:inline">
-            DSU Debate
+            DSU Event
           </span>
         </div>
 

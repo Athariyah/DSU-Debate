@@ -11,7 +11,7 @@ interface ActiveDebateCardProps {
 }
 
 /**
- * Крупная карточка активного дебата на главном экране.
+ * Крупная карточка активного мероприятия на главном экране.
  *
  * Фон — НЕПРОЗРАЧНЫЙ градиент: раньше карточка была полупрозрачной и при
  * появлении «просвечивала» фиолетовый фон страницы (сначала синяя, потом
@@ -64,7 +64,7 @@ export function ActiveDebateCard({ event, voted, onVoteClick }: ActiveDebateCard
       </div>
 
       <div className="relative flex items-center justify-between gap-3">
-        <Badge tone="active">Активный дебат</Badge>
+        <Badge tone="active">Активное мероприятие</Badge>
         <LiveEqualizer />
       </div>
 

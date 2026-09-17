@@ -7,9 +7,6 @@ import { votingEndsAt } from "../utils/votingWindow";
 import { computeEventResults, redactEventResults } from "./vote.controller";
 
 function publicEventResponse(event: EventRecord, results: Awaited<ReturnType<typeof computeEventResults>>) {
-  // Закрытое голосование (флажок «Скрыть голоса» в админке): участники и их
-  // описания видны, но цифры и проценты сервер зануляет — зритель не узнает
-  // расклад до раскрытия.
   const votesHidden = Boolean(event.votes_hidden);
   const visibleResults = votesHidden ? redactEventResults(results) : results;
   return {
@@ -18,11 +15,15 @@ function publicEventResponse(event: EventRecord, results: Awaited<ReturnType<typ
       title: event.title,
       status: event.status,
       eventType: (event as any).event_type ?? event.event_type ?? "debate",
+      customTypeLabel: (event as any).custom_type_label ?? (event as any).customTypeLabel ?? null,
       dateTime: event.date_time,
       votingDurationMinutes: event.voting_duration_minutes ?? null,
       votingEndsAt: votingEndsAt(event)?.toISOString() ?? null,
       votesHidden,
       participantsCount: results.participants.length,
+      showLeaderboard: (event as any).show_leaderboard === undefined || (event as any).show_leaderboard === null ? true : Boolean((event as any).show_leaderboard),
+      showStandings: (event as any).show_standings === undefined || (event as any).show_standings === null ? true : Boolean((event as any).show_standings),
+      showPodium: (event as any).show_podium === undefined || (event as any).show_podium === null ? true : Boolean((event as any).show_podium),
     },
     participants: visibleResults.participants.map((participant) => ({
       id: participant.participantId,

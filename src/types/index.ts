@@ -22,6 +22,8 @@ export interface DebateEvent {
   title: string;
   status: DebateStatus;
   eventType?: EventType;
+  /** Кастомное название когда eventType === "other" */
+  customTypeLabel?: string | null;
   participantsCount: number;
   /** ISO timestamp; backend calls this `dateTime`. */
   scheduledAt: string;
@@ -31,12 +33,20 @@ export interface DebateEvent {
   votingEndsAt?: string | null;
   /** true — закрытое голосование: сервер зануляет цифры, показываем плашку «скрыто». */
   votesHidden?: boolean;
-  /** true — дебат скрыт от обычных пользователей (виден только в админке). */
+  /** true — мероприятие скрыто от обычных пользователей (виден только в админке). */
   hiddenFromPublic?: boolean;
+  /** Гибкие вкладки */
+  showLeaderboard?: boolean;
+  showStandings?: boolean;
+  showPodium?: boolean;
   totalVotes: number;
   participants: Participant[];
   coverGradient?: string;
 }
+// Алиасы для нового нейминга DSU Event (обратная совместимость)
+export type EventStatus = DebateStatus;
+export type AppEvent = DebateEvent;
+// Event alias removed to avoid DOM conflict — use AppEvent
 
 export interface Match {
   id: number;
@@ -106,10 +116,17 @@ export interface CreateDebateInput {
   /** Число участников (не ограничено сверху; минимум 2). */
   format: number;
   eventType?: EventType;
+  customTypeLabel?: string | null;
   participants: { name: string; subtitle?: string }[];
   scheduledAt: string;
   /** Опциональный таймер голосования, минуты. */
   votingDurationMinutes?: number | null;
-  /** true — дебат создаётся скрытым от обычных пользователей. */
+  /** true — результаты скрыты */
+  votesHidden?: boolean;
+  /** true — мероприятие создаётся скрытым от обычных пользователей. */
   hiddenFromPublic?: boolean;
+  showLeaderboard?: boolean;
+  showStandings?: boolean;
+  showPodium?: boolean;
 }
+export type CreateEventInput = CreateDebateInput;

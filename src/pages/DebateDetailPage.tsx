@@ -52,23 +52,31 @@ export function DebateDetailPage() {
   const [activeTab, setActiveTab] = useState<"vote" | "leaders" | "table" | "podium">("vote");
   const isAdmin = isAdminAuthenticated();
 
+  // Если админ скрыл вкладку — переключаем на голосование
+  useEffect(() => {
+    if (!event) return;
+    if (activeTab === "leaders" && event.showLeaderboard === false) setActiveTab("vote");
+    if (activeTab === "table" && event.showStandings === false) setActiveTab("vote");
+    if (activeTab === "podium" && event.showPodium === false) setActiveTab("vote");
+  }, [event?.showLeaderboard, event?.showStandings, event?.showPodium, activeTab, event]);
+
   const loadEvent = useCallback(() => {
     if (!id) return;
     setLoading(true);
     setError(null);
     fetchDebateById(id)
       .then((data) => {
-        if (!data) setError("Дебат не найден");
+        if (!data) setError("Мероприятие не найдено");
         setEvent(data);
         setJustVotedFor(getVotedParticipant(id)?.participantId ?? null);
       })
-      .catch(() => setError("Не удалось загрузить дебат"))
+      .catch(() => setError("Не удалось загрузить мероприятие"))
       .finally(() => setLoading(false));
   }, [id]);
 
   useEffect(() => {
     if (!id) {
-      setError("Некорректный идентификатор дебата");
+      setError("Некорректный идентификатор мероприятия");
       setLoading(false);
       return;
     }
@@ -137,7 +145,7 @@ export function DebateDetailPage() {
       <div className="flex h-full flex-col">
         <TopBar showBack />
         <div className="flex flex-1 items-center justify-center px-5 text-center text-sm text-rose-300">
-          {error ?? "Дебат не найден"}
+          {error ?? "Мероприятие не найдено"}
         </div>
       </div>
     );
@@ -155,7 +163,7 @@ export function DebateDetailPage() {
               <UserX size={20} className="text-amber-300" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-white">Дебат скрыт организатором</p>
+              <p className="text-sm font-semibold text-white">Мероприятие скрыто организатором</p>
               <p className="mx-auto mt-1.5 max-w-[30ch] text-xs leading-relaxed text-white/40">
                 Он снова появится на главном экране, когда организатор сделает его публичным.
               </p>
@@ -236,7 +244,7 @@ export function DebateDetailPage() {
 
       <div className="styled-scrollbar mx-auto flex-1 w-full max-w-2xl overflow-y-auto px-5 pb-8 lg:px-8">
         <Badge tone={eventStatus === "active" ? "active" : "neutral"}>
-          {eventStatus === "active" ? "Активный дебат" : eventStatus === "completed" ? "Завершён" : "Скоро"}
+          {eventStatus === "active" ? "Активное мероприятие" : eventStatus === "completed" ? "Завершён" : "Скоро"}
         </Badge>
 
         <h1 className="mt-3 text-[22px] font-bold leading-snug text-white">{event.title}</h1>
@@ -280,26 +288,29 @@ export function DebateDetailPage() {
 
         {/* Тип мероприятия — визуальный контекст */}
         <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-white/40">
-          {event.eventType === "tournament" ? "Турнир" : event.eventType === "poll" ? "Опрос" : event.eventType === "competition" ? "Соревнование" : event.eventType === "quiz" ? "Квиз" : event.eventType === "other" ? "Мероприятие" : "Дебаты"}
+          {event.eventType === "other" && event.customTypeLabel ? event.customTypeLabel : event.eventType === "tournament" ? "Турнир" : event.eventType === "poll" ? "Опрос" : event.eventType === "competition" ? "Соревнование" : event.eventType === "quiz" ? "Квиз" : event.eventType === "other" ? "Мероприятие" : "Дебаты"}
         </div>
 
-        {/* Вкладки: Голосование / Лидеры / Таблица / Пьедестал — сохраняем привычный UI, не ломаем логику */}
-        <div className="mt-5 flex gap-1.5 overflow-x-auto styled-scrollbar rounded-2xl border border-white/10 bg-black/20 p-1">
-          {([
-            ["vote", "Голосование"],
-            ["leaders", "Лидеры"],
-            ["table", "Таблица"],
-            ["podium", "Пьедестал"],
-          ] as const).map(([key, label]) => (
-            <button
-              key={key}
-              onClick={() => setActiveTab(key)}
-              className={cn("whitespace-nowrap rounded-xl px-4 py-2 text-sm font-medium transition", activeTab === key ? "bg-white text-black shadow" : "text-white/60 hover:text-white hover:bg-white/10")}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        {/* Вкладки: Голосование всегда, остальные — по флагам show* */}
+        {(() => {
+          const tabs: Array<[typeof activeTab, string]> = [["vote", "Голосование"]];
+          if (event.showLeaderboard ?? true) tabs.push(["leaders", "Лидеры"]);
+          if (event.showStandings ?? true) tabs.push(["table", "Таблица"]);
+          if (event.showPodium ?? true) tabs.push(["podium", "Пьедестал"]);
+          return (
+            <div className="mt-5 flex gap-1.5 overflow-x-auto styled-scrollbar rounded-2xl border border-white/10 bg-black/20 p-1">
+              {tabs.map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setActiveTab(key)}
+                  className={cn("whitespace-nowrap rounded-xl px-4 py-2 text-sm font-medium transition", activeTab === key ? "bg-white text-black shadow" : "text-white/60 hover:text-white hover:bg-white/10")}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          );
+        })()}
 
         <div className="mt-6">
           {activeTab === "vote" && (
@@ -317,17 +328,17 @@ export function DebateDetailPage() {
               )}
             </>
           )}
-          {activeTab === "leaders" && (
+          {activeTab === "leaders" && (event.showLeaderboard ?? true) && (
             <Suspense fallback={<div className="h-20 animate-pulse rounded-2xl bg-white/5" />}>
               <LeaderboardTab eventId={event.id} />
             </Suspense>
           )}
-          {activeTab === "table" && (
+          {activeTab === "table" && (event.showStandings ?? true) && (
             <Suspense fallback={<div className="h-20 animate-pulse rounded-2xl bg-white/5" />}>
               <StandingsTab eventId={event.id} />
             </Suspense>
           )}
-          {activeTab === "podium" && (
+          {activeTab === "podium" && (event.showPodium ?? true) && (
             <Suspense fallback={<div className="h-20 animate-pulse rounded-2xl bg-white/5" />}>
               <PodiumTab eventId={event.id} />
             </Suspense>

@@ -40,6 +40,10 @@ CREATE TABLE IF NOT EXISTS events (
   voting_started_at TEXT,
   votes_hidden INTEGER NOT NULL DEFAULT 0,
   hidden_from_public INTEGER NOT NULL DEFAULT 0,
+  custom_type_label TEXT,
+  show_leaderboard INTEGER NOT NULL DEFAULT 1 CHECK (show_leaderboard IN (0,1)),
+  show_standings INTEGER NOT NULL DEFAULT 1 CHECK (show_standings IN (0,1)),
+  show_podium INTEGER NOT NULL DEFAULT 1 CHECK (show_podium IN (0,1)),
   created_by INTEGER NOT NULL REFERENCES admins(id) ON DELETE RESTRICT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
@@ -49,6 +53,7 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE INDEX IF NOT EXISTS idx_events_status ON events(status);
 CREATE INDEX IF NOT EXISTS idx_events_date_time ON events(date_time);
 CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
+CREATE INDEX IF NOT EXISTS idx_events_custom_label ON events(custom_type_label);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_events_single_active ON events(status) WHERE status = 'active';
 
 DROP TRIGGER IF EXISTS set_updated_at_events;
