@@ -51,8 +51,10 @@ export const createEvent = asyncHandler(async (req: Request, res: Response) => {
     }
 
     const inserted = await client.query<EventRecord>(
-      `INSERT INTO events (title, status, date_time, voting_duration_minutes, created_by)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO events (
+         title, status, date_time, voting_duration_minutes, voting_started_at, created_by
+       )
+       VALUES ($1, $2, $3, $4, CASE WHEN $2 = 'active'::event_status THEN now() ELSE NULL END, $5)
        RETURNING *`,
       [title, status, dateTime, votingDurationMinutes ?? null, adminId]
     );
@@ -225,6 +227,23 @@ export const updateEvent = asyncHandler(async (req: Request, res: Response) => {
     // выключение таймера, и COALESCE его не отличит от «поле не прислано».
     const setClauses: string[] = [];
     const values: unknown[] = [];
+    const current = existing.rows[0];
+    const timerEnabledAfterUpdate =
+      votingDurationMinutes === undefined
+        ? current.voting_duration_minutes !== null
+        : votingDurationMinutes !== null;
+    const startsNow =
+      timerEnabledAfterUpdate &&
+      ((status === "active" && current.status !== "active") ||
+        (current.status === "active" && current.voting_started_at == null));
+
+    // Новый активный дебат получает собственную точку отсчёта. Если таймер
+    // выключили или дебат вернули в расписание, старый старт больше не должен
+    // неожиданно включить автостоп при следующем запуске.
+    if (startsNow) setClauses.push("voting_started_at = now()");
+    else if (status === "upcoming" || votingDurationMinutes === null) {
+      setClauses.push("voting_started_at = NULL");
+    }
     if (title !== undefined) {
       values.push(title);
       setClauses.push(`title = $${values.length}`);

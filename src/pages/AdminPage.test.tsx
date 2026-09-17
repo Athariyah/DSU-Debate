@@ -137,7 +137,7 @@ describe("таймер голосования", () => {
 
     fireEvent.change(minutes, { target: { value: "30" } });
     expect(minutes.value).toBe("30");
-    expect(screen.getByText("Через 30 мин. голосование закроется само")).toBeTruthy();
+    expect(screen.getByText("После запуска: 30 мин. до автостопа")).toBeTruthy();
   });
 });
 

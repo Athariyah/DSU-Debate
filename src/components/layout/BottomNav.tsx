@@ -19,7 +19,7 @@ export function BottomNav() {
   return (
     <>
       {/* Mobile / планшет: нижняя «стеклянная» пилюля */}
-      <div className="absolute inset-x-0 bottom-0 z-30 px-5 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] lg:hidden">
+      <div className="absolute inset-x-0 bottom-0 z-30 px-5 pb-[env(safe-area-inset-bottom,0px)] lg:hidden">
         <div className="glass-panel flex items-center justify-between rounded-[1.75rem] border border-white/10 px-4 py-3">
           {items.map((item) => (
             <MobileNavItem key={item.to} {...item} />
