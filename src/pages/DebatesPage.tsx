@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { TopBar } from "../components/layout/TopBar";
 import { BottomNav } from "../components/layout/BottomNav";
+import { PullToRefresh } from "../components/ui/PullToRefresh";
 import { UpcomingDebateItem } from "../components/debate/UpcomingDebateItem";
 import { fetchActiveDebate, fetchCompletedDebates, fetchUpcomingDebates } from "../api/debates";
 import type { DebateEvent } from "../types";
@@ -15,17 +16,32 @@ export function DebatesPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    Promise.all([fetchActiveDebate(), fetchUpcomingDebates(), fetchCompletedDebates(1)])
-      .then(([activeEvent, upcomingEvents, completedResult]) => {
-        setActive(activeEvent);
-        setUpcoming(upcomingEvents);
-        setCompleted(completedResult.items);
-        setCompletedTotal(completedResult.total);
-      })
-      .catch(() => setError("Не удалось загрузить список дебатов"))
-      .finally(() => setLoading(false));
+  // initial — первая загрузка (скелетон); повторная (pull-to-refresh)
+  // перечитывает все три списка и сбрасывает пагинацию истории.
+  const load = useCallback(async (initial: boolean) => {
+    if (initial) setLoading(true);
+    try {
+      const [activeEvent, upcomingEvents, completedResult] = await Promise.all([
+        fetchActiveDebate(),
+        fetchUpcomingDebates(),
+        fetchCompletedDebates(1),
+      ]);
+      setActive(activeEvent);
+      setUpcoming(upcomingEvents);
+      setCompleted(completedResult.items);
+      setCompletedTotal(completedResult.total);
+      setCompletedPage(1);
+      setError(null);
+    } catch {
+      if (initial) setError("Не удалось загрузить список дебатов");
+    } finally {
+      if (initial) setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void load(true);
+  }, [load]);
 
   async function loadMoreCompleted() {
     setLoadingMore(true);
@@ -46,7 +62,11 @@ export function DebatesPage() {
       {/* Кнопку профиля справа в шапке убрали (см. HomePage): переход на
           профиль — через вкладку нижней панели. */}
       <TopBar title="Дебаты" />
-      <div className="no-scrollbar mx-auto flex-1 w-full max-w-5xl overflow-y-auto px-5 pb-[calc(env(safe-area-inset-bottom,0px)+4.75rem)] pt-2 lg:px-10 lg:pb-10 lg:pt-6">
+      {/* Pull-to-refresh: тянем список вниз — все три секции обновляются. */}
+      <PullToRefresh
+        onRefresh={() => load(false)}
+        className="mx-auto flex-1 w-full max-w-5xl px-5 pb-[calc(env(safe-area-inset-bottom,0px)+4.75rem)] pt-2 lg:px-10 lg:pb-10 lg:pt-6"
+      >
         {loading && <div className="h-24 animate-pulse rounded-2xl bg-white/5" />}
         {error && <p className="rounded-2xl border border-rose-400/20 bg-rose-400/10 p-4 text-sm text-rose-300">{error}</p>}
 
@@ -72,7 +92,7 @@ export function DebatesPage() {
             </div>
           </>
         )}
-      </div>
+      </PullToRefresh>
       <BottomNav />
     </div>
   );

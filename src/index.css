@@ -11,6 +11,61 @@ body,
   min-height: 100dvh;
 }
 
+/* PWA standalone («Добавить на экран Домой» / установленное приложение):
+   высоты задаём в 100vh, а не в %/dvh. При viewport-fit=cover +
+   black-translucent iOS задвигает полотно под статус-бар (сверху градиент,
+   а не чёрная полоса), но процентные и динамические высоты это смещение не
+   компенсируют — внизу экрана остаётся непрокрашенная чёрная полоса
+   («chin», известный баг WebKit). 100vh равна физической высоте экрана,
+   поэтому фон и рамка дотягиваются до последнего ряда пикселей: сверху
+   градиент под статус-баром, снизу полосы нет. */
+@media (display-mode: standalone) {
+  html,
+  body,
+  #root {
+    height: 100vh;
+    min-height: 100vh;
+  }
+
+  .broadcast-bg {
+    min-height: 100vh;
+  }
+}
+
+/* iOS медиа-запрос display-mode не поддерживает — там страховкой служит
+   класс pwa-standalone-ios: его вешает инлайн-скрипт из index.html
+   (navigator.standalone) до первой отрисовки. */
+html.pwa-standalone-ios,
+html.pwa-standalone-ios body,
+html.pwa-standalone-ios #root {
+  height: 100vh;
+  min-height: 100vh;
+}
+
+html.pwa-standalone-ios .broadcast-bg {
+  min-height: 100vh;
+}
+
+/* Телефонная рамка оболочки в PWA тоже тянется на физическую высоту экрана:
+   при «укороченном» dvh нижняя панель иначе висела бы над нижним краем.
+   Только телефоны (<sm): на планшете и компьютере размер рамки
+   min(880px, 100dvh-1.5rem) и центрирование остаются как есть. */
+@media (display-mode: standalone) and (max-width: 639px) {
+  .app-shell-screen,
+  .app-shell-frame {
+    height: 100vh;
+    min-height: 100vh;
+  }
+}
+
+@media (max-width: 639px) {
+  html.pwa-standalone-ios .app-shell-screen,
+  html.pwa-standalone-ios .app-shell-frame {
+    height: 100vh;
+    min-height: 100vh;
+  }
+}
+
 /* Фон документа — это и есть фон приложения: он одинаков и под рамкой
    «телефона» (область вокруг неё на планшете), и в зоне «резинового»
    оверскролла на телефоне, и под статус-баром в PWA-режиме. Никаких
