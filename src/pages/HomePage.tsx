@@ -54,7 +54,7 @@ export function HomePage() {
     <div className="relative flex h-full flex-col lg:pl-64">
       <TopBar title="DSU Debate" rightSlot="profile" />
 
-      <div className="no-scrollbar mx-auto flex-1 w-full max-w-5xl overflow-y-auto px-5 pb-32 pt-2 lg:px-10 lg:pb-10 lg:pt-6">
+      <div className="no-scrollbar mx-auto flex-1 w-full max-w-5xl overflow-y-auto px-5 pb-[calc(env(safe-area-inset-bottom,0px)+4.75rem)] pt-2 lg:px-10 lg:pb-10 lg:pt-6">
         {loading && (
           <div className="h-52 animate-pulse rounded-[1.75rem] bg-white/5" />
         )}

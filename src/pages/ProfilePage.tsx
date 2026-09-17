@@ -46,7 +46,7 @@ export function ProfilePage() {
     <div className="relative flex h-full flex-col lg:pl-64">
       <TopBar title="Профиль" />
 
-      <div className="profile-content no-scrollbar mx-auto flex-1 w-full max-w-2xl overflow-hidden px-3 pb-2 pt-0 lg:overflow-y-auto lg:px-10 lg:pb-10 lg:pt-6">
+      <div className="profile-content no-scrollbar mx-auto flex-1 w-full max-w-2xl overflow-y-auto px-3 pb-[calc(env(safe-area-inset-bottom,0px)+4.75rem)] pt-0 lg:overflow-y-auto lg:px-10 lg:pb-10 lg:pt-6">
         <div className="glass-panel flex items-center gap-3 rounded-2xl border border-white/10 p-3 lg:gap-4 lg:rounded-3xl lg:p-5">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-400 via-violet-500 to-sky-400 text-sm font-bold text-white lg:h-14 lg:w-14 lg:rounded-2xl lg:text-lg">
             {initials === "?" ? <UserRound size={18} className="lg:h-[22px] lg:w-[22px]" /> : initials}
