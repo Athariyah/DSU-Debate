@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronRight } from "lucide-react";
 import { TopBar } from "../components/layout/TopBar";
 import { BottomNav } from "../components/layout/BottomNav";
+import { PullToRefresh } from "../components/ui/PullToRefresh";
 import { ActiveDebateCard } from "../components/debate/ActiveDebateCard";
 import { UpcomingDebateItem } from "../components/debate/UpcomingDebateItem";
 import { VoteModal } from "../components/debate/VoteModal";
@@ -19,25 +20,31 @@ export function HomePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let mounted = true;
-    Promise.all([fetchActiveDebate(), fetchUpcomingDebates(), fetchCompletedDebates()])
-      .then(([active, upcomingList, completedResult]) => {
-        if (!mounted) return;
-        setActiveEvent(active);
-        setUpcoming(upcomingList);
-        setCompleted(completedResult.items);
-      })
-      .catch(() => {
-        if (mounted) setError("Не удалось загрузить данные дебатов");
-      })
-      .finally(() => {
-        if (mounted) setLoading(false);
-      });
-    return () => {
-      mounted = false;
-    };
+  // initial — первая загрузка (скелетон); повторная (pull-to-refresh)
+  // обновляет данные молча, поверх уже показанного контента, а ошибку
+  // сети переживает без баннера: список остаётся на экране.
+  const load = useCallback(async (initial: boolean) => {
+    if (initial) setLoading(true);
+    try {
+      const [active, upcomingList, completedResult] = await Promise.all([
+        fetchActiveDebate(),
+        fetchUpcomingDebates(),
+        fetchCompletedDebates(),
+      ]);
+      setActiveEvent(active);
+      setUpcoming(upcomingList);
+      setCompleted(completedResult.items);
+      setError(null);
+    } catch {
+      if (initial) setError("Не удалось загрузить данные дебатов");
+    } finally {
+      if (initial) setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void load(true);
+  }, [load]);
 
   const voted = activeEvent ? hasVoted(activeEvent.id) : false;
 
@@ -57,7 +64,11 @@ export function HomePage() {
           Круглая кнопка в углу остаётся только в администрировании. */}
       <TopBar title="DSU Debate" />
 
-      <div className="no-scrollbar mx-auto flex-1 w-full max-w-5xl overflow-y-auto px-5 pb-[calc(env(safe-area-inset-bottom,0px)+4.75rem)] pt-2 lg:px-10 lg:pb-10 lg:pt-6">
+      {/* Pull-to-refresh: тянем список вниз — главная обновляется. */}
+      <PullToRefresh
+        onRefresh={() => load(false)}
+        className="mx-auto flex-1 w-full max-w-5xl px-5 pb-[calc(env(safe-area-inset-bottom,0px)+4.75rem)] pt-2 lg:px-10 lg:pb-10 lg:pt-6"
+      >
         {loading && (
           <div className="h-52 animate-pulse rounded-[1.75rem] bg-white/5" />
         )}
@@ -99,7 +110,7 @@ export function HomePage() {
             </div>
           </>
         )}
-      </div>
+      </PullToRefresh>
 
       <BottomNav />
 

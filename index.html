@@ -4,26 +4,48 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <!-- Цвет в тон верхней части градиента оболочки: статус-бар мобильного
-         браузера/PWA сливается с приложением вместо чёрной полосы. -->
+         браузера и PWA на Android сливается с приложением вместо чёрной
+         полосы. На iOS в standalone статус-баром управляет мета-тег
+         apple-mobile-web-app-status-bar-style ниже. -->
     <meta name="theme-color" content="#141633" />
     <!-- PWA: «Добавить на экран Домой» на iOS/Android даёт вид полноценного приложения -->
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <!-- Непрозрачный статус-бар (black), а НЕ black-translucent: с транслитным
-         стилем iOS (особенно iOS 26) считает высоту WebView на высоту
-         статус-бара меньше, и внизу экрана остаётся «мёртвая» чёрная полоса,
-         до которой из страницы не дотянуться ни CSS, ни JS — известный WebKit
-         баг PWA. Со статусом black WebView разворачивается до нижнего края
-         экрана, отступ env(safe-area-inset-bottom) в нижней панели встаёт на
-         место, а полосы больше нет. ВАЖНО: apple-mobile-web-app-* мета-теги
-         iOS «запекает» в момент добавления значка на домашний экран — уже
-         установленное приложение надо удалить и добавить заново, чтобы
-         изменение подхватилось. -->
-    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <!-- Прозрачный статус-бар (black-translucent): в PWA градиент приложения
+         заходит ПОД статус-бар — сверху нет чёрной полосы, а сам контент
+         отстоит от края экрана на env(safe-area-inset-top) (см. TopBar,
+         SplashPage). Обратная сторона translucent — риск чёрной полосы
+         ВНИЗУ экрана («chin» WebKit): она появляется, когда высоты html/body
+         заданы в % или dvh — iOS смещает полотно под статус-бар, не
+         компенсируя смещение в процентных высотах. Поэтому в standalone-
+         режиме index.css переключает html/body/#root и телефонную рамку на
+         100vh (физическая высота экрана): фон дотягивается до последнего
+         ряда пикселей, и внизу полосы нет. ВАЖНО: apple-mobile-web-app-*
+         мета-теги iOS «запекает» в момент добавления значка на домашний
+         экран — уже установленное приложение надо удалить и добавить
+         заново, чтобы изменение подхватилось. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="DSU Debate" />
+    <script>
+      // iOS не поддерживает медиа-запрос display-mode, но отдаёт флаг
+      // navigator.standalone. Вешаем класс на <html> ДО первой отрисовки,
+      // чтобы index.css сразу переключил высоты на 100vh в PWA-режиме
+      // (страховка от чёрной полосы внизу экрана при black-translucent).
+      if (window.navigator.standalone) {
+        document.documentElement.classList.add("pwa-standalone-ios");
+      }
+    </script>
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2064%2064'%3E%3Cdefs%3E%3ClinearGradient%20id%3D'g'%20x1%3D'0'%20y1%3D'0'%20x2%3D'1'%20y2%3D'1'%3E%3Cstop%20offset%3D'0'%20stop-color%3D'%236366f1'%2F%3E%3Cstop%20offset%3D'0.55'%20stop-color%3D'%238b5cf6'%2F%3E%3Cstop%20offset%3D'1'%20stop-color%3D'%2338bdf8'%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20width%3D'64'%20height%3D'64'%20rx%3D'14'%20fill%3D'url(%23g)'%2F%3E%3Cpath%20d%3D'M19%2016h14a7%207%200%200%201%207%207v8a7%207%200%200%201-7%207h-6l-7%206v-6h-1a7%207%200%200%201-7-7v-8a7%207%200%200%201%207-7z'%20fill%3D'%23ffffff'%2F%3E%3Cpath%20d%3D'M36%2028h10a6%206%200%200%201%206%206v6a6%206%200%200%201-6%206h-1v5l-6-5h-3a6%206%200%200%201-6-6v-6a6%206%200%200%201%206-6z'%20fill%3D'%23ffffff'%20opacity%3D'0.62'%2F%3E%3C%2Fsvg%3E" />
+    <!-- Фавиконка — знак логотипа (плитка + пузырь с живыми столбиками);
+         в крупных контекстах (тайлы, шорткаты) браузер возьмёт png-логотип
+         с надписью из manifest. Полные версии — public/logo.svg. -->
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3E%3Cdefs%3E%3ClinearGradient%20id='b'%20x1='0'%20y1='0'%20x2='1'%20y2='1'%3E%3Cstop%20offset='0'%20stop-color='%236366f1'/%3E%3Cstop%20offset='.55'%20stop-color='%238b5cf6'/%3E%3Cstop%20offset='1'%20stop-color='%2338bdf8'/%3E%3C/linearGradient%3E%3CradialGradient%20id='g'%20cx='.2'%20cy='.05'%20r='1'%3E%3Cstop%20offset='0'%20stop-color='%236366f1'%20stop-opacity='.55'/%3E%3Cstop%20offset='1'%20stop-color='%236366f1'%20stop-opacity='0'/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect%20width='64'%20height='64'%20fill='%230a0c1e'/%3E%3Crect%20width='64'%20height='64'%20fill='url(%23g)'/%3E%3Crect%20x='31'%20y='12'%20width='22'%20height='17'%20rx='6'%20fill='%23ffffff'%20fill-opacity='.08'%20stroke='%23ffffff'%20stroke-opacity='.4'%20stroke-width='2'/%3E%3Cpath%20d='M21%2037L18%2046L30%2039Z'%20fill='url(%23b)'/%3E%3Crect%20x='14'%20y='18'%20width='28'%20height='21'%20rx='8'%20fill='url(%23b)'/%3E%3Crect%20x='20'%20y='25'%20width='4'%20height='8'%20rx='2'%20fill='%23ffffff'/%3E%3Crect%20x='26'%20y='21'%20width='4'%20height='12'%20rx='2'%20fill='%23ffffff'/%3E%3Crect%20x='32'%20y='23'%20width='4'%20height='10'%20rx='2'%20fill='%23ffffff'/%3E%3C/svg%3E"
+    />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
     <title>DSU Debate — Твой голос решает</title>
     <meta name="description" content="DSU Debate — платформа live-голосований на дебатах в реальном времени." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />

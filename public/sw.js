@@ -9,7 +9,7 @@
  *  - /api и /socket.io — никогда не кэшируем: голосование всегда живое.
  * ========================================================================= */
 
-const CACHE_NAME = "dsu-debate-shell-v1";
+const CACHE_NAME = "dsu-debate-shell-v2"; // v2: обновлённые иконки/логотип
 const SHELL_URLS = ["/", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/apple-touch-icon.png"];
 
 self.addEventListener("install", (event) => {
