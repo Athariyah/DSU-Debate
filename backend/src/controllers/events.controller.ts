@@ -6,6 +6,7 @@ import { ApiError } from "../middleware/errorHandler";
 import { createEventSchema, eventStatusEnum, updateEventSchema } from "../validation/schemas";
 import {
   broadcastEventStatusChanged,
+  broadcastPublicVisibilityChanged,
   broadcastVoteUpdate,
   broadcastVoteVisibilityChanged,
 } from "../sockets";
@@ -21,6 +22,7 @@ function serializeEvent(row: EventRecord & { participants_count?: string }) {
     votingDurationMinutes: row.voting_duration_minutes ?? null,
     votingEndsAt: votingEndsAt(row)?.toISOString() ?? null,
     votesHidden: Boolean(row.votes_hidden),
+    hiddenFromPublic: Boolean(row.hidden_from_public),
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -37,7 +39,7 @@ export const createEvent = asyncHandler(async (req: Request, res: Response) => {
   if (!parsed.success) {
     throw new ApiError(400, "VALIDATION_ERROR", parsed.error.issues[0].message);
   }
-  const { title, dateTime, status, votingDurationMinutes, participants } = parsed.data;
+  const { title, dateTime, status, votingDurationMinutes, hiddenFromPublic, participants } = parsed.data;
   const adminId = req.admin!.adminId;
 
   if (status === "active" && (!participants || participants.length < 2)) {
@@ -58,11 +60,11 @@ export const createEvent = asyncHandler(async (req: Request, res: Response) => {
 
     const inserted = await client.query<EventRecord>(
       `INSERT INTO events (
-         title, status, date_time, voting_duration_minutes, voting_started_at, created_by
+         title, status, date_time, voting_duration_minutes, voting_started_at, hidden_from_public, created_by
        )
-       VALUES ($1, $2, $3, $4, CASE WHEN $2 = 'active'::event_status THEN now() ELSE NULL END, $5)
+       VALUES ($1, $2, $3, $4, CASE WHEN $2 = 'active'::event_status THEN now() ELSE NULL END, $5, $6)
        RETURNING *`,
-      [title, status, dateTime, votingDurationMinutes ?? null, adminId]
+      [title, status, dateTime, votingDurationMinutes ?? null, hiddenFromPublic ?? false, adminId]
     );
 
     if (participants) {
@@ -189,20 +191,22 @@ export const updateEvent = asyncHandler(async (req: Request, res: Response) => {
   if (!parsed.success) {
     throw new ApiError(400, "VALIDATION_ERROR", parsed.error.issues[0].message);
   }
-  const { title, dateTime, status, votingDurationMinutes, votesHidden } = parsed.data;
+  const { title, dateTime, status, votingDurationMinutes, votesHidden, hiddenFromPublic } = parsed.data;
 
   if (
     title === undefined &&
     dateTime === undefined &&
     status === undefined &&
     votingDurationMinutes === undefined &&
-    votesHidden === undefined
+    votesHidden === undefined &&
+    hiddenFromPublic === undefined
   ) {
     throw new ApiError(400, "VALIDATION_ERROR", "Нет полей для обновления");
   }
 
   let previousActiveId: number | null = null;
   let previousVotesHidden: boolean | null = null;
+  let previousHiddenFromPublic: boolean | null = null;
   const updatedEvent = await withTransaction(async (client) => {
     const existing = await client.query<EventRecord>(
       "SELECT * FROM events WHERE id = $1 FOR UPDATE",
@@ -212,6 +216,7 @@ export const updateEvent = asyncHandler(async (req: Request, res: Response) => {
       throw new ApiError(404, "EVENT_NOT_FOUND", "Мероприятие не найдено");
     }
     previousVotesHidden = Boolean(existing.rows[0].votes_hidden);
+    previousHiddenFromPublic = Boolean(existing.rows[0].hidden_from_public);
 
     if (status === "active") {
       const participantsCount = await client.query<{ count: string }>(
@@ -273,6 +278,10 @@ export const updateEvent = asyncHandler(async (req: Request, res: Response) => {
       values.push(votesHidden);
       setClauses.push(`votes_hidden = $${values.length}`);
     }
+    if (hiddenFromPublic !== undefined) {
+      values.push(hiddenFromPublic);
+      setClauses.push(`hidden_from_public = $${values.length}`);
+    }
     values.push(eventId);
     const updated = await client.query<EventRecord>(
       `UPDATE events SET ${setClauses.join(", ")} WHERE id = $${values.length} RETURNING *`,
@@ -301,6 +310,16 @@ export const updateEvent = asyncHandler(async (req: Request, res: Response) => {
     } finally {
       visibilityClient.release();
     }
+  }
+
+  // Переключили «Скрыть от публики»: подписчики дебата сразу видят результат
+  // (страница обычного пользователя укрывается, при раскрытии — подгружается).
+  if (
+    hiddenFromPublic !== undefined &&
+    previousHiddenFromPublic !== null &&
+    hiddenFromPublic !== previousHiddenFromPublic
+  ) {
+    broadcastPublicVisibilityChanged(eventId, hiddenFromPublic);
   }
 
   const participantsCount = await pool.query<{ count: string }>(

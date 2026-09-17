@@ -10,6 +10,7 @@ import {
   RefreshCw,
   Settings2,
   Timer,
+  UserX,
   Users,
   Wifi,
   WifiOff,
@@ -38,6 +39,8 @@ export function DebateDetailPage() {
   const [voteModalOpen, setVoteModalOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuNotice, setMenuNotice] = useState<string | null>(null);
+  /** Дебат скрыли от публики, пока страница была открыта (event:public_visibility). */
+  const [hiddenFromPublic, setHiddenFromPublic] = useState(false);
   const votedRecord = event ? getVotedParticipant(event.id) : null;
   const [justVotedFor, setJustVotedFor] = useState<number | null>(votedRecord?.participantId ?? null);
   const isAdmin = isAdminAuthenticated();
@@ -62,6 +65,8 @@ export function DebateDetailPage() {
       setLoading(false);
       return;
     }
+    // При смене дебата сбрасываем признак «скрыт от публики» предыдущего.
+    setHiddenFromPublic(false);
     loadEvent();
   }, [id, loadEvent]);
 
@@ -71,6 +76,17 @@ export function DebateDetailPage() {
     initialParticipants: event?.participants ?? EMPTY_PARTICIPANTS,
     initialTotalVotes: event?.totalVotes ?? 0,
     initialVotesHidden: event?.votesHidden ?? false,
+    onPublicVisibility: (hidden) => {
+      if (hidden) {
+        // Админ скрыл дебат: данные публичных маршрутов больше недоступны —
+        // показываем заглушку вместо последнего состояния.
+        setHiddenFromPublic(true);
+      } else {
+        // Скрыли обратно: данные снова отдаёт сервер — перечитываем их.
+        setHiddenFromPublic(false);
+        loadEvent();
+      }
+    },
   });
 
   // Таймер голосования: тикаем раз в секунду, пока дебат активен и есть
@@ -111,6 +127,33 @@ export function DebateDetailPage() {
         <TopBar showBack />
         <div className="flex flex-1 items-center justify-center px-5 text-center text-sm text-rose-300">
           {error ?? "Дебат не найден"}
+        </div>
+      </div>
+    );
+  }
+
+  // Пока страница была открыта, дебат скрыли от обычных пользователей:
+  // публичные данные больше недоступны, показываем заглушку.
+  if (hiddenFromPublic) {
+    return (
+      <div className="flex h-full flex-col">
+        <TopBar showBack />
+        <div className="flex flex-1 items-center justify-center px-5 text-center">
+          <div className="space-y-3">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-amber-300/30 bg-amber-400/10">
+              <UserX size={20} className="text-amber-300" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-white">Дебат скрыт организатором</p>
+              <p className="mx-auto mt-1.5 max-w-[30ch] text-xs leading-relaxed text-white/40">
+                Он снова появится на главном экране, когда организатор сделает его публичным.
+              </p>
+            </div>
+            <Button variant="glass" onClick={() => navigate("/home")}>
+              <Home size={16} />
+              На главный экран
+            </Button>
+          </div>
         </div>
       </div>
     );

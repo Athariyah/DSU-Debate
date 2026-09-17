@@ -17,6 +17,7 @@ interface BackendEvent {
   votingDurationMinutes?: number | null;
   votingEndsAt?: string | null;
   votesHidden?: boolean;
+  hiddenFromPublic?: boolean;
   participantsCount?: number;
 }
 
@@ -63,6 +64,7 @@ function mapPublicEvent(payload: BackendPublicEventResponse): DebateEvent {
     votingDurationMinutes: payload.event.votingDurationMinutes ?? null,
     votingEndsAt: payload.event.votingEndsAt ?? null,
     votesHidden: Boolean(payload.event.votesHidden),
+    hiddenFromPublic: Boolean(payload.event.hiddenFromPublic),
     totalVotes: Number(payload.totalVotes ?? 0),
     participants,
   };
@@ -92,7 +94,7 @@ export async function fetchActiveDebate(): Promise<DebateEvent | null> {
     return mapPublicEvent(response);
   } catch (error) {
     if (isNotFound(error)) return null;
-    if (USE_MOCKS) return mockStore.events.find((event) => event.status === "active") ?? null;
+    if (USE_MOCKS) return mockStore.events.find((event) => event.status === "active" && !event.hiddenFromPublic) ?? null;
     throw error;
   }
 }
@@ -102,7 +104,7 @@ export async function fetchUpcomingDebates(): Promise<DebateEvent[]> {
     const response = await apiFetch<BackendPublicEventResponse[]>("/events/upcoming");
     return response.map(mapPublicEvent);
   } catch (error) {
-    if (USE_MOCKS) return mockStore.events.filter((event) => event.status === "upcoming");
+    if (USE_MOCKS) return mockStore.events.filter((event) => event.status === "upcoming" && !event.hiddenFromPublic);
     throw error;
   }
 }
@@ -115,7 +117,7 @@ export async function fetchCompletedDebates(page = 1, limit = 20): Promise<{ ite
     return { items: response.items.map(mapPublicEvent), total: response.total };
   } catch (error) {
     if (USE_MOCKS) {
-      const items = mockStore.events.filter((event) => event.status === "completed");
+      const items = mockStore.events.filter((event) => event.status === "completed" && !event.hiddenFromPublic);
       return { items, total: items.length };
     }
     throw error;
@@ -128,7 +130,10 @@ export async function fetchDebateById(eventId: string): Promise<DebateEvent | nu
     return mapPublicEvent(response);
   } catch (error) {
     if (isNotFound(error)) return null;
-    if (USE_MOCKS) return mockGetEvent(Number(eventId)) ?? null;
+    if (USE_MOCKS) {
+      const mockEvent = mockGetEvent(Number(eventId));
+      return mockEvent && !mockEvent.hiddenFromPublic ? mockEvent : null;
+    }
     throw error;
   }
 }
@@ -172,6 +177,8 @@ export interface AdminEventSummary {
   votingDurationMinutes: number | null;
   /** true — зрители не видят голоса и проценты (закрытое голосование). */
   votesHidden: boolean;
+  /** true — дебат скрыт от обычных пользователей (виден только в админке). */
+  hiddenFromPublic: boolean;
   participantsCount: number;
 }
 
@@ -183,12 +190,13 @@ export async function listAdminDebates(status?: DebateEvent["status"]): Promise<
     ...item,
     votingDurationMinutes: item.votingDurationMinutes ?? null,
     votesHidden: item.votesHidden ?? false,
+    hiddenFromPublic: item.hiddenFromPublic ?? false,
   }));
 }
 
 export async function updateDebate(
   eventId: number,
-  patch: Partial<Pick<AdminEventSummary, "title" | "status" | "votingDurationMinutes" | "votesHidden">> & {
+  patch: Partial<Pick<AdminEventSummary, "title" | "status" | "votingDurationMinutes" | "votesHidden" | "hiddenFromPublic">> & {
     dateTime?: string;
   }
 ): Promise<AdminEventSummary> {
@@ -260,6 +268,7 @@ export async function createDebate(input: CreateDebateInput): Promise<DebateEven
       dateTime: input.scheduledAt,
       status: "upcoming",
       votingDurationMinutes: input.votingDurationMinutes ?? null,
+      hiddenFromPublic: input.hiddenFromPublic ?? false,
       participants: input.participants.map((participant) => ({
         name: participant.name,
         description: participant.subtitle ?? null,

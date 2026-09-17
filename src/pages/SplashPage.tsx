@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion, type PanInfo } from "framer-motion";
-import { MonitorPlay, Smartphone, Vote } from "lucide-react";
+import { Check, MonitorPlay, Smartphone, Vote } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { BrandLogoMark } from "../components/brand/BrandLogo";
 import { Button } from "../components/ui/Button";
 import { cn } from "../utils/cn";
 
@@ -215,35 +214,28 @@ export function SplashPage() {
 /* Фоны и «арт» слайдов                                                */
 /* ------------------------------------------------------------------ */
 
-/** Живой фон: дрейфующие орбы + мерцающие точки вместо статики. */
+/**
+ * Живой фон: мягкие дрейфующие цветовые пятна + тонкая точечная сетка.
+ * Спокойная, «бумажная» фактура — без звёздного неба и неона,
+ * чтобы картина оставалась современной и минималистичной.
+ */
 function SplashBackdrop() {
-  const stars = useMemo(
-    () =>
-      Array.from({ length: 26 }, (_, index) => ({
-        left: (index * 37) % 100,
-        top: (index * 53) % 100,
-        size: 1 + (index % 3) * 0.7,
-        delay: ((index * 7) % 40) / 10,
-        duration: 2.5 + ((index * 3) % 30) / 10,
-      })),
-    []
-  );
-
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0">
       <div className="animate-drift absolute -left-24 -top-28 h-72 w-72 rounded-full bg-indigo-500/25 blur-3xl" />
       <div className="animate-drift-slow absolute -right-20 top-10 h-64 w-64 rounded-full bg-violet-500/20 blur-3xl" />
       <div className="animate-drift absolute -bottom-24 left-1/3 h-72 w-72 rounded-full bg-sky-500/15 blur-3xl" />
 
-      {stars.map((star, index) => (
-        <motion.span
-          key={index}
-          className="absolute rounded-full bg-white"
-          style={{ left: `${star.left}%`, top: `${star.top}%`, width: star.size, height: star.size }}
-          animate={{ opacity: [0.08, 0.5, 0.08] }}
-          transition={{ duration: star.duration, delay: star.delay, repeat: Infinity, ease: "easeInOut" }}
-        />
-      ))}
+      {/* Точечная сетка, затухающая к краям. */}
+      <div
+        className="absolute inset-0 opacity-60"
+        style={{
+          backgroundImage: "radial-gradient(rgba(255,255,255,0.09) 1px, transparent 1.5px)",
+          backgroundSize: "26px 26px",
+          maskImage: "radial-gradient(ellipse 90% 80% at 50% 40%, black 30%, transparent 75%)",
+          WebkitMaskImage: "radial-gradient(ellipse 90% 80% at 50% 40%, black 30%, transparent 75%)",
+        }}
+      />
     </div>
   );
 }
@@ -316,25 +308,105 @@ function SlideArt({ art }: { art: Slide["art"] }) {
     );
   }
 
-  // Брендовый слайд: новый минималистичный марк (components/brand/BrandLogo) —
-  // стеклянная плитка с монограммой «D», внутри живой эквалайзер голосов,
-  // снаружи орбита со спутниками; всё парит над дышащим свечением.
+  // Брендовый слайд: минималистичный «диалог» — суть дебатов. Два простых
+  // пузырька с позициями спорящих: первый печатает (точечный «тайпинг»),
+  // второй отвечает — и в нём появляется галочка учёта голоса. Спокойные
+  // формы, мягкие градиенты, без футуризма; вся картинка — чистая CSS/SVG-
+  // графика с бесконечным циклом анимации.
+  return <DialogueArt />;
+}
+
+/** Длительность одного полного цикла «диалога», сек. */
+const DIALOGUE_LOOP = 5.2;
+
+/** Одинаковый цикл для всех элементов сцены: бесшовное повторение. */
+function loop(times: number[]) {
+  return { duration: DIALOGUE_LOOP, repeat: Infinity, times, ease: "easeInOut" as const };
+}
+
+function DialogueArt() {
   return (
     <div className="relative flex h-52 w-52 items-center justify-center [@media(max-height:700px)]:h-40 [@media(max-height:700px)]:w-40">
+      {/* «Дыхание» позади диалога + тёплая подсветка со стороны ответа. */}
       <motion.span
         aria-hidden
-        className="absolute h-40 w-40 rounded-full bg-indigo-500/30 blur-3xl"
-        animate={{ opacity: [0.5, 0.85, 0.5], scale: [1, 1.08, 1] }}
+        className="absolute h-40 w-40 rounded-full bg-indigo-500/25 blur-3xl"
+        animate={{ opacity: [0.45, 0.8, 0.45], scale: [1, 1.07, 1] }}
         transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut" }}
       />
-      <div aria-hidden className="absolute h-32 w-32 rounded-full bg-sky-400/20 blur-2xl" />
-      <BrandLogoMark className="relative h-44 w-44 [@media(max-height:700px)]:h-36 [@media(max-height:700px)]:w-36" />
       <motion.span
         aria-hidden
-        className="absolute h-2 w-2 rounded-full bg-sky-300"
-        animate={{ scale: [0, 1, 0], opacity: [0, 1, 0], x: [0, 14], y: [8, -30] }}
-        transition={{ duration: 2.4, repeat: Infinity, ease: "easeOut" }}
+        className="absolute bottom-4 right-6 h-24 w-24 rounded-full bg-amber-400/15 blur-2xl"
+        animate={{ opacity: [0.25, 0.55, 0.25] }}
+        transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut", delay: 1 }}
       />
+
+      <div className="animate-float-y relative h-40 w-40 [@media(max-height:700px)]:h-[7.5rem] [@media(max-height:700px)]:w-[7.5rem]">
+        {/* Реплика первой стороны: появляется первой, «печатает». */}
+        <motion.div
+          className="absolute left-0 top-1"
+          animate={{ opacity: [0, 1, 1, 0], scale: [0.45, 1, 1, 0.9], y: [12, 0, 0, -6] }}
+          transition={loop([0, 0.09, 0.93, 1])}
+        >
+          <div className="relative h-16 w-28 rounded-2xl rounded-bl-md border border-white/20 bg-gradient-to-br from-indigo-400/95 to-violet-500/90 shadow-[0_16px_32px_-14px_rgba(99,102,241,0.85)]">
+            <DialogueTail className="-left-1.5 -bottom-1.5 rotate-45 rounded-[5px] border-b border-l border-white/25 bg-violet-500/90" />
+            <TypingDots opacityKeyframes={[0, 1, 1, 0, 0]} times={[0, 0.1, 0.48, 0.56, 1]} />
+          </div>
+        </motion.div>
+
+        {/* Ответ второй стороны: печатает, затем голос учтён — галочка. */}
+        <motion.div
+          className="absolute bottom-1 right-0"
+          animate={{ opacity: [0, 0, 1, 1, 0], scale: [0.45, 0.45, 1, 1, 0.9], y: [12, 12, 0, 0, -6] }}
+          transition={loop([0, 0.29, 0.4, 0.93, 1])}
+        >
+          <div className="relative h-16 w-28 rounded-2xl rounded-br-md border border-white/20 bg-gradient-to-bl from-sky-400/95 to-cyan-400/85 shadow-[0_16px_32px_-14px_rgba(56,189,248,0.8)]">
+            <DialogueTail className="-right-1.5 -bottom-1.5 rotate-45 rounded-[5px] border-b border-r border-white/25 bg-cyan-400/85" />
+            <TypingDots opacityKeyframes={[0, 0, 1, 1, 0, 0]} times={[0, 0.41, 0.49, 0.7, 0.78, 1]} />
+            <motion.span
+              className="absolute inset-0 flex items-center justify-center"
+              animate={{ opacity: [0, 0, 1, 1, 0], scale: [0.3, 0.3, 1.15, 1, 0.85] }}
+              transition={loop([0, 0.75, 0.83, 0.93, 1])}
+            >
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/95 shadow-[0_4px_12px_-2px_rgba(2,132,199,0.5)]">
+                <Check size={15} strokeWidth={3} className="text-sky-600" />
+              </span>
+            </motion.span>
+          </div>
+        </motion.div>
+      </div>
     </div>
+  );
+}
+
+/** Маленький хвостик пузырька (повёрнутый квадрат у угла). */
+function DialogueTail({ className }: { className?: string }) {
+  return <span aria-hidden className={cn("absolute h-4 w-4", className)} />;
+}
+
+/** Три «печатает…»-точки: покачиваются бесконечно, окно их видимости
+    задают keyframes-циклы самого контейнера (синхронно с циклом сцены). */
+function TypingDots({
+  opacityKeyframes,
+  times,
+}: {
+  opacityKeyframes: number[];
+  times: number[];
+}) {
+  return (
+    <motion.div
+      className="absolute inset-0 flex items-center justify-center gap-[7px]"
+      animate={{ opacity: opacityKeyframes }}
+      transition={loop(times)}
+    >
+      {[0, 1, 2].map((index) => (
+        <motion.span
+          key={index}
+          className="h-[7px] w-[7px] rounded-full bg-white/90"
+          animate={{ y: [0, -5, 0], opacity: [0.55, 1, 0.55] }}
+          transition={{ duration: 0.9, repeat: Infinity, ease: "easeInOut", delay: index * 0.15 }}
+        />
+      ))}
+    </motion.div>
   );
 }

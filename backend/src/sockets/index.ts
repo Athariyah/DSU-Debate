@@ -105,3 +105,16 @@ export function broadcastVoteVisibilityChanged(
   const io = getIO();
   io.to(debateRoom(eventId)).emit("event:votes_visibility", { eventId, votesHidden });
 }
+
+/**
+ * Транслирует переключение флажка «Скрыть от публики»: открытые страницы
+ * дебата у обычных пользователей мгновенно показывают «дебат скрыт» (или,
+ * при раскрытии, подгружают данные заново).
+ */
+export function broadcastPublicVisibilityChanged(
+  eventId: number,
+  hiddenFromPublic: boolean
+): void {
+  const io = getIO();
+  io.to(debateRoom(eventId)).emit("event:public_visibility", { eventId, hiddenFromPublic });
+}

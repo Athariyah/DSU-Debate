@@ -45,6 +45,8 @@ export function BroadcastPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [revealOpen, setRevealOpen] = useState(false);
+  /** Пока трансляция открыта, дебат скрыли от публики (event:public_visibility). */
+  const [hiddenFromPublic, setHiddenFromPublic] = useState(false);
   const [clock, setClock] = useState(() => new Date());
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(() =>
@@ -86,6 +88,8 @@ export function BroadcastPage() {
   );
 
   useEffect(() => {
+    // При смене дебата (переход по ссылке) сбрасываем признак «скрыт».
+    setHiddenFromPublic(false);
     void loadEvent();
   }, [loadEvent]);
 
@@ -95,6 +99,15 @@ export function BroadcastPage() {
     initialParticipants: event?.participants ?? EMPTY_PARTICIPANTS,
     initialTotalVotes: event?.totalVotes ?? 0,
     initialVotesHidden: event?.votesHidden ?? false,
+    onPublicVisibility: (hidden) => {
+      if (hidden) {
+        // Админ скрыл дебат: цифры больше не публикуются — прячем и экран.
+        setHiddenFromPublic(true);
+      } else {
+        setHiddenFromPublic(false);
+        void loadEvent(true);
+      }
+    },
   });
 
   // Подстраховка для большого экрана: если realtime-соединения нет, регулярно
@@ -186,6 +199,10 @@ export function BroadcastPage() {
 
   if (!event) {
     return <BroadcastFallback text={error ?? "Дебат не найден"} onBack={goBack} />;
+  }
+
+  if (hiddenFromPublic) {
+    return <BroadcastFallback text="Дебат скрыт организатором" onBack={goBack} />;
   }
 
   const finished = eventStatus === "completed";

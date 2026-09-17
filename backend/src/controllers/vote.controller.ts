@@ -94,8 +94,12 @@ export function redactEventResults(results: EventResults): EventResults {
  * Возвращает текущий активный дебат вместе с участниками и live-результатами.
  */
 export const getActiveEvent = asyncHandler(async (_req: Request, res: Response) => {
+  // Скрытые от публики дебаты не показываем даже как «активный»:
+  // для обычных пользователей их просто нет.
   const eventResult = await pool.query<EventRecord>(
-    "SELECT * FROM events WHERE status = 'active' ORDER BY date_time DESC LIMIT 1"
+    `SELECT * FROM events
+     WHERE status = 'active' AND COALESCE(hidden_from_public, FALSE) = FALSE
+     ORDER BY date_time DESC LIMIT 1`
   );
 
   if (eventResult.rowCount === 0) {
@@ -192,6 +196,13 @@ export const castVote = asyncHandler(async (req: Request, res: Response) => {
 
     const event = eventResult.rows[0];
     votesHidden = Boolean(event.votes_hidden);
+
+    // Скрытый от публики дебат для обычных пользователей «не существует»:
+    // голосование по нему недоступно.
+    if (Boolean(event.hidden_from_public)) {
+      throw new ApiError(404, "EVENT_NOT_FOUND", "Мероприятие не найдено");
+    }
+
     if (event.status !== "active") {
       throw new ApiError(
         409,

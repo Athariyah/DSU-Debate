@@ -33,6 +33,8 @@ export const createEventSchema = z.object({
   dateTime: z.string().datetime({ offset: true }),
   status: eventStatusEnum.optional().default("upcoming"),
   votingDurationMinutes: votingDurationSchema.nullable().optional(),
+  // TRUE — дебат скрыт от обычных пользователей (виден только администраторам).
+  hiddenFromPublic: z.boolean().optional(),
   // Optional keeps the CRUD endpoint backwards compatible. When supplied,
   // event and participants are persisted atomically in one transaction.
   // Число участников не ограничено сверху: минимум 2 (дебаты требуют сторон).
@@ -47,6 +49,8 @@ export const updateEventSchema = z.object({
   votingDurationMinutes: votingDurationSchema.nullable().optional(),
   // true — закрытое голосование: зрители не видят голоса и проценты.
   votesHidden: z.boolean().optional(),
+  // true — дебат скрыт от обычных пользователей (виден только администраторам).
+  hiddenFromPublic: z.boolean().optional(),
 });
 
 export const createParticipantSchema = z.object({

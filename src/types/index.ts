@@ -29,6 +29,8 @@ export interface DebateEvent {
   votingEndsAt?: string | null;
   /** true — закрытое голосование: сервер зануляет цифры, показываем плашку «скрыто». */
   votesHidden?: boolean;
+  /** true — дебат скрыт от обычных пользователей (виден только в админке). */
+  hiddenFromPublic?: boolean;
   totalVotes: number;
   participants: Participant[];
   coverGradient?: string;
@@ -63,4 +65,6 @@ export interface CreateDebateInput {
   scheduledAt: string;
   /** Опциональный таймер голосования, минуты. */
   votingDurationMinutes?: number | null;
+  /** true — дебат создаётся скрытым от обычных пользователей. */
+  hiddenFromPublic?: boolean;
 }
