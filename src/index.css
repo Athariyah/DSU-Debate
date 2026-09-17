@@ -8,6 +8,7 @@ html,
 body,
 #root {
   height: 100%;
+  min-height: 100dvh;
 }
 
 /* Фон документа — это и есть фон приложения: он одинаков и под рамкой
@@ -91,6 +92,64 @@ body {
 /* Поля даты и времени больше не используют нативные виджеты
    (свои календарь и часы внутри DateTimeField), поэтому старое
    подстрахование от системных инпутов здесь не нужно. */
+
+/* Профиль — обзорный экран, поэтому на невысоком телефоне немного ужимаем
+   только расстояния, а не основной кегль. Это сохраняет читаемость и не
+   прячет нижнюю часть карточек за навигацией. */
+@media (max-width: 1023px) and (max-height: 760px) {
+  .profile-content {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 4.25rem);
+  }
+
+  .profile-identity {
+    padding-block: 0.75rem;
+  }
+
+  .profile-sections {
+    margin-top: 0.5rem;
+    gap: 0.5rem;
+  }
+
+  .profile-section-heading {
+    margin-bottom: 0.25rem;
+  }
+
+  .profile-panel {
+    padding: 0.75rem;
+  }
+
+  .profile-panel p {
+    margin-top: 0.5rem;
+  }
+
+  .profile-admin-content > *:not(:last-child),
+  .profile-login > .glass-panel > *:not(:last-child) {
+    margin-block-start: 0;
+    margin-block-end: 0.5rem;
+  }
+
+  .profile-login > .glass-panel {
+    padding: 0.75rem;
+  }
+
+  .profile-login > .glass-panel > * {
+    margin-block-start: 0;
+  }
+
+  .profile-login input {
+    padding-block: 0.5rem;
+  }
+
+  .profile-login button {
+    padding-block: 0.625rem;
+    font-size: 0.875rem;
+  }
+
+  .profile-footer {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+  }
+}
 
 .glow-btn {
   box-shadow: 0 10px 30px -8px rgba(255, 255, 255, 0.35);
