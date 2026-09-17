@@ -14,8 +14,8 @@ import type { ReactNode } from "react";
  */
 export function PhoneShell({ children }: { children: ReactNode }) {
   return (
-    <div className="h-dvh w-full font-sans text-white sm:flex sm:items-center sm:justify-center sm:p-3 lg:block lg:p-0">
-      <div className="app-shell-bg relative h-dvh w-full overflow-hidden text-white sm:h-[min(880px,100dvh-1.5rem)] sm:w-[min(430px,100vw-1.5rem)] sm:rounded-[2.75rem] sm:border sm:border-white/10 sm:shadow-[0_0_70px_-12px_rgba(99,102,241,0.4)] lg:h-dvh lg:w-full lg:rounded-none lg:border-0 lg:shadow-none">
+    <div className="app-shell-bg h-dvh min-h-dvh w-full overflow-hidden font-sans text-white sm:flex sm:items-center sm:justify-center sm:p-3 lg:block lg:p-0">
+      <div className="app-shell-bg relative h-dvh min-h-dvh w-full overflow-hidden text-white sm:h-[min(880px,100dvh-1.5rem)] sm:min-h-0 sm:w-[min(430px,100vw-1.5rem)] sm:rounded-[2.75rem] sm:border sm:border-white/10 sm:shadow-[0_0_70px_-12px_rgba(99,102,241,0.4)] lg:h-dvh lg:min-h-0 lg:w-full lg:rounded-none lg:border-0 lg:shadow-none">
         {children}
       </div>
     </div>

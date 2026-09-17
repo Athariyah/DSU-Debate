@@ -43,130 +43,146 @@ export function ProfilePage() {
   const initials = profile ? `${profile.firstName[0]}${profile.lastName[0]}`.toUpperCase() : "?";
 
   return (
-    <div className="relative flex h-full flex-col lg:pl-64">
+    <div className="profile-page relative flex h-full min-h-0 flex-col lg:pl-64">
       <TopBar title="Профиль" />
 
-      <div className="profile-content no-scrollbar mx-auto flex-1 w-full max-w-2xl overflow-y-auto px-3 pb-[calc(env(safe-area-inset-bottom,0px)+4.75rem)] pt-0 lg:overflow-y-auto lg:px-10 lg:pb-10 lg:pt-6">
-        <div className="glass-panel flex items-center gap-3 rounded-2xl border border-white/10 p-3 lg:gap-4 lg:rounded-3xl lg:p-5">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-400 via-violet-500 to-sky-400 text-sm font-bold text-white lg:h-14 lg:w-14 lg:rounded-2xl lg:text-lg">
-            {initials === "?" ? <UserRound size={18} className="lg:h-[22px] lg:w-[22px]" /> : initials}
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-white lg:text-[15px]">{fullName}</p>
-            <p className="text-[10px] text-white/45 lg:text-xs">Зритель DSU Debate</p>
-          </div>
-        </div>
-
-        <div className="mt-3 lg:mt-6">
-          <h3 className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-white/40 lg:mb-2 lg:text-xs">Anti-fraud</h3>
-          <div className="glass-panel rounded-xl border border-white/10 p-3 lg:rounded-2xl lg:p-4">
-            <div className="flex items-center gap-2 text-xs font-medium text-white lg:text-sm">
-              <ShieldCheck size={15} className="text-emerald-400 lg:h-4 lg:w-4" />
-              Device fingerprint
+      {/*
+        На профиле нет длинной ленты: это экран-обзор. Две информационные
+        карточки стоят рядом на больших экранах, а на телефоне укладываются
+        друг под друга. min-h-0 и overflow-hidden не дают оболочке создавать
+        отдельную страницу со скроллом поверх нижней панели.
+      */}
+      <div className="profile-content no-scrollbar flex min-h-0 flex-1 flex-col overflow-hidden px-4 pb-[calc(env(safe-area-inset-bottom,0px)+4.75rem)] pt-1 sm:px-5 lg:px-10 lg:pb-7 lg:pt-4">
+        <div className="mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col">
+          <section className="profile-identity glass-panel flex shrink-0 items-center gap-4 rounded-3xl border border-white/10 p-4 sm:p-5 lg:p-6">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-400 via-violet-500 to-sky-400 text-lg font-bold text-white shadow-[0_8px_24px_-10px_rgba(99,102,241,0.9)] lg:h-[4.5rem] lg:w-[4.5rem] lg:text-xl">
+              {initials === "?" ? <UserRound size={24} /> : initials}
             </div>
-            <p className="mt-1 truncate rounded-lg bg-black/30 px-2.5 py-1.5 font-mono text-[10px] text-white/50 lg:mt-2 lg:px-3 lg:py-2 lg:text-[11px]">
-              {fingerprint}
-            </p>
-            <p className="mt-1 text-[10px] leading-snug text-white/35 lg:mt-2 lg:text-[11px] lg:leading-relaxed">
-              Уникальный идентификатор устройства, который вместе с IP-адресом
-              не позволяет проголосовать в одном дебате дважды.
-            </p>
-          </div>
-        </div>
+            <div className="min-w-0">
+              <p className="truncate text-lg font-bold tracking-tight text-white lg:text-xl">{fullName}</p>
+              <p className="mt-0.5 text-xs text-white/50 lg:mt-1 lg:text-sm">Зритель DSU Debate</p>
+            </div>
+          </section>
 
-        <div className="mt-3 lg:mt-6">
-          <h3 className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-white/40 lg:mb-2 lg:text-xs">
-            Доступ администратора
-          </h3>
-          <div className="space-y-2 lg:space-y-3">
-            {status === "checking" && (
-              <div className="glass-panel rounded-xl border border-white/10 p-3 text-xs text-white/50 lg:rounded-2xl lg:p-4 lg:text-sm">
-                Проверка сессии…
-              </div>
-            )}
-
-            {status === "authed" && (
-              <div className="glass-panel space-y-2 rounded-xl border border-white/10 p-3 lg:space-y-3 lg:rounded-2xl lg:p-4">
-                <div className="flex items-center gap-2 text-xs font-medium text-white lg:text-sm">
-                  <ShieldCheck size={15} className="text-emerald-400 lg:h-4 lg:w-4" />
-                  Администратор авторизован
+          <div className="profile-sections mt-4 grid min-h-0 flex-1 gap-4 lg:grid-cols-2">
+            <section className="flex min-h-0 flex-col">
+              <h2 className="profile-section-heading mb-2 shrink-0 px-1 text-xs font-bold uppercase tracking-[0.12em] text-white/50 lg:text-sm">
+                Anti-fraud
+              </h2>
+              <div className="profile-panel glass-panel min-h-0 flex-1 rounded-2xl border border-white/10 p-4 lg:rounded-3xl lg:p-5">
+                <div className="flex items-center gap-2.5 text-sm font-semibold text-white lg:text-base">
+                  <ShieldCheck size={19} className="text-emerald-400" />
+                  Device fingerprint
                 </div>
-                <p className="text-[10px] leading-snug text-white/35 lg:text-[11px] lg:leading-relaxed">
-                  Вход запоминается в этом браузере (токен хранится 365 дней),
-                  поэтому при возвращении на сайт профиль снова авторизован.
+                <p className="mt-3 truncate rounded-xl bg-black/30 px-3 py-2.5 font-mono text-xs text-white/60 lg:text-sm">
+                  {fingerprint}
                 </p>
-                <Button variant="glass" fullWidth className="py-2.5 text-xs lg:py-4 lg:text-[15px]" onClick={() => void logout()}>
-                  <LogOut size={14} className="lg:h-4 lg:w-4" />
-                  Выйти
-                </Button>
-              </div>
-            )}
-
-            {status === "expired" && (
-              <>
-                <p className="rounded-xl border border-amber-400/20 bg-amber-400/10 p-2.5 text-[10px] leading-snug text-amber-300 lg:rounded-2xl lg:p-3 lg:text-xs lg:leading-relaxed">
-                  Сохранённая сессия истекла или недействительна. Войдите заново —
-                  кнопка «Создать» и панель администрирования снова станут доступны.
+                <p className="mt-3 text-xs leading-relaxed text-white/45 lg:text-sm">
+                  Уникальный идентификатор устройства, который вместе с IP-адресом
+                  не позволяет проголосовать в одном дебате дважды.
                 </p>
-                <AdminLoginForm compact onSuccess={handleLoggedIn} />
-              </>
-            )}
+              </div>
+            </section>
 
-            {status === "network" && (
-              <div className="glass-panel space-y-2 rounded-xl border border-white/10 p-3 lg:space-y-3 lg:rounded-2xl lg:p-4">
-                <p className="text-[10px] leading-snug text-rose-300 lg:text-xs lg:leading-relaxed">
-                  Не удалось связаться с сервером для проверки сессии. Это не
-                  выход из аккаунта — нажмите «Повторить».
+            <section className="flex min-h-0 flex-col">
+              <h2 className="profile-section-heading mb-2 shrink-0 px-1 text-xs font-bold uppercase tracking-[0.12em] text-white/50 lg:text-sm">
+                Доступ администратора
+              </h2>
+              <div className="profile-admin-content min-h-0 flex-1 space-y-3 overflow-hidden">
+                {status === "checking" && (
+                  <div className="glass-panel rounded-2xl border border-white/10 p-5 text-sm text-white/55 lg:rounded-3xl lg:text-base">
+                    Проверка сессии…
+                  </div>
+                )}
+
+                {status === "authed" && (
+                  <div className="glass-panel space-y-4 rounded-2xl border border-white/10 p-4 lg:rounded-3xl lg:p-5">
+                    <div className="flex items-center gap-2.5 text-sm font-semibold text-white lg:text-base">
+                      <ShieldCheck size={19} className="text-emerald-400" />
+                      Администратор авторизован
+                    </div>
+                    <p className="text-xs leading-relaxed text-white/45 lg:text-sm">
+                      Вход запоминается в этом браузере (токен хранится 365 дней),
+                      поэтому при возвращении на сайт профиль снова авторизован.
+                    </p>
+                    <Button variant="glass" fullWidth className="py-3 text-sm lg:py-3.5" onClick={() => void logout()}>
+                      <LogOut size={17} />
+                      Выйти
+                    </Button>
+                  </div>
+                )}
+
+                {status === "expired" && (
+                  <>
+                    <p className="rounded-2xl border border-amber-400/20 bg-amber-400/10 p-3 text-xs leading-relaxed text-amber-300">
+                      Сохранённая сессия истекла или недействительна. Войдите заново —
+                      кнопка «Создать» и панель администрирования снова станут доступны.
+                    </p>
+                    <div className="profile-login">
+                      <AdminLoginForm compact onSuccess={handleLoggedIn} />
+                    </div>
+                  </>
+                )}
+
+                {status === "network" && (
+                  <div className="glass-panel space-y-3 rounded-2xl border border-white/10 p-4 lg:rounded-3xl lg:p-5">
+                    <p className="text-xs leading-relaxed text-rose-300 lg:text-sm">
+                      Не удалось связаться с сервером для проверки сессии. Это не
+                      выход из аккаунта — нажмите «Повторить».
+                    </p>
+                    <Button variant="glass" fullWidth className="py-3 text-sm" onClick={() => void verifySession()}>
+                      <RefreshCw size={17} />
+                      Повторить
+                    </Button>
+                  </div>
+                )}
+
+                {status === "anonymous" && (
+                  <div className="profile-login">
+                    <AdminLoginForm onSuccess={handleLoggedIn} />
+                  </div>
+                )}
+
+                <details className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                  <summary className="flex cursor-pointer items-center gap-2 text-xs font-medium text-white/65 lg:text-sm">
+                    <KeyRound size={16} /> Вставить JWT вручную
+                  </summary>
+                  <div className="mt-3 space-y-3">
+                    <input
+                      value={token}
+                      onChange={(event) => setToken(event.target.value)}
+                      placeholder="JWT администратора"
+                      className="w-full bg-transparent font-mono text-xs text-white placeholder:text-white/25 outline-none"
+                    />
+                    <Button
+                      variant="glass"
+                      fullWidth
+                      className="py-3 text-sm"
+                      onClick={() => {
+                        setAdminToken(token.trim());
+                        void verifySession();
+                        setSaved(true);
+                        setTimeout(() => setSaved(false), 1500);
+                      }}
+                    >
+                      {saved ? "Сохранено ✓" : "Сохранить токен"}
+                    </Button>
+                  </div>
+                </details>
+
+                <p className="px-1 text-xs leading-relaxed text-white/40 lg:text-sm">
+                  Кнопка «Создать» в нижней панели появляется только после входа
+                  администратора. JWT хранится только в этом браузере и передаётся
+                  в защищённые admin-запросы.
                 </p>
-                <Button variant="glass" fullWidth className="py-2.5 text-xs lg:py-4 lg:text-[15px]" onClick={() => void verifySession()}>
-                  <RefreshCw size={14} className="lg:h-[15px] lg:w-[15px]" />
-                  Повторить
-                </Button>
               </div>
-            )}
-
-            {status === "anonymous" && (
-              <AdminLoginForm compact onSuccess={handleLoggedIn} />
-            )}
-
-            <details className="rounded-xl border border-white/10 bg-white/5 p-2.5 lg:p-3">
-              <summary className="flex cursor-pointer items-center gap-2 text-[10px] text-white/55 lg:text-xs">
-                <KeyRound size={14} /> Вставить JWT вручную
-              </summary>
-              <div className="mt-2 space-y-2 lg:mt-3 lg:space-y-3">
-                <input
-                  value={token}
-                  onChange={(event) => setToken(event.target.value)}
-                  placeholder="JWT администратора"
-                  className="w-full bg-transparent font-mono text-[9px] text-white placeholder:text-white/20 outline-none lg:text-[10px]"
-                />
-                <Button
-                  variant="glass"
-                  fullWidth
-                  className="py-2.5 text-xs lg:py-4 lg:text-[15px]"
-                  onClick={() => {
-                    setAdminToken(token.trim());
-                    void verifySession();
-                    setSaved(true);
-                    setTimeout(() => setSaved(false), 1500);
-                  }}
-                >
-                  {saved ? "Сохранено ✓" : "Сохранить токен"}
-                </Button>
-              </div>
-            </details>
-
-            <p className="text-[10px] leading-snug text-white/35 lg:text-[11px] lg:leading-relaxed">
-              Кнопка «Создать» в нижней панели появляется только после входа
-              администратора. JWT хранится только в этом браузере и передаётся
-              в защищённые admin-запросы.
-            </p>
+            </section>
           </div>
-        </div>
 
-        <p className="mt-4 border-t border-white/5 pt-3 text-center text-[10px] leading-snug text-white/30 lg:mt-10 lg:pt-5 lg:text-[11px] lg:leading-relaxed">
-          Платформа DSU Debate разработана для СНО ДГУ от СНО ФИиИТ
-        </p>
+          <p className="profile-footer mt-3 shrink-0 border-t border-white/10 pt-3 text-center text-xs leading-relaxed text-white/35 lg:mt-4 lg:pt-4 lg:text-sm">
+            Платформа DSU Debate разработана для СНО ДГУ от СНО ФиИИТ
+          </p>
+        </div>
       </div>
 
       <BottomNav />
