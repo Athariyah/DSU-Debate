@@ -94,7 +94,7 @@ export function SplashPage() {
   const slide = SLIDES[page];
 
   return (
-    <div className="relative flex h-full flex-col overflow-hidden px-7 pb-[calc(env(safe-area-inset-bottom,0px)+2rem)] pt-[calc(env(safe-area-inset-top,0px)+3.5rem)]">
+    <div className="relative flex h-full flex-col overflow-hidden px-7 pb-[calc(env(safe-area-inset-bottom,0px)+2rem)] pt-[calc(env(safe-area-inset-top,0px)+3.5rem)] [@media(max-height:700px)]:pt-[calc(env(safe-area-inset-top,0px)+1.75rem)]">
       <SplashBackdrop />
 
       <div className="relative flex-1">
@@ -117,7 +117,7 @@ export function SplashPage() {
           >
             <SlideArt art={slide.art} />
 
-            <div className="mt-12 flex flex-col items-center text-center">
+            <div className="mt-12 flex flex-col items-center text-center [@media(max-height:700px)]:mt-7">
               {slide.art !== "logo" && (
                 <motion.span
                   initial={{ opacity: 0, y: 8, scale: 0.9 }}
@@ -249,7 +249,7 @@ function SplashBackdrop() {
 function SlideArt({ art }: { art: Slide["art"] }) {
   if (art === "phone") {
     return (
-      <div className="relative flex h-52 w-52 items-center justify-center">
+      <div className="relative flex h-52 w-52 items-center justify-center [@media(max-height:700px)]:h-40 [@media(max-height:700px)]:w-40">
         <div className="absolute h-40 w-40 rounded-full bg-indigo-500/25 blur-3xl" />
         <motion.div
           className="animate-float-y relative flex h-40 w-24 -rotate-3 flex-col items-center rounded-[1.6rem] border border-white/20 bg-gradient-to-b from-white/15 to-white/[0.03] shadow-[0_20px_50px_-16px_rgba(99,102,241,0.7)] backdrop-blur-md"
@@ -283,7 +283,7 @@ function SlideArt({ art }: { art: Slide["art"] }) {
 
   if (art === "screen") {
     return (
-      <div className="relative flex h-52 w-52 items-center justify-center">
+      <div className="relative flex h-52 w-52 items-center justify-center [@media(max-height:700px)]:h-40 [@media(max-height:700px)]:w-40">
         <div className="absolute h-40 w-40 rounded-full bg-sky-500/20 blur-3xl" />
         <motion.div
           className="animate-float-y relative flex h-32 w-44 rotate-2 flex-col rounded-[1.2rem] border border-white/20 bg-gradient-to-b from-white/10 to-white/[0.03] p-3 shadow-[0_20px_50px_-16px_rgba(56,189,248,0.6)] backdrop-blur-md"
@@ -316,7 +316,7 @@ function SlideArt({ art }: { art: Slide["art"] }) {
 
   // Брендовый мотив — две пересекающиеся «стеклянные» плашки логотипа.
   return (
-    <div className="relative flex h-52 w-52 items-center justify-center">
+    <div className="relative flex h-52 w-52 items-center justify-center [@media(max-height:700px)]:h-40 [@media(max-height:700px)]:w-40">
       <div className="absolute h-40 w-40 rounded-full bg-indigo-500/30 blur-3xl" />
       <div className="absolute h-32 w-32 rounded-full bg-sky-400/20 blur-2xl" />
       <motion.div
