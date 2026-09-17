@@ -91,6 +91,17 @@ describe("меню «три точки»", () => {
     expect(panel.className).not.toContain("glass-panel");
   });
 
+  test("трансляция доступна только в десктопном меню", async () => {
+    renderDetail();
+    await screen.findByText(TOPIC);
+
+    fireEvent.click(screen.getByLabelText("Меню"));
+    const broadcast = screen.getByText("Трансляция на экран").closest("button");
+
+    expect(broadcast?.className).toContain("hidden");
+    expect(broadcast?.className).toContain("lg:flex");
+  });
+
   test("прежние пункты меню на месте", async () => {
     renderDetail();
     await screen.findByText(TOPIC);

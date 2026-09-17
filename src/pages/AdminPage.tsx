@@ -243,7 +243,7 @@ export function AdminPage() {
                     <p className="text-xs font-semibold text-white">Таймер голосования</p>
                     <p className="truncate text-[11px] text-white/35">
                       {event.votingDurationMinutes
-                        ? `Через ${event.votingDurationMinutes} мин. голосование закроется само`
+                        ? `После запуска: ${event.votingDurationMinutes} мин. до автостопа`
                         : "Выключен — до смены статуса вручную"}
                     </p>
                   </div>

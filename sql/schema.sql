@@ -77,6 +77,8 @@ CREATE TABLE IF NOT EXISTS events (
   title           VARCHAR(500) NOT NULL,
   status          event_status NOT NULL DEFAULT 'upcoming',
   date_time       TIMESTAMPTZ  NOT NULL,
+  -- Фактический старт таймера: заполняется при переводе дебата в active.
+  voting_started_at TIMESTAMPTZ,
   created_by      INTEGER      NOT NULL,
   created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
   updated_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),

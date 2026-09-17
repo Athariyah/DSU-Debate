@@ -173,7 +173,7 @@ export function CreateDebatePage() {
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-white">Автостоп голосования</p>
               <p className="text-[11px] leading-relaxed text-white/35">
-                Опционально: после интервала голосование закроется само
+                Опционально: после запуска голосование закроется само через этот интервал
               </p>
             </div>
             <input

@@ -14,6 +14,8 @@ export interface EventRecord {
   date_time: Date;
   /** Длительность голосования в минутах (NULL — таймер выключен). */
   voting_duration_minutes: number | null;
+  /** Фактический момент запуска активного голосования. */
+  voting_started_at: Date | null;
   created_by: number;
   created_at: Date;
   updated_at: Date;

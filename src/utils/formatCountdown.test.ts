@@ -7,6 +7,10 @@ const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
 describe("formatCountdown", () => {
+  test("десять минут — 10:00, без пересчёта в часы", () => {
+    expect(formatCountdown(10 * MINUTE)).toBe("10:00");
+  });
+
   test("меньше минуты — мм:сс", () => {
     expect(formatCountdown(42 * SECOND)).toBe("00:42");
   });

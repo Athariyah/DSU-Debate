@@ -143,6 +143,7 @@ export function DebateDetailPage() {
             <MenuItem
               icon={MonitorPlay}
               label="Трансляция на экран"
+              className="hidden lg:flex"
               onClick={() => {
                 setMenuOpen(false);
                 navigate(`/broadcast/${event.id}`);
@@ -270,15 +271,20 @@ function MenuItem({
   icon: Icon,
   label,
   onClick,
+  className,
 }: {
   icon: typeof Link2;
   label: string;
   onClick: () => void;
+  className?: string;
 }) {
   return (
     <button
       onClick={onClick}
-      className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-white/80 transition hover:bg-white/10"
+      className={cn(
+        "flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-white/80 transition hover:bg-white/10",
+        className
+      )}
     >
       <Icon size={16} className="text-white opacity-50" />
       {label}

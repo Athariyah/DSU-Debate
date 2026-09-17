@@ -25,7 +25,7 @@ export interface DebateEvent {
   scheduledAt: string;
   /** Длительность таймера голосования в минутах (null/отсутствует — выключен). */
   votingDurationMinutes?: number | null;
-  /** Дедлайн голосования (ISO): scheduledAt + длительность. */
+  /** Дедлайн голосования (ISO): фактический старт + длительность. */
   votingEndsAt?: string | null;
   totalVotes: number;
   participants: Participant[];

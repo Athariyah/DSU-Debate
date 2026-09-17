@@ -5,7 +5,7 @@ import { broadcastEventStatusChanged } from "../sockets";
  * Фоновый таймер голосования.
  *
  * Раз в intervalMs ищет активные события, у которых интервал
- * «дата_время + длительность» уже истёк, переводит их в «completed»
+ * «время запуска + длительность» уже истёк, переводит их в «completed»
  * и рассылает всем клиентам дебата событие смены статуса — так голосование
  * останавливается само по себе, без участия администратора:
  *   - фронтенд получает `event:status_changed` и блокирует кнопку «Голосовать»;
@@ -23,7 +23,8 @@ export function startVotingTimer(intervalMs = 15_000): () => void {
          SET status = 'completed'
          WHERE status = 'active'
            AND voting_duration_minutes IS NOT NULL
-           AND date_time + make_interval(secs => voting_duration_minutes * 60) <= now()
+           AND COALESCE(voting_started_at, date_time)
+             + make_interval(secs => voting_duration_minutes * 60) <= now()
          RETURNING id`
       );
       for (const row of result.rows) {

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { LogIn } from "lucide-react";
+import { cn } from "../../utils/cn";
 import { Button } from "../ui/Button";
 import { loginAdmin } from "../../api/debates";
 import { getAdminToken, setAdminToken } from "../../api/httpClient";
@@ -9,6 +10,8 @@ import { markAuthed } from "../../api/authStore";
 interface AdminLoginFormProps {
   title?: string;
   subtitle?: string;
+  /** Компактная версия для профиля на небольших экранах. */
+  compact?: boolean;
   /** Вызывается после успешного входа (токен уже сохранён). */
   onSuccess?: () => void;
 }
@@ -20,7 +23,12 @@ interface AdminLoginFormProps {
  * Регистрации здесь намеренно нет: новые администраторы создаются только
  * серверными командами (npm run admin:add), а не из публичной формы.
  */
-export function AdminLoginForm({ title = "Вход администратора", subtitle, onSuccess }: AdminLoginFormProps) {
+export function AdminLoginForm({
+  title = "Вход администратора",
+  subtitle,
+  compact = false,
+  onSuccess,
+}: AdminLoginFormProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loggingIn, setLoggingIn] = useState(false);
@@ -62,10 +70,17 @@ export function AdminLoginForm({ title = "Вход администратора"
   }
 
   return (
-    <div className="glass-panel space-y-3 rounded-2xl border border-white/10 p-4">
+    <div
+      className={cn(
+        "glass-panel space-y-3 rounded-2xl border border-white/10 p-4",
+        compact && "space-y-2 p-3"
+      )}
+    >
       <div>
-        <p className="text-sm font-semibold text-white">{title}</p>
-        {subtitle && <p className="mt-1 text-xs leading-relaxed text-white/45">{subtitle}</p>}
+        <p className={cn("text-sm font-semibold text-white", compact && "text-xs")}>{title}</p>
+        {subtitle && (
+          <p className={cn("mt-1 text-xs leading-relaxed text-white/45", compact && "text-[10px]")}>{subtitle}</p>
+        )}
       </div>
 
       <input
@@ -73,19 +88,30 @@ export function AdminLoginForm({ title = "Вход администратора"
         onChange={(event) => setEmail(event.target.value)}
         type="email"
         placeholder="Email администратора"
-        className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-xs text-white placeholder:text-white/25 outline-none focus:border-indigo-400/60"
+        className={cn(
+          "w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-xs text-white placeholder:text-white/25 outline-none focus:border-indigo-400/60",
+          compact && "py-2"
+        )}
       />
       <input
         value={password}
         onChange={(event) => setPassword(event.target.value)}
         type="password"
         placeholder="Пароль"
-        className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-xs text-white placeholder:text-white/25 outline-none focus:border-indigo-400/60"
+        className={cn(
+          "w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-xs text-white placeholder:text-white/25 outline-none focus:border-indigo-400/60",
+          compact && "py-2"
+        )}
       />
       {error && <p className="text-xs text-rose-400">{error}</p>}
 
-      <Button fullWidth onClick={() => void submit()} disabled={loggingIn || !email || !password}>
-        <LogIn size={16} />
+      <Button
+        fullWidth
+        onClick={() => void submit()}
+        disabled={loggingIn || !email || !password}
+        className={compact ? "py-2.5 text-xs" : undefined}
+      >
+        <LogIn size={compact ? 14 : 16} />
         {loggingIn ? "Подождите…" : "Войти"}
       </Button>
     </div>
