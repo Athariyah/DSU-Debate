@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Clock3, Loader2, Maximize2, Minimize2, Wifi, WifiOff, X } from "lucide-react";
+import { Clock3, Loader2, Maximize2, Minimize2, Pencil, Wifi, WifiOff, X } from "lucide-react";
 import { fetchDebateById } from "../api/debates";
 import { useDebateSocket, type RealtimeStatus } from "../hooks/useDebateSocket";
 import { AnimatedNumber } from "../components/ui/AnimatedNumber";
 import { BroadcastParticipantCard } from "../components/broadcast/BroadcastParticipantCard";
 import { WinnerReveal } from "../components/broadcast/WinnerReveal";
 import { computeStandings } from "../components/broadcast/standings";
+import { BroadcastQrCard } from "../components/broadcast/BroadcastQrCard";
 import { cn } from "../utils/cn";
 import { formatCountdown } from "../utils/formatCountdown";
 import type { DebateEvent, DebateStatus, Participant } from "../types";
@@ -29,6 +30,9 @@ const CONNECTION_TEXT: Record<RealtimeStatus, string> = {
   offline: `Обновление каждые ${FALLBACK_POLL_MS / 1000} с`,
   "demo-offline": "Демо-режим",
 };
+
+/** Ключ localStorage: кастомный текст организатора на трансляции дебата. */
+const noteKeyFor = (eventId: string) => `dsu-broadcast-note-${eventId}`;
 
 /**
  * Экран трансляции голосования для больших экранов (телевизор, проектор).
@@ -52,7 +56,18 @@ export function BroadcastPage() {
   const [viewportWidth, setViewportWidth] = useState(() =>
     typeof window === "undefined" ? 1920 : window.innerWidth
   );
+  /** Кастомный текст организатора — выводится на трансляции баннером. */
+  const [customText, setCustomText] = useState("");
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editorDraft, setEditorDraft] = useState("");
   const revealedRef = useRef(false);
+
+  // Заметка хранится локально по идентификатору дебата: открыли трансляцию —
+  // подтянулся последний сохранённый текст.
+  useEffect(() => {
+    if (!id) return;
+    setCustomText(localStorage.getItem(noteKeyFor(id)) ?? "");
+  }, [id]);
 
   /** Назад в приложение: если экран открыт прямой ссылкой — на страницу дебата. */
   const goBack = useCallback(() => {
@@ -153,12 +168,13 @@ export function BroadcastPage() {
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
-      if (revealOpen) setRevealOpen(false);
+      if (editorOpen) setEditorOpen(false);
+      else if (revealOpen) setRevealOpen(false);
       else goBack();
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [revealOpen, goBack]);
+  }, [editorOpen, revealOpen, goBack]);
 
   const standings = useMemo(() => computeStandings(participants), [participants]);
   const columns = useMemo(
@@ -172,6 +188,23 @@ export function BroadcastPage() {
     votingEndsAtMs !== null && eventStatus === "active"
       ? votingEndsAtMs - clock.getTime()
       : null;
+
+  /** Открыть редактор кастомного текста для зала. */
+  function openNoteEditor() {
+    setEditorDraft(customText);
+    setEditorOpen(true);
+  }
+
+  /** Сохранить кастомный текст (или очистить пустым) и показать на экране. */
+  function saveNote() {
+    const text = editorDraft.trim();
+    setCustomText(text);
+    if (id) {
+      if (text) localStorage.setItem(noteKeyFor(id), text);
+      else localStorage.removeItem(noteKeyFor(id));
+    }
+    setEditorOpen(false);
+  }
 
   async function toggleFullscreen() {
     try {
@@ -207,6 +240,8 @@ export function BroadcastPage() {
 
   const finished = eventStatus === "completed";
   const scheduled = new Date(event.scheduledAt);
+  // QR-код ведёт на страницу голосования этого дебата на текущем хосте.
+  const voteUrl = `${window.location.origin}/debate/${id}`;
 
   return (
     <div className="broadcast-bg relative flex min-h-dvh w-full flex-col overflow-hidden font-sans text-white">
@@ -262,6 +297,9 @@ export function BroadcastPage() {
           </span>
 
           <div className="flex items-center gap-1">
+            <IconButton label="Кастомный текст на трансляции" onClick={openNoteEditor}>
+              <Pencil size={16} />
+            </IconButton>
             <IconButton label={isFullscreen ? "Выйти из полного экрана" : "Во весь экран"} onClick={() => void toggleFullscreen()}>
               {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
             </IconButton>
@@ -292,9 +330,17 @@ export function BroadcastPage() {
                 : "результаты обновляются в реальном времени"
               : "старт по расписанию"}
         </p>
+
+        {customText && (
+          <p className="mt-[clamp(0.75rem,1.6vw,1.75rem)] inline-block max-w-[60ch] rounded-2xl border border-indigo-300/25 bg-gradient-to-r from-indigo-500/20 via-violet-500/15 to-sky-500/15 px-[clamp(0.9rem,1.6vw,2rem)] py-[clamp(0.5rem,1vw,1.1rem)] text-[clamp(0.85rem,1.5vw,1.9rem)] font-semibold leading-snug text-indigo-100 shadow-[0_16px_40px_-20px_rgba(99,102,241,0.8)]">
+            {customText}
+          </p>
+        )}
       </div>
 
-      <main className="no-scrollbar flex-1 overflow-y-auto px-[clamp(1rem,3vw,3.5rem)] pb-[clamp(1rem,2.5vw,2.5rem)] pt-[clamp(0.75rem,2vw,2rem)]">
+      {/* На десктопе снизу справа лежит QR-карточка — снизу добавлен запас,
+          чтобы участники докручивались выше неё. На мобильном QR идёт в потоке. */}
+      <main className="no-scrollbar flex-1 overflow-y-auto px-[clamp(1rem,3vw,3.5rem)] pb-[clamp(1rem,2.5vw,2.5rem)] pt-[clamp(0.75rem,2vw,2rem)] lg:pb-[clamp(11rem,17vw,15rem)]">
         {participants.length === 0 ? (
           <p className="rounded-3xl border border-white/10 bg-white/[0.03] p-10 text-center text-[clamp(0.9rem,1.4vw,1.75rem)] text-white/45">
             Участники ещё не добавлены
@@ -317,7 +363,64 @@ export function BroadcastPage() {
             ))}
           </div>
         )}
+
+        {/* Мобильная/планшетная трансляция: QR идёт в потоке после карточек. */}
+        <div className="mt-[clamp(1rem,2vw,2rem)] lg:hidden">
+          <BroadcastQrCard voteUrl={voteUrl} className="w-full" />
+        </div>
       </main>
+
+      {/* Большой экран: QR-код на голосование виден всегда, справа снизу. */}
+      <div className="pointer-events-none absolute bottom-0 right-0 z-20 hidden p-[clamp(1rem,2vw,2.5rem)] lg:block">
+        <BroadcastQrCard voteUrl={voteUrl} />
+      </div>
+
+      {/* Редактор кастомного текста для зала. */}
+      {editorOpen && (
+        <div className="fixed inset-x-0 bottom-6 z-40 flex justify-center px-4">
+          <div className="glass-panel w-full max-w-xl rounded-2xl border border-white/15 p-4 shadow-[0_30px_80px_-30px_rgba(2,6,23,1)]">
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-white/45">
+              Текст на трансляции
+            </p>
+            <input
+              autoFocus
+              value={editorDraft}
+              onChange={(event) => setEditorDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") saveNote();
+              }}
+              placeholder="Например: сканируйте QR и голосуйте за свою команду"
+              maxLength={140}
+              className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-indigo-300/50"
+            />
+            <div className="mt-3 flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => setEditorDraft("")}
+                className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white/40 transition hover:bg-white/5 hover:text-white"
+              >
+                Очистить
+              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditorOpen(false)}
+                  className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/70 transition hover:border-white/25 hover:text-white"
+                >
+                  Отмена
+                </button>
+                <button
+                  type="button"
+                  onClick={saveNote}
+                  className="rounded-lg border border-indigo-300/30 bg-gradient-to-r from-indigo-500 to-violet-500 px-4 py-1.5 text-xs font-bold text-white shadow-[0_8px_20px_-8px_rgba(99,102,241,0.9)] transition hover:brightness-110 active:scale-95"
+                >
+                  Показать
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <WinnerReveal
         topic={event.title}
