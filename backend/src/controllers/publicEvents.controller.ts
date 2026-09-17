@@ -35,8 +35,18 @@ function publicEventResponse(event: EventRecord, results: Awaited<ReturnType<typ
   };
 }
 
+/**
+ * Условия публичности: дебаты, скрытые от обычных пользователей
+ * (hidden_from_public = TRUE), не попадают ни в один публичный ответ —
+ * для них публичные маршруты отвечают 404, как если бы их не существовало.
+ */
+const PUBLIC_EVENT_FILTER = "COALESCE(hidden_from_public, FALSE) = FALSE";
+
 async function loadPublicEvent(eventId: number) {
-  const eventResult = await pool.query<EventRecord>("SELECT * FROM events WHERE id = $1", [eventId]);
+  const eventResult = await pool.query<EventRecord>(
+    `SELECT * FROM events WHERE id = $1 AND ${PUBLIC_EVENT_FILTER}`,
+    [eventId]
+  );
   if (eventResult.rowCount === 0) {
     throw new ApiError(404, "EVENT_NOT_FOUND", "Мероприятие не найдено");
   }
@@ -53,7 +63,9 @@ async function loadPublicEvent(eventId: number) {
 /** GET /api/events/upcoming */
 export const listUpcomingEvents = asyncHandler(async (_req: Request, res: Response) => {
   const events = await pool.query<EventRecord>(
-    "SELECT * FROM events WHERE status = 'upcoming' ORDER BY date_time ASC"
+    `SELECT * FROM events
+     WHERE status = 'upcoming' AND ${PUBLIC_EVENT_FILTER}
+     ORDER BY date_time ASC`
   );
 
   const responses = await Promise.all(events.rows.map((event) => loadPublicEvent(event.id)));
@@ -65,9 +77,11 @@ export const listCompletedEvents = asyncHandler(async (req: Request, res: Respon
   const page = Math.max(parseInt(String(req.query.page ?? "1"), 10) || 1, 1);
   const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? "20"), 10) || 20, 1), 100);
   const offset = (page - 1) * limit;
-  const count = await pool.query<{ count: string }>("SELECT COUNT(*)::text AS count FROM events WHERE status = 'completed'");
+  const count = await pool.query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM events WHERE status = 'completed' AND ${PUBLIC_EVENT_FILTER}`);
   const events = await pool.query<EventRecord>(
-    "SELECT * FROM events WHERE status = 'completed' ORDER BY date_time DESC LIMIT $1 OFFSET $2",
+    `SELECT * FROM events
+     WHERE status = 'completed' AND ${PUBLIC_EVENT_FILTER}
+     ORDER BY date_time DESC LIMIT $1 OFFSET $2`,
     [limit, offset]
   );
   const items = await Promise.all(events.rows.map((event) => loadPublicEvent(event.id)));

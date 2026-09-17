@@ -14,6 +14,12 @@ interface UseDebateSocketArgs {
   initialTotalVotes: number;
   /** Закрытое голосование: флажок «Скрыть голоса» из админки. */
   initialVotesHidden: boolean;
+  /**
+   * Флажок «Скрыть от публики» переключился в админке. hidden = true —
+   * дебат больше не публичный (страницу обычного пользователя укрываем),
+   * false — снова публичный (можно подгрузить данные заново).
+   */
+  onPublicVisibility?: (hiddenFromPublic: boolean) => void;
 }
 
 interface UseDebateSocketResult {
@@ -48,6 +54,11 @@ interface VisibilityPayload {
   votesHidden: boolean;
 }
 
+interface PublicVisibilityPayload {
+  eventId: number;
+  hiddenFromPublic: boolean;
+}
+
 type RealtimePayload = VoteUpdatePayload | BackendRealtimePayload;
 
 export function useDebateSocket({
@@ -56,6 +67,7 @@ export function useDebateSocket({
   initialParticipants,
   initialTotalVotes,
   initialVotesHidden,
+  onPublicVisibility,
 }: UseDebateSocketArgs): UseDebateSocketResult {
   const [participants, setParticipants] = useState<Participant[]>(initialParticipants);
   const [totalVotes, setTotalVotes] = useState(initialTotalVotes);
@@ -63,6 +75,9 @@ export function useDebateSocket({
   const [votesHidden, setVotesHidden] = useState(initialVotesHidden);
   const [status, setStatus] = useState<RealtimeStatus>("connecting");
   const hasLiveConnection = useRef(false);
+  // Колбэк храним в ref, чтобы не переподключать сокет при каждом рендере.
+  const onPublicVisibilityRef = useRef(onPublicVisibility);
+  onPublicVisibilityRef.current = onPublicVisibility;
 
   useEffect(() => {
     setParticipants(initialParticipants);
@@ -107,6 +122,13 @@ export function useDebateSocket({
       if (Number(payload.eventId) === eventId) setVotesHidden(Boolean(payload.votesHidden));
     };
 
+    // Флажок «Скрыть от публики»: сообщаем странице — она сама решает,
+    // что показывать (укрыть экран или подгрузить данные заново).
+    const applyPublicVisibility = (payload: PublicVisibilityPayload) => {
+      if (Number(payload.eventId) !== eventId) return;
+      onPublicVisibilityRef.current?.(Boolean(payload.hiddenFromPublic));
+    };
+
     const handleConnect = () => {
       hasLiveConnection.current = true;
       setStatus("live");
@@ -123,6 +145,7 @@ export function useDebateSocket({
     socket.on("vote:update", applyUpdate);
     socket.on("event:status_changed", applyStatus);
     socket.on("event:votes_visibility", applyVisibility);
+    socket.on("event:public_visibility", applyPublicVisibility);
 
     if (socket.connected) handleConnect();
 
@@ -140,6 +163,7 @@ export function useDebateSocket({
       socket.off("vote:update", applyUpdate);
       socket.off("event:status_changed", applyStatus);
       socket.off("event:votes_visibility", applyVisibility);
+      socket.off("event:public_visibility", applyPublicVisibility);
       if (socket.connected) socket.emit("leave_debate", eventId);
       demoUnsubscribe?.();
     };

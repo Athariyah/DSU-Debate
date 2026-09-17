@@ -18,6 +18,8 @@ export interface EventRecord {
   voting_started_at: Date | null;
   /** TRUE — результаты скрыты от зрителей (закрытое голосование). */
   votes_hidden: boolean;
+  /** TRUE — дебат скрыт от обычных пользователей (виден только администраторам). */
+  hidden_from_public: boolean;
   created_by: number;
   created_at: Date;
   updated_at: Date;

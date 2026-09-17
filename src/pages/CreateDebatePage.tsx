@@ -1,11 +1,13 @@
 import { useState } from "react";
+import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { Loader2, Plus, Timer, Type, X } from "lucide-react";
+import { Loader2, Plus, Timer, Type, UserX, Users, X } from "lucide-react";
 import { TopBar } from "../components/layout/TopBar";
 import { Button } from "../components/ui/Button";
 import { DateTimeField } from "../components/ui/DateTimeField";
 import { IconChip } from "../components/ui/IconChip";
 import { createDebate } from "../api/debates";
+import { cn } from "../utils/cn";
 
 interface DraftParticipant {
   id: string;
@@ -24,6 +26,8 @@ export function CreateDebatePage() {
   const [scheduledAt, setScheduledAt] = useState("");
   /** Опциональный таймер голосования, минуты (пусто — выключен). */
   const [durationMinutes, setDurationMinutes] = useState("");
+  /** Флажок: дебат не показывать обычным пользователям. */
+  const [hiddenFromPublic, setHiddenFromPublic] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,6 +70,7 @@ export function CreateDebatePage() {
           parsedDuration === null || !Number.isFinite(parsedDuration)
             ? null
             : Math.min(1440, Math.max(1, Math.round(parsedDuration))),
+        hiddenFromPublic,
       });
       navigate("/admin");
     } catch (createError) {
@@ -188,6 +193,50 @@ export function CreateDebatePage() {
               className="w-16 rounded-xl border border-white/10 bg-black/25 px-2 py-2 text-center text-sm font-semibold tabular-nums text-white outline-none transition focus:border-indigo-300/50 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
             />
             <span className="text-xs text-white/45">мин</span>
+          </div>
+        </section>
+
+        <section className="mt-6">
+          <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-white/40">
+            Видимость
+          </label>
+          <div
+            className={cn(
+              "flex items-center gap-3 rounded-2xl border px-4 py-3 transition-colors duration-300",
+              hiddenFromPublic
+                ? "border-amber-300/30 bg-amber-400/[0.08]"
+                : "glass-panel border-white/10"
+            )}
+          >
+            <IconChip icon={hiddenFromPublic ? UserX : Users} iconSize={15} tone={hiddenFromPublic ? "accent" : "neutral"} />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-white">Скрыть от публики</p>
+              <p className="text-[11px] leading-relaxed text-white/35">
+                {hiddenFromPublic
+                  ? "Дебат будет виден только администраторам"
+                  : "Дебат будет виден обычным пользователям"}
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={hiddenFromPublic}
+              aria-label="Скрыть дебат от обычных пользователей"
+              onClick={() => setHiddenFromPublic((value) => !value)}
+              className={cn(
+                "relative h-[26px] w-11 shrink-0 rounded-full border transition-colors duration-300",
+                hiddenFromPublic
+                  ? "border-amber-300/50 bg-gradient-to-r from-amber-500/80 via-orange-500/70 to-amber-400/80 shadow-[0_4px_16px_-4px_rgba(245,158,11,0.75),inset_0_1px_0_rgba(255,255,255,0.25)]"
+                  : "border-white/15 bg-black/30 shadow-[inset_0_2px_6px_rgba(0,0,0,0.35)]"
+              )}
+            >
+              <motion.span
+                aria-hidden
+                className="absolute left-1 top-1 h-[18px] w-[18px] rounded-full bg-white shadow-[0_2px_6px_rgba(0,0,0,0.45)]"
+                animate={{ x: hiddenFromPublic ? 18 : 0 }}
+                transition={{ type: "spring", stiffness: 500, damping: 30 }}
+              />
+            </button>
           </div>
         </section>
 

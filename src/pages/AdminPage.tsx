@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Check, ChevronDown, ChevronUp, Eye, EyeOff, Pencil, Plus, Save, Timer, Trash2 } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Eye, EyeOff, Pencil, Plus, Save, Timer, Trash2, UserX, Users } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { TopBar } from "../components/layout/TopBar";
 import { Button } from "../components/ui/Button";
@@ -79,6 +79,7 @@ export function AdminPage() {
         dateTime: new Date(event.dateTime).toISOString(),
         votingDurationMinutes: event.votingDurationMinutes ?? null,
         votesHidden: event.votesHidden ?? false,
+        hiddenFromPublic: event.hiddenFromPublic ?? false,
       });
       setEvents((current) => current.map((item) => (item.id === saved.id ? saved : item)));
       if (saved.status === "active") await loadEvents();
@@ -309,6 +310,49 @@ export function AdminPage() {
                       aria-hidden
                       className="absolute left-1 top-1 h-[18px] w-[18px] rounded-full bg-white shadow-[0_2px_6px_rgba(0,0,0,0.45)]"
                       animate={{ x: event.votesHidden ? 18 : 0 }}
+                      transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                    />
+                  </button>
+                </div>
+
+                {/* Скрытый от публики дебат: обычные пользователи не видят его
+                    в списках, на главной и по прямой ссылке (сервер отвечает
+                    404), голосование по нему недоступно. Администраторам дебат
+                    остаётся видимым. Применяется по «Сохранить». */}
+                <div
+                  className={cn(
+                    "mt-3 flex items-center gap-3 rounded-2xl border px-3 py-2 transition-colors duration-300",
+                    event.hiddenFromPublic
+                      ? "border-amber-300/30 bg-amber-400/[0.08]"
+                      : "border-white/10 bg-white/5"
+                  )}
+                >
+                  <IconChip icon={event.hiddenFromPublic ? UserX : Users} iconSize={15} tone={event.hiddenFromPublic ? "accent" : "neutral"} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold text-white">Скрыть от публики</p>
+                    <p className="truncate text-[11px] text-white/35">
+                      {event.hiddenFromPublic
+                        ? "Включено — дебат виден только администраторам"
+                        : "Выключено — дебат виден всем"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={event.hiddenFromPublic}
+                    aria-label="Скрыть дебат от обычных пользователей"
+                    onClick={() => updateEventLocal(event.id, { hiddenFromPublic: !event.hiddenFromPublic })}
+                    className={cn(
+                      "relative h-[26px] w-11 shrink-0 rounded-full border transition-colors duration-300",
+                      event.hiddenFromPublic
+                        ? "border-amber-300/50 bg-gradient-to-r from-amber-500/80 via-orange-500/70 to-amber-400/80 shadow-[0_4px_16px_-4px_rgba(245,158,11,0.75),inset_0_1px_0_rgba(255,255,255,0.25)]"
+                        : "border-white/15 bg-black/30 shadow-[inset_0_2px_6px_rgba(0,0,0,0.35)]"
+                    )}
+                  >
+                    <motion.span
+                      aria-hidden
+                      className="absolute left-1 top-1 h-[18px] w-[18px] rounded-full bg-white shadow-[0_2px_6px_rgba(0,0,0,0.45)]"
+                      animate={{ x: event.hiddenFromPublic ? 18 : 0 }}
                       transition={{ type: "spring", stiffness: 500, damping: 30 }}
                     />
                   </button>
