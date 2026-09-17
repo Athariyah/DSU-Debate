@@ -95,7 +95,7 @@ export function CreateDebatePage() {
       {/* Стрелка «назад» всегда возвращает на панель администрирования. */}
       <TopBar showBack onBack={() => navigate("/admin")} title="Создать дебат" rightSlot="menu" />
 
-      <div className="no-scrollbar mx-auto flex-1 w-full max-w-3xl overflow-y-auto px-5 pb-8 pt-2 lg:px-8 lg:pt-6">
+      <div className="styled-scrollbar mx-auto flex-1 w-full max-w-3xl overflow-y-auto px-5 pb-8 pt-2 lg:px-8 lg:pt-6">
         <section>
           <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-white/40">
             Тип мероприятия
@@ -115,7 +115,7 @@ export function CreateDebatePage() {
               </button>
             ))}
           </div>
-          <p className="mt-2 text-[11px] text-white/30">Дебаты, турниры и опросы используют одинаковые голосования, но трансляция и таблиц�� адаптируются.</p>
+          <p className="mt-2 text-[11px] text-white/30">Дебаты, турниры и опросы используют одинаковые голосования, но трансляция и таблицы адаптируются.</p>
         </section>
 
         <section className="mt-6">

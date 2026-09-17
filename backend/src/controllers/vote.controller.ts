@@ -236,51 +236,56 @@ export const castVote = asyncHandler(async (req: Request, res: Response) => {
       );
     }
 
-    // --- ANTI-FRAUD: проверка дубликата по IP или device_fingerprint ---
-    const duplicateResult = await client.query<{
-      device_fingerprint: string;
-      ip_address: string;
-    }>(
-      `SELECT device_fingerprint, ip_address
-       FROM votes
-       WHERE event_id = $1 AND device_fingerprint = $2
-       LIMIT 1`,
+    // --- ANTI-FRAUD: один голос на устройство, но разрешаем менять выбор ---
+    const existingVote = await client.query<{ id: number; participant_id: number }>(
+      `SELECT id, participant_id FROM votes WHERE event_id = $1 AND device_fingerprint = $2 LIMIT 1`,
       [eventId, deviceFingerprint]
     );
 
-    if (duplicateResult.rowCount && duplicateResult.rowCount > 0) {
-      throw new ApiError(
-        409,
-        "DUPLICATE_VOTE",
-        "Вы уже голосовали в этом дебате"
-      );
-    }
-
-    // --- Запись голоса. UNIQUE(event_id, device_fingerprint) и
-    // UNIQUE(event_id, ip_address) в БД — второй рубеж защиты от гонок. ---
-    let insertResult;
-    try {
-      insertResult = await client.query<{ id: number; created_at: Date }>(
-        `INSERT INTO votes (event_id, participant_id, voter_name, device_fingerprint, ip_address)
-         VALUES ($1, $2, $3, $4, $5::inet)
-         RETURNING id, created_at`,
-        [eventId, participantId, voterName ?? null, deviceFingerprint, ipAddress]
-      );
-    } catch (err: unknown) {
-      // Код 23505 = unique_violation в PostgreSQL
-      if (
-        typeof err === "object" &&
-        err !== null &&
-        "code" in err &&
-        (err as { code?: string }).code === "23505"
-      ) {
-        throw new ApiError(409, "DUPLICATE_VOTE", "Вы уже голосовали в этом дебате");
+    if (existingVote.rowCount && existingVote.rowCount > 0) {
+      const existing = existingVote.rows[0];
+      if (existing.participant_id === participantId) {
+        throw new ApiError(409, "DUPLICATE_VOTE", "Вы уже голосовали за этого участника");
       }
-      throw err;
+      // Меняем голос — UPDATE вместо INSERT, сохраняем 1 запись на устройство
+      let updateResult;
+      try {
+        updateResult = await client.query<{ id: number; created_at: Date }>(
+          `UPDATE votes SET participant_id = $1, voter_name = $2, ip_address = $3::inet WHERE id = $4 RETURNING id, created_at`,
+          [participantId, voterName ?? null, ipAddress, existing.id]
+        );
+      } catch (err: unknown) {
+        if (typeof err === "object" && err !== null && "code" in err && (err as { code?: string }).code === "23505") {
+          throw new ApiError(409, "DUPLICATE_VOTE", "Вы уже голосовали в этом дебате");
+        }
+        throw err;
+      }
+      insertedVoteId = updateResult.rows[0].id;
+      insertedVoteCreatedAt = updateResult.rows[0].created_at;
+    } else {
+      // --- Запись голоса. UNIQUE(event_id, device_fingerprint) — второй рубеж защиты от гонок. ---
+      let insertResult;
+      try {
+        insertResult = await client.query<{ id: number; created_at: Date }>(
+          `INSERT INTO votes (event_id, participant_id, voter_name, device_fingerprint, ip_address)
+           VALUES ($1, $2, $3, $4, $5::inet)
+           RETURNING id, created_at`,
+          [eventId, participantId, voterName ?? null, deviceFingerprint, ipAddress]
+        );
+      } catch (err: unknown) {
+        if (
+          typeof err === "object" &&
+          err !== null &&
+          "code" in err &&
+          (err as { code?: string }).code === "23505"
+        ) {
+          throw new ApiError(409, "DUPLICATE_VOTE", "Вы уже голосовали в этом дебате");
+        }
+        throw err;
+      }
+      insertedVoteId = insertResult.rows[0].id;
+      insertedVoteCreatedAt = insertResult.rows[0].created_at;
     }
-
-    insertedVoteId = insertResult.rows[0].id;
-    insertedVoteCreatedAt = insertResult.rows[0].created_at;
 
     // --- Пересчёт процентов по ВСЕМ участникам этого дебата ---
     results = await computeEventResults(client, eventId);

@@ -234,7 +234,7 @@ export function DebateDetailPage() {
         </div>
       )}
 
-      <div className="no-scrollbar mx-auto flex-1 w-full max-w-2xl overflow-y-auto px-5 pb-8 lg:px-8">
+      <div className="styled-scrollbar mx-auto flex-1 w-full max-w-2xl overflow-y-auto px-5 pb-8 lg:px-8">
         <Badge tone={eventStatus === "active" ? "active" : "neutral"}>
           {eventStatus === "active" ? "Активный дебат" : eventStatus === "completed" ? "Завершён" : "Скоро"}
         </Badge>
@@ -284,7 +284,7 @@ export function DebateDetailPage() {
         </div>
 
         {/* Вкладки: Голосование / Лидеры / Таблица / Пьедестал — сохраняем привычный UI, не ломаем логику */}
-        <div className="mt-5 flex gap-1.5 overflow-x-auto rounded-2xl border border-white/10 bg-black/20 p-1">
+        <div className="mt-5 flex gap-1.5 overflow-x-auto styled-scrollbar rounded-2xl border border-white/10 bg-black/20 p-1">
           {([
             ["vote", "Голосование"],
             ["leaders", "Лидеры"],
@@ -338,14 +338,22 @@ export function DebateDetailPage() {
       <div className="mx-auto w-full max-w-2xl space-y-2 px-5 pb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] pt-2 lg:px-8">
         {voted ? (
           <>
-            <div className="glass-panel flex items-center justify-center gap-2 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-6 py-4 text-sm font-semibold text-emerald-300">
-              <CheckCircle2 size={18} />
-              Ваш голос учтён
+            <div className="glass-panel flex flex-col items-center justify-center gap-1 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-6 py-4 text-center">
+              <span className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-300">
+                <CheckCircle2 size={18} />
+                Ваш голос учтён{participants.find((p) => p.id === justVotedFor) ? ` — ${participants.find((p) => p.id === justVotedFor)!.name}` : ""}
+              </span>
+              <span className="text-xs text-emerald-200/60">Можно изменить, пока голосование активно</span>
             </div>
-            <Button variant="glass" fullWidth onClick={() => navigate("/home")}>
-              <Home size={16} />
-              На главный экран
-            </Button>
+            <div className="grid grid-cols-2 gap-2">
+              <Button fullWidth disabled={!canVote} onClick={() => setVoteModalOpen(true)}>
+                {canVote ? "Изменить голос" : timerExpired ? "Время вышло" : "Голосование закрыто"}
+              </Button>
+              <Button variant="glass" fullWidth onClick={() => navigate("/home")}>
+                <Home size={16} />
+                На главный
+              </Button>
+            </div>
           </>
         ) : (
           <Button fullWidth disabled={!canVote} onClick={() => setVoteModalOpen(true)}>
@@ -361,6 +369,7 @@ export function DebateDetailPage() {
       <VoteModal
         event={event}
         open={voteModalOpen}
+        preselectedParticipantId={justVotedFor}
         onClose={() => setVoteModalOpen(false)}
         onVoted={(participantId) => {
           setJustVotedFor(participantId);

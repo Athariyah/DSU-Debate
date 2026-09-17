@@ -101,6 +101,57 @@ body {
   scrollbar-width: none;
 }
 
+/* Стилизованный скроллбар сайта — вместо системного серого.
+   Тёмный полупрозрачный трек + индиго-фиолетовый градиент ползунка, скруглённый, с hover. */
+.styled-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.styled-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 9999px;
+  margin: 2px;
+}
+.styled-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(99, 102, 241, 0.75) 0%, rgba(139, 92, 246, 0.65) 100%);
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+}
+.styled-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(99, 102, 241, 0.95) 0%, rgba(139, 92, 246, 0.85) 100%);
+}
+.styled-scrollbar::-webkit-scrollbar-corner {
+  background: transparent;
+}
+.styled-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(99, 102, 241, 0.60) rgba(255, 255, 255, 0.06);
+  scrollbar-gutter: stable;
+}
+
+/* Глобально — чтобы даже системные полосы ( страница, модалки) были в стиле сайта */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(99, 102, 241, 0.50) rgba(255, 255, 255, 0.04);
+}
+html::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+html::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+}
+html::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(99, 102, 241, 0.60) 0%, rgba(139, 92, 246, 0.50) 100%);
+  border-radius: 9999px;
+  border: 2px solid rgba(7, 8, 15, 0.6);
+  background-clip: padding-box;
+}
+html::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(99, 102, 241, 0.85) 0%, rgba(139, 92, 246, 0.75) 100%);
+  background-clip: padding-box;
+}
+
 .app-shell-bg {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.015) 55%, rgba(255, 255, 255, 0.03) 100%),

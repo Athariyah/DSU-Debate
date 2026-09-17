@@ -55,7 +55,7 @@ export function ProfilePage() {
         блок .profile-content для max-width: 1023px). Масштаб текста
         при этом тот же: сжимаются только отступы.
       */}
-      <div className="profile-content no-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-[calc(env(safe-area-inset-bottom,0px)+4.75rem)] pt-1 sm:px-5 lg:px-10 lg:pb-7 lg:pt-4">
+      <div className="profile-content styled-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-[calc(env(safe-area-inset-bottom,0px)+4.75rem)] pt-1 sm:px-5 lg:px-10 lg:pb-7 lg:pt-4">
         <div className="profile-inner mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col">
           <section className="profile-identity glass-panel flex shrink-0 items-center gap-4 rounded-3xl border border-white/10 p-4 sm:p-5 lg:p-6">
             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-400 via-violet-500 to-sky-400 text-lg font-bold text-white shadow-[0_8px_24px_-10px_rgba(99,102,241,0.9)] lg:h-[4.5rem] lg:w-[4.5rem] lg:text-xl">

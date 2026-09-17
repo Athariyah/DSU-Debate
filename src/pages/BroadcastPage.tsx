@@ -343,7 +343,7 @@ export function BroadcastPage() {
 
       {/* На десктопе снизу справа лежит QR-карточка — снизу добавлен запас,
           чтобы участники докручивались выше неё. На мобильном QR идёт в потоке. */}
-      <main className="no-scrollbar flex-1 overflow-y-auto px-[clamp(1rem,3vw,3.5rem)] pb-[clamp(1rem,2.5vw,2.5rem)] pt-[clamp(0.75rem,2vw,2rem)] lg:pb-[clamp(11rem,17vw,15rem)]">
+      <main className="styled-scrollbar flex-1 overflow-y-auto px-[clamp(1rem,3vw,3.5rem)] pb-[clamp(1rem,2.5vw,2.5rem)] pt-[clamp(0.75rem,2vw,2rem)] lg:pb-[clamp(11rem,17vw,15rem)]">
         {participants.length === 0 ? (
           <p className="rounded-3xl border border-white/10 bg-white/[0.03] p-10 text-center text-[clamp(0.9rem,1.4vw,1.75rem)] text-white/45">
             Участники ещё не добавлены

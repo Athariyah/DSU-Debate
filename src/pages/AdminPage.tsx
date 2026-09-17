@@ -180,7 +180,7 @@ export function AdminPage() {
   return (
     <div className="relative flex h-full flex-col">
       <TopBar title="Администрирование" showBack onBack={() => navigate("/debates")} rightSlot="profile" />
-      <div className="no-scrollbar mx-auto flex-1 w-full max-w-3xl overflow-y-auto px-5 pb-10 pt-2 lg:px-8 lg:pb-12 lg:pt-6">
+      <div className="styled-scrollbar mx-auto flex-1 w-full max-w-3xl overflow-y-auto px-5 pb-10 pt-2 lg:px-8 lg:pb-12 lg:pt-6">
         <div className="mb-5 flex items-center justify-between">
           <div>
             <p className="text-xs uppercase tracking-wide text-white/40">Protected admin area</p>
