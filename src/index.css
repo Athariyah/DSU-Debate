@@ -108,7 +108,7 @@ body {
 }
 .styled-scrollbar::-webkit-scrollbar-track {
   background: transparent;
-  margin: 6px;
+  margin: 10px 14px;
   border-radius: 9999px;
 }
 .styled-scrollbar::-webkit-scrollbar-thumb {
@@ -123,6 +123,10 @@ body {
 }
 .styled-scrollbar::-webkit-scrollbar-corner {
   background: transparent;
+}
+.scroll-rounded-clip {
+  overflow: hidden;
+  border-radius: 1rem;
 }
 .styled-scrollbar {
   scrollbar-width: thin;
@@ -143,6 +147,8 @@ html::-webkit-scrollbar {
 }
 html::-webkit-scrollbar-track {
   background: transparent;
+  margin: 8px;
+  border-radius: 9999px;
 }
 html::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.14);

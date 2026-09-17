@@ -25,6 +25,7 @@ import { useDebateSocket } from "../hooks/useDebateSocket";
 import { getVotedParticipant } from "../utils/votedStore";
 import { cn } from "../utils/cn";
 import type { DebateEvent, Participant } from "../types";
+import { getEventTypeMeta } from "../utils/eventType";
 
 import { formatCountdown } from "../utils/formatCountdown";
 
@@ -242,7 +243,7 @@ export function DebateDetailPage() {
         </div>
       )}
 
-      <div className="styled-scrollbar mx-auto flex-1 w-full max-w-2xl overflow-y-auto px-5 pb-8 lg:px-8">
+      <div className="styled-scrollbar mx-auto flex-1 w-full max-w-2xl overflow-y-auto overflow-x-hidden px-5 pb-8 lg:px-8">
         <Badge tone={eventStatus === "active" ? "active" : "neutral"}>
           {eventStatus === "active" ? "Активное мероприятие" : eventStatus === "completed" ? "Завершён" : "Скоро"}
         </Badge>
@@ -287,9 +288,10 @@ export function DebateDetailPage() {
         )}
 
         {/* Тип мероприятия — визуальный контекст */}
+        {(() => { const meta = getEventTypeMeta(event.eventType, event.customTypeLabel); const Icon = meta.Icon; return (
         <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-white/40">
-          {event.eventType === "other" && event.customTypeLabel ? event.customTypeLabel : event.eventType === "tournament" ? "Турнир" : event.eventType === "poll" ? "Опрос" : event.eventType === "competition" ? "Соревнование" : event.eventType === "quiz" ? "Квиз" : event.eventType === "other" ? "Мероприятие" : "Дебаты"}
-        </div>
+          <Icon size={12} />{meta.label}
+        </div> )})()}
 
         {/* Вкладки: Голосование всегда, остальные — по флагам show* */}
         {(() => {
@@ -298,7 +300,7 @@ export function DebateDetailPage() {
           if (event.showStandings ?? true) tabs.push(["table", "Таблица"]);
           if (event.showPodium ?? true) tabs.push(["podium", "Пьедестал"]);
           return (
-            <div className="mt-5 flex gap-1.5 overflow-x-auto styled-scrollbar rounded-2xl border border-white/10 bg-black/20 p-1">
+            <div className="mt-5 flex gap-1.5 overflow-x-auto no-scrollbar rounded-2xl border border-white/10 bg-black/20 p-1">
               {tabs.map(([key, label]) => (
                 <button
                   key={key}
@@ -329,19 +331,39 @@ export function DebateDetailPage() {
             </>
           )}
           {activeTab === "leaders" && (event.showLeaderboard ?? true) && (
+            eventStatus !== "completed" ? (
+              <div className="py-12 text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/5">
+                  <span className="text-lg">🏆</span>
+                </div>
+                <p className="mt-3 text-sm font-semibold text-white">Лидеры будут определены после завершения</p>
+                <p className="mx-auto mt-1 max-w-[28ch] text-xs text-white/40">Голосование ещё не завершено — итоги скрыты до финала</p>
+              </div>
+            ) : (
             <Suspense fallback={<div className="h-20 animate-pulse rounded-2xl bg-white/5" />}>
               <LeaderboardTab eventId={event.id} />
             </Suspense>
+            )
           )}
           {activeTab === "table" && (event.showStandings ?? true) && (
             <Suspense fallback={<div className="h-20 animate-pulse rounded-2xl bg-white/5" />}>
-              <StandingsTab eventId={event.id} />
+              <StandingsTab eventId={event.id} participants={participants} eventType={event.eventType} />
             </Suspense>
           )}
           {activeTab === "podium" && (event.showPodium ?? true) && (
+            eventStatus !== "completed" ? (
+              <div className="py-12 text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/5">
+                  <span className="text-lg">🥇</span>
+                </div>
+                <p className="mt-3 text-sm font-semibold text-white">Пьедестал пока пуст</p>
+                <p className="mx-auto mt-1 max-w-[28ch] text-xs text-white/40">Призовые места появятся после завершения мероприятия</p>
+              </div>
+            ) : (
             <Suspense fallback={<div className="h-20 animate-pulse rounded-2xl bg-white/5" />}>
               <PodiumTab eventId={event.id} />
             </Suspense>
+            )
           )}
         </div>
       </div>

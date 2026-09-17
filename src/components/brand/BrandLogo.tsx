@@ -35,7 +35,7 @@ export function BrandMark({ className }: BrandLogoMarkProps) {
       <rect width="64" height="64" fill="#0a0c1e" />
       <rect width="64" height="64" fill={`url(#${glowId})`} />
 
-      {/* Орбита «голосов» и спутники. */}
+      {/* Орбита и спутники — остаются */}
       <circle
         cx="32"
         cy="28.5"
@@ -50,26 +50,23 @@ export function BrandMark({ className }: BrandLogoMarkProps) {
       <circle cx="52.5" cy="13.5" r="1.6" fill="#7dd3fc" />
       <circle cx="12.5" cy="15" r="1.2" fill="#a78bfa" fillOpacity="0.9" />
 
-      {/* Задний пузырь: стекло собеседника. */}
-      <rect
-        x="31"
-        y="12"
-        width="22"
-        height="17"
-        rx="6"
-        fill="#ffffff"
-        fillOpacity="0.08"
-        stroke="#ffffff"
-        strokeOpacity="0.4"
-        strokeWidth="2"
-      />
-
-      {/* Передний пузырь: живое голосование. */}
-      <path d="M21 37L18 46L30 39Z" fill={`url(#${bubbleId})`} />
-      <rect x="14" y="18" width="28" height="21" rx="8" fill={`url(#${bubbleId})`} />
-      <rect x="20" y="25" width="4" height="8" rx="2" fill="#ffffff" />
-      <rect x="26" y="21" width="4" height="12" rx="2" fill="#ffffff" />
-      <rect x="32" y="23" width="4" height="10" rx="2" fill="#ffffff" />
+      {/* Центр — трофей DSU Event */}
+      <g transform="translate(32 30)">
+        {/* свечение за трофеем */}
+        <circle r="18" fill="white" fillOpacity="0.06" />
+        {/* чаша */}
+        <path d="M -8 -10 L -8 2 C -8 7  -4 10 0 10 C 4 10 8 7 8 2 L 8 -10 Z" fill="white" fillOpacity="0.95" />
+        {/* ручки */}
+        <path d="M -8 -6 C -12 -6 -14 -2 -10 2" fill="none" stroke="white" strokeOpacity="0.9" strokeWidth="1.7" strokeLinecap="round" />
+        <path d="M 8 -6 C 12 -6 14 -2 10 2" fill="none" stroke="white" strokeOpacity="0.9" strokeWidth="1.7" strokeLinecap="round" />
+        {/* ножка и база */}
+        <rect x="-2" y="10" width="4" height="6" rx="1" fill="white" />
+        <rect x="-7" y="16" width="14" height="4" rx="1.2" fill="white" />
+        {/* звезда на чаше */}
+        <g transform="translate(0 -2)">
+          <path d="M 0 -3 L 0.9 -1 L 2.8 -0.8 L 1.3 0.4 L 1.7 2.2 L 0 1.2 L -1.7 2.2 L -1.3 0.4 L -2.8 -0.8 L -0.9 -1 Z" fill="#6366f1" />
+        </g>
+      </g>
     </svg>
   );
 }
@@ -153,12 +150,12 @@ export function BrandLogoMark({ className }: BrandLogoMarkProps) {
             <circle cx="60" cy="107.5" r="1.7" fill="#c4b5fd" opacity="0.9" />
           </g>
 
-          {/* Монограмма D: ножка и чаша одним штрихом, прорисовка при появлении. */}
+          {/* Монограмма DSU Event — стилизованная "E" как сцена/подиум */}
           <motion.path
-            d="M 45 38 V 82 M 45 42 H 53 C 69.5 42 79 49.5 79 60 C 79 70.5 69.5 78 53 78 H 45"
+            d="M 38 38 H 78 M 38 60 H 70 M 38 82 H 78"
             fill="none"
             stroke="url(#dsu-brand-stroke)"
-            strokeWidth="8.5"
+            strokeWidth="7"
             strokeLinecap="round"
             strokeLinejoin="round"
             initial={{ pathLength: 0, opacity: 0 }}
@@ -168,21 +165,28 @@ export function BrandLogoMark({ className }: BrandLogoMarkProps) {
               opacity: { duration: 0.3, delay: 0.3 },
             }}
           />
-
-          {/* Живые голоса внутри «D»: три дышащих столбика-эквалайзера. */}
-          {[0, 1, 2].map((bar) => (
-            <rect
-              key={bar}
-              className="logo-bar"
-              x={54 + bar * 6.2}
-              y={55}
-              width={4.2}
-              height={10}
-              rx={2.1}
-              fill="url(#dsu-brand-bars)"
-              style={{ animationDelay: `${0.55 + bar * 0.25}s` }}
-            />
-          ))}
+          {/* Центр — трофей DSU Event, мягко пульсирует */}
+          <motion.g
+            initial={{ scale: 0.7, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.6, type: "spring", stiffness: 180, damping: 14 }}
+            style={{ transformOrigin: "60px 60px" }}
+          >
+            <motion.g
+              animate={{ y: [0, -1.5, 0] }}
+              transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+            >
+              {/* glow */}
+              <circle cx="60" cy="62" r="18" fill="white" fillOpacity="0.07" />
+              {/* trophy cup */}
+              <path d="M 52 48 L 52 58 C 52 64 56 68 60 68 C 64 68 68 64 68 58 L 68 48 Z" fill="white" fillOpacity="0.95" />
+              <path d="M 52 50 C 46 50 44 56 48 62" fill="none" stroke="white" strokeOpacity="0.9" strokeWidth="2.2" strokeLinecap="round" />
+              <path d="M 68 50 C 74 50 76 56 72 62" fill="none" stroke="white" strokeOpacity="0.9" strokeWidth="2.2" strokeLinecap="round" />
+              <rect x="58" y="68" width="4" height="7" rx="1" fill="white" />
+              <rect x="53" y="75" width="14" height="4.5" rx="1.3" fill="white" />
+              <path d="M 60 54 L 61 56 L 63.5 56.2 L 61.7 57.5 L 62.2 59.7 L 60 58.5 L 57.8 59.7 L 58.3 57.5 L 56.5 56.2 L 58.9 56 Z" fill="#6366f1" />
+            </motion.g>
+          </motion.g>
         </svg>
       </div>
     </motion.div>

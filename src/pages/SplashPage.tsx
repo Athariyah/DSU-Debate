@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion, type PanInfo } from "framer-motion";
-import { Check, MonitorPlay, Smartphone, Vote } from "lucide-react";
+import { MonitorPlay, Smartphone, Trophy, Vote } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../components/ui/Button";
 import { cn } from "../utils/cn";
@@ -315,61 +315,46 @@ function SlideArt({ art }: { art: Slide["art"] }) {
 }
 
 /**
- * Сцена «диалога» — чистый CSS: бесконечные анимации стартуют сразу при
- * отрисовке страницы и не зависят от rAF-драйвера (цикл framer-motion при
- * первом открытии мог оставаться замороженным, и заставка выглядела
- * статичной). Цикл один — 5.2s — для всех элементов: бесшовное повторение.
+ * Сцена мероприятия — подиум с трофеем, лёгкое дыхание и конфетти.
+ * Чистый CSS + framer-motion: трофей парит, подиум подсвечен, искры мерцают.
  */
-function DialogueArt() {
+function EventArt() {
   return (
     <div className="relative flex h-52 w-52 items-center justify-center [@media(max-height:700px)]:h-40 [@media(max-height:700px)]:w-40">
-      {/* «Дыхание» позади диалога + тёплая подсветка со стороны ответа. */}
       <span aria-hidden className="dialogue-glow-a absolute h-40 w-40 rounded-full bg-indigo-500/25 blur-3xl" />
       <span aria-hidden className="dialogue-glow-b absolute bottom-4 right-6 h-24 w-24 rounded-full bg-amber-400/15 blur-2xl" />
-
       <div className="animate-float-y relative h-40 w-40 [@media(max-height:700px)]:h-[7.5rem] [@media(max-height:700px)]:w-[7.5rem]">
-        {/* Реплика первой стороны: появляется первой, «печатает». */}
-        <div className="dialogue-bubble-a absolute left-0 top-1">
-          <div className="relative h-16 w-28 rounded-2xl rounded-bl-md border border-white/20 bg-gradient-to-br from-indigo-400/95 to-violet-500/90 shadow-[0_16px_32px_-14px_rgba(99,102,241,0.85)]">
-            <DialogueTail className="-left-1.5 -bottom-1.5 rotate-45 rounded-[5px] border-b border-l border-white/25 bg-violet-500/90" />
-            <TypingDots windowClass="dialogue-window-a" />
+        {/* Подиум 2-1-3 */}
+        <div className="absolute bottom-0 left-1/2 flex -translate-x-1/2 items-end gap-1.5">
+          <div className="flex h-10 w-12 flex-col items-center justify-end rounded-t-xl border border-white/15 bg-gradient-to-b from-zinc-300 to-zinc-400 p-1 shadow-lg">
+            <span className="text-[10px] font-black text-white">2</span>
+          </div>
+          <div className="flex h-14 w-14 flex-col items-center justify-end rounded-t-xl border border-white/15 bg-gradient-to-b from-amber-300 to-amber-500 p-1 shadow-lg shadow-amber-500/20">
+            <Trophy size={12} className="mb-0.5 text-white" />
+            <span className="text-xs font-black text-white">1</span>
+          </div>
+          <div className="flex h-8 w-12 flex-col items-center justify-end rounded-t-xl border border-white/15 bg-gradient-to-b from-amber-700 to-orange-700 p-1 shadow-lg">
+            <span className="text-[10px] font-black text-white">3</span>
           </div>
         </div>
-
-        {/* Ответ второй стороны: печатает, затем голос учтён — галочка. */}
-        <div className="dialogue-bubble-b absolute bottom-1 right-0">
-          <div className="relative h-16 w-28 rounded-2xl rounded-br-md border border-white/20 bg-gradient-to-bl from-sky-400/95 to-cyan-400/85 shadow-[0_16px_32px_-14px_rgba(56,189,248,0.8)]">
-            <DialogueTail className="-right-1.5 -bottom-1.5 rotate-45 rounded-[5px] border-b border-r border-white/25 bg-cyan-400/85" />
-            <TypingDots windowClass="dialogue-window-b" />
-            <span className="dialogue-check absolute inset-0 flex items-center justify-center">
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/95 shadow-[0_4px_12px_-2px_rgba(2,132,199,0.5)]">
-                <Check size={15} strokeWidth={3} className="text-sky-600" />
-              </span>
-            </span>
-          </div>
-        </div>
+        {/* Парящий трофей над подиумом */}
+        <motion.div
+          className="absolute left-1/2 top-2 flex h-16 w-16 -translate-x-1/2 items-center justify-center rounded-2xl border border-white/20 bg-gradient-to-br from-indigo-400 to-violet-500 shadow-[0_16px_32px_-14px_rgba(99,102,241,0.9)]"
+          animate={{ y: [0, -4, 0] }}
+          transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
+        >
+          <Trophy size={28} className="text-white drop-shadow" />
+        </motion.div>
+        {/* Искорки */}
+        <motion.span className="absolute left-4 top-6 h-1.5 w-1.5 rounded-full bg-sky-300" animate={{ scale: [0,1,0], opacity: [0,0.9,0], y: [0,-10] }} transition={{ duration: 2, repeat: Infinity, delay: 0.6 }} />
+        <motion.span className="absolute right-5 top-10 h-1 w-1 rounded-full bg-amber-300" animate={{ scale: [0,1,0], opacity: [0,0.9,0], y: [0,-8] }} transition={{ duration: 2, repeat: Infinity, delay: 1.2 }} />
+        <motion.span className="absolute left-6 bottom-10 h-1 w-1 rounded-full bg-violet-300" animate={{ scale: [0,1,0], opacity: [0,0.9,0], y: [0,-6] }} transition={{ duration: 2, repeat: Infinity, delay: 0.9 }} />
       </div>
     </div>
   );
 }
-
-/** Маленький хвостик пузырька (повёрнутый квадрат у угла). */
-function DialogueTail({ className }: { className?: string }) {
-  return <span aria-hidden className={cn("absolute h-4 w-4", className)} />;
+function DialogueArt() {
+  return <EventArt />;
 }
 
-/** Три «печатает…»-точки: покачиваются на CSS, окно их видимости задаёт
-    keyframes-цикл контейнера (синхронно с циклом сцены). */
-function TypingDots({ windowClass }: { windowClass: string }) {
-  return (
-    <div className={cn("absolute inset-0 flex items-center justify-center gap-[7px]", windowClass)}>
-      {[0, 1, 2].map((index) => (
-        <span
-          key={index}
-          className="dialogue-dot h-[7px] w-[7px] rounded-full bg-white/90"
-          style={{ animationDelay: `${index * 0.15}s` }}
-        />
-      ))}
-    </div>
-  );
-}
+

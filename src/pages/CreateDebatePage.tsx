@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { Award, EyeOff, Flame, LayoutGrid, Loader2, Plus, Timer, Trophy, Type, UserX, Users, X } from "lucide-react";
+import { Award, EyeOff, LayoutGrid, Loader2, Plus, Timer, Trophy, Type, UserX, Users, X } from "lucide-react";
 import type { EventType } from "../types";
+import { EVENT_TYPE_META } from "../utils/eventType";
 import { TopBar } from "../components/layout/TopBar";
 import { Button } from "../components/ui/Button";
 import { DateTimeField } from "../components/ui/DateTimeField";
@@ -183,23 +184,16 @@ export function CreateDebatePage() {
     <div className="flex h-full flex-col">
       <TopBar showBack onBack={() => navigate("/admin")} title="Создать мероприятие" rightSlot="menu" />
 
-      <div className="styled-scrollbar mx-auto flex-1 w-full max-w-3xl overflow-y-auto px-5 pb-8 pt-2 lg:px-8 lg:pt-6">
+      <div className="styled-scrollbar mx-auto flex-1 w-full max-w-3xl overflow-y-auto overflow-x-hidden px-5 pb-8 pt-2 lg:px-8 lg:pt-6">
         <section>
           <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-white/40">
             Тип мероприятия
           </label>
           <div className="grid grid-cols-3 gap-2 lg:grid-cols-6">
-            {([
-              ["debate", "Дебаты", Type],
-              ["tournament", "Турнир", Trophy],
-              ["poll", "Опрос", Users],
-              ["competition", "Конкурс", Flame],
-              ["quiz", "Квиз", Type],
-              ["other", "Другое", Type],
-            ] as const).map(([value, label, Icon]) => (
+            {(Object.entries(EVENT_TYPE_META) as Array<[EventType, typeof EVENT_TYPE_META[EventType]]>).map(([value, meta]) => (
               <button key={value} type="button" onClick={() => setEventType(value as EventType)} className={cn("flex flex-col items-center gap-1 rounded-2xl border px-3 py-3 text-xs font-medium transition", eventType === value ? "border-indigo-400/50 bg-indigo-500/20 text-white shadow" : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10")}>
-                <Icon size={16} />
-                {label}
+                <meta.Icon size={16} />
+                {meta.label}
               </button>
             ))}
           </div>

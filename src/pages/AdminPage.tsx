@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Award, Check, ChevronDown, ChevronUp, Eye, EyeOff, Filter, LayoutGrid, MonitorPlay, Pencil, Plus, Save, Timer, Trash2, Trophy, UserX, Users } from "lucide-react";
+import { EVENT_TYPE_META, getEventTypeMeta } from "../utils/eventType";
 import { Link, useNavigate } from "react-router-dom";
 import { TopBar } from "../components/layout/TopBar";
 import { Button } from "../components/ui/Button";
@@ -29,14 +30,6 @@ type PendingDelete =
   | { kind: "event"; id: number; title: string }
   | { kind: "participant"; eventId: number; id: number; name: string };
 
-const EVENT_TYPE_LABEL: Record<EventType, string> = {
-  debate: "Дебаты",
-  tournament: "Турнир",
-  poll: "Опрос",
-  competition: "Соревнование",
-  quiz: "Квиз",
-  other: "Другое",
-};
 const EVENT_TYPE_OPTIONS: EventType[] = ["debate", "tournament", "poll", "competition", "quiz", "other"];
 
 export function AdminPage() {
@@ -132,7 +125,15 @@ export function AdminPage() {
       setBusyId(eventId);
       try {
         await deleteDebate(eventId);
+        // try removing from top-level events, then from votings
         setEvents((current) => current.filter((event) => event.id !== eventId));
+        setVotings((current) => {
+          const next: Record<number, AdminEventSummary[]> = {};
+          for (const [pid, list] of Object.entries(current)) {
+            next[Number(pid)] = (list as AdminEventSummary[]).filter((v) => v.id !== eventId);
+          }
+          return next;
+        });
         setParticipants((current) => {
           const next = { ...current };
           delete next[eventId];
@@ -184,26 +185,45 @@ export function AdminPage() {
     }
   }
 
+  const [addingParticipantFor, setAddingParticipantFor] = useState<number | null>(null);
+  const [newParticipantName, setNewParticipantName] = useState("");
+  const [newParticipantDesc, setNewParticipantDesc] = useState("");
+  const [addingVotingFor, setAddingVotingFor] = useState<number | null>(null);
+  const [newVotingTitle, setNewVotingTitle] = useState("");
+
   async function addParticipant(eventId: number) {
-    const name = window.prompt("Имя нового участника");
-    if (!name?.trim()) return;
+    setAddingParticipantFor(eventId);
+    setNewParticipantName("");
+    setNewParticipantDesc("");
+  }
+  async function confirmAddParticipant() {
+    const eventId = addingParticipantFor;
+    if (!eventId || !newParticipantName.trim()) return;
     try {
-      const created = await createAdminParticipant(eventId, { name: name.trim(), description: null });
+      const created = await createAdminParticipant(eventId, { name: newParticipantName.trim(), description: newParticipantDesc.trim() || null });
       setParticipants((current) => ({ ...current, [eventId]: [...(current[eventId] ?? []), created] }));
+      setAddingParticipantFor(null);
+      setNewParticipantName("");
+      setNewParticipantDesc("");
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : "Не удалось добавить участника");
     }
   }
 
   async function addVoting(eventId: number) {
-    const title = window.prompt("Название нового голосования");
-    if (!title?.trim()) return;
+    setAddingVotingFor(eventId);
+    setNewVotingTitle("");
+  }
+  async function confirmAddVoting() {
+    const eventId = addingVotingFor;
+    if (!eventId || !newVotingTitle.trim()) return;
     try {
-      const created = await createAdminVoting(eventId, { title: title.trim(), participants: [{ name: "Участник 1", description: null }, { name: "Участник 2", description: null }] });
+      const created = await createAdminVoting(eventId, { title: newVotingTitle.trim(), participants: [{ name: "Участник 1", description: null }, { name: "Участник 2", description: null }] });
       setVotings((cur) => ({ ...cur, [eventId]: [...(cur[eventId] ?? []), created] }));
-      // load its participants
       const vp = await listAdminParticipants(created.id);
       setParticipants((cur) => ({ ...cur, [created.id]: vp }));
+      setAddingVotingFor(null);
+      setNewVotingTitle("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не удалось создать голосование");
     }
@@ -244,7 +264,7 @@ export function AdminPage() {
   return (
     <div className="relative flex h-full flex-col">
       <TopBar title="Администрирование" showBack onBack={() => navigate("/debates")} rightSlot="profile" />
-      <div className="styled-scrollbar mx-auto flex-1 w-full max-w-3xl overflow-y-auto px-5 pb-10 pt-2 lg:px-8 lg:pb-12 lg:pt-6">
+      <div className="styled-scrollbar mx-auto flex-1 w-full max-w-3xl overflow-y-auto overflow-x-hidden px-5 pb-10 pt-2 lg:px-8 lg:pb-12 lg:pt-6">
         <div className="mb-5 flex items-center justify-between">
           <div>
             <p className="text-xs uppercase tracking-wide text-white/40">Protected admin area</p>
@@ -256,11 +276,15 @@ export function AdminPage() {
         {/* Фильтр по типу мероприятия */}
         <div className="mb-4 flex flex-wrap items-center gap-1.5 rounded-2xl border border-white/10 bg-black/20 p-1.5">
           <span className="ml-2 mr-1 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest text-white/40"><Filter size={12} /> Тип</span>
-          {(["all", ...EVENT_TYPE_OPTIONS] as const).map((opt) => (
-            <button key={opt} onClick={() => setTypeFilter(opt as any)} className={cn("rounded-xl px-3 py-1.5 text-xs font-medium transition", typeFilter === opt ? "bg-white text-black shadow" : "text-white/60 hover:text-white hover:bg-white/10")}>
-              {opt === "all" ? "Все" : EVENT_TYPE_LABEL[opt as EventType]}
+          {(["all", ...EVENT_TYPE_OPTIONS] as const).map((opt) => {
+            const meta = opt === "all" ? null : EVENT_TYPE_META[opt as EventType];
+            const Icon = meta?.Icon;
+            return (
+            <button key={opt} onClick={() => setTypeFilter(opt as any)} className={cn("inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition", typeFilter === opt ? "bg-white text-black shadow" : "text-white/60 hover:text-white hover:bg-white/10")}>
+              {Icon && <Icon size={12} />}{opt === "all" ? "Все" : meta?.label}
             </button>
-          ))}
+          )})}
+
           <span className="ml-auto mr-2 text-xs text-white/30">{filteredEvents.length}/{events.length}</span>
         </div>
 
@@ -316,9 +340,10 @@ export function AdminPage() {
                     )}
                     <p className="mt-1 flex items-center gap-2 text-xs text-white/35">
                       <span>ID: {event.id} · участников: {event.participantsCount}</span>
+                      {(() => { const meta = getEventTypeMeta(event.eventType as EventType, (event as any).customTypeLabel); const Icon = meta.Icon; return (
                       <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-white/40">
-                        <Trophy size={10} /> {(event.eventType === "other" && (event as any).customTypeLabel) ? (event as any).customTypeLabel : EVENT_TYPE_LABEL[(event.eventType ?? "debate") as EventType]}
-                      </span>
+                        <Icon size={10} /> {meta.label}
+                      </span> )})()}
                     </p>
                   </div>
                   <StatusSelect
@@ -331,11 +356,14 @@ export function AdminPage() {
                 <div className="mt-3">
                   <p className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-widest text-white/40">Тип мероприятия</p>
                   <div className="grid grid-cols-3 gap-1.5 lg:grid-cols-6">
-                    {EVENT_TYPE_OPTIONS.map((opt) => (
-                      <button key={opt} type="button" onClick={() => updateEventLocal(event.id, { eventType: opt })} className={cn("rounded-xl border px-2 py-2 text-[11px] font-medium transition", (event.eventType ?? "debate")===opt ? "border-indigo-400/50 bg-indigo-500/20 text-white shadow" : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10")}>
-                        {EVENT_TYPE_LABEL[opt]}
+                    {EVENT_TYPE_OPTIONS.map((opt) => {
+                      const meta = EVENT_TYPE_META[opt];
+                      const Icon = meta.Icon;
+                      return (
+                      <button key={opt} type="button" onClick={() => updateEventLocal(event.id, { eventType: opt })} className={cn("inline-flex flex-col items-center gap-1 rounded-xl border px-2 py-2 text-[11px] font-medium transition", (event.eventType ?? "debate")===opt ? "border-indigo-400/50 bg-indigo-500/20 text-white shadow" : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10")}>
+                        <Icon size={14} />{meta.label}
                       </button>
-                    ))}
+                    )})}
                   </div>
                 </div>
 
@@ -457,7 +485,7 @@ export function AdminPage() {
 
                 {(event.eventType === "other") && (
                   <div className="mt-3 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
-                    <IconChip icon={Trophy} iconSize={15} />
+                    <IconChip icon={EVENT_TYPE_META.other.Icon} iconSize={15} />
                     <input
                       value={(event as any).customTypeLabel ?? ""}
                       onChange={(e) => updateEventLocal(event.id, { customTypeLabel: e.target.value } as any)}
@@ -655,6 +683,46 @@ export function AdminPage() {
           })}
         </div>
       </div>
+
+      {/* App-style modals for adding participant / voting */}
+      {addingParticipantFor !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="frosted-panel w-full max-w-md rounded-3xl border border-white/15 p-6">
+            <h3 className="text-base font-bold text-white">Новый участник</h3>
+            <p className="mt-1 text-xs text-white/40">Добавляется к мероприятию #{addingParticipantFor}</p>
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-widest text-white/40">Имя</label>
+                <input value={newParticipantName} onChange={(e) => setNewParticipantName(e.target.value)} placeholder="Например: Команда А" autoFocus className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2.5 text-sm text-white placeholder:text-white/30 outline-none focus:border-indigo-300/50" />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-widest text-white/40">Описание (необязательно)</label>
+                <input value={newParticipantDesc} onChange={(e) => setNewParticipantDesc(e.target.value)} placeholder="Позиция, слоган — до 2000 символов" className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2.5 text-xs text-white placeholder:text-white/30 outline-none focus:border-indigo-300/50" />
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setAddingParticipantFor(null)}>Отмена</Button>
+              <Button onClick={() => void confirmAddParticipant()} disabled={!newParticipantName.trim()}>Добавить</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {addingVotingFor !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="frosted-panel w-full max-w-md rounded-3xl border border-white/15 p-6">
+            <h3 className="text-base font-bold text-white">Новое голосование</h3>
+            <p className="mt-1 text-xs text-white/40">Будет создано в мероприятии #{addingVotingFor} с двумя участниками по умолчанию</p>
+            <div className="mt-4">
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-widest text-white/40">Название</label>
+              <input value={newVotingTitle} onChange={(e) => setNewVotingTitle(e.target.value)} placeholder="Например: Финал — лучший проект" autoFocus className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2.5 text-sm text-white placeholder:text-white/30 outline-none focus:border-indigo-300/50" />
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setAddingVotingFor(null)}>Отмена</Button>
+              <Button onClick={() => void confirmAddVoting()} disabled={!newVotingTitle.trim()}>Создать</Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ConfirmDialog
         open={pendingDelete !== null}

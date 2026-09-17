@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { ChevronRight, Users } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { DebateEvent } from "../../types";
+import { getEventTypeMeta } from "../../utils/eventType";
 
 const MONTHS_SHORT = [
   "Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек",
@@ -37,11 +38,12 @@ export function UpcomingDebateItem({ event, index = 0 }: UpcomingDebateItemProps
 
       <div className="min-w-0 flex-1">
         <p className="line-clamp-2 text-sm font-semibold leading-snug text-white">{event.title}</p>
-        <div className="mt-1.5 flex items-center gap-1.5 text-xs text-white/45">
-          <Users size={13} className="text-white opacity-45" />
-          <span>{event.participantsCount} участника</span>
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-white/45">
+          <span className="inline-flex items-center gap-1"><Users size={13} className="text-white opacity-45" />{event.participantsCount}</span>
           <span className="mx-0.5">·</span>
           <span>{time}</span>
+          <span className="mx-0.5">·</span>
+          {(() => { const meta = getEventTypeMeta(event.eventType, event.customTypeLabel); const Icon = meta.Icon; return <span className="inline-flex items-center gap-1"><Icon size={11} />{meta.label}</span> })()}
         </div>
       </div>
 
