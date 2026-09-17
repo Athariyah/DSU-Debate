@@ -314,17 +314,16 @@ function SlideArt({ art }: { art: Slide["art"] }) {
     );
   }
 
-  // Брендовый мотив — две пересекающиеся «стеклянные» плашки логотипа.
+  // Брендовый слайд: сам логотип (public/logo.svg) — плитка с пузырём
+  // живого голосования и надписью DSU Debate, парит поверх свечения.
   return (
     <div className="relative flex h-52 w-52 items-center justify-center [@media(max-height:700px)]:h-40 [@media(max-height:700px)]:w-40">
       <div className="absolute h-40 w-40 rounded-full bg-indigo-500/30 blur-3xl" />
       <div className="absolute h-32 w-32 rounded-full bg-sky-400/20 blur-2xl" />
-      <motion.div
-        className="animate-float-y absolute -ml-6 -mt-3 h-24 w-24 rotate-[-8deg] rounded-[2rem] border border-white/25 bg-gradient-to-br from-white/15 to-white/0 backdrop-blur-md"
-      />
-      <motion.div
-        className="animate-float-y absolute -mb-3 -mr-6 h-24 w-24 rotate-[8deg] rounded-[2rem] border border-white/15 bg-gradient-to-br from-indigo-300/25 to-transparent backdrop-blur-md"
-        style={{ animationDelay: "0.6s" }}
+      <motion.img
+        src="/logo.svg"
+        alt="Логотип DSU Debate"
+        className="animate-float-y relative h-44 w-44 rounded-[2.4rem] border border-white/10 shadow-[0_24px_60px_-16px_rgba(99,102,241,0.65)] [@media(max-height:700px)]:h-36 [@media(max-height:700px)]:w-36"
       />
       <motion.span
         className="absolute h-2 w-2 rounded-full bg-sky-300"
