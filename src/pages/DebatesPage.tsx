@@ -43,7 +43,9 @@ export function DebatesPage() {
 
   return (
     <div className="relative flex h-full flex-col lg:pl-64">
-      <TopBar title="Дебаты" rightSlot="profile" />
+      {/* Кнопку профиля справа в шапке убрали (см. HomePage): переход на
+          профиль — через вкладку нижней панели. */}
+      <TopBar title="Дебаты" />
       <div className="no-scrollbar mx-auto flex-1 w-full max-w-5xl overflow-y-auto px-5 pb-[calc(env(safe-area-inset-bottom,0px)+4.75rem)] pt-2 lg:px-10 lg:pb-10 lg:pt-6">
         {loading && <div className="h-24 animate-pulse rounded-2xl bg-white/5" />}
         {error && <p className="rounded-2xl border border-rose-400/20 bg-rose-400/10 p-4 text-sm text-rose-300">{error}</p>}
