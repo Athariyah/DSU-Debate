@@ -356,6 +356,208 @@ body {
   animation: logo-bar-breathe 2.1s ease-in-out infinite;
 }
 
+/* ------------------------------------------------------------------ */
+/* Заставка: бесконечный цикл «диалога» на чистом CSS.                   */
+/* CSS-анимации стартуют сразу при отрисовке — в отличие от rAF-циклов  */
+/* framer-motion, которые при первом открытии могли оставаться в        */
+/* начальном кадре, и заставка выглядела статичной. Цикл один — 5.2s —  */
+/* для всех элементов сцены: бесшовное повторение.                      */
+/* ------------------------------------------------------------------ */
+
+@keyframes dialogue-bubble-a {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.45);
+  }
+  9% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  93% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.9);
+  }
+}
+
+@keyframes dialogue-bubble-b {
+  0%,
+  29% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.45);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  93% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.9);
+  }
+}
+
+@keyframes dialogue-window-a {
+  0% {
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  48% {
+    opacity: 1;
+  }
+  56%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes dialogue-window-b {
+  0%,
+  41% {
+    opacity: 0;
+  }
+  49% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  78%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes dialogue-check-pop {
+  0%,
+  75% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  83% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+  93% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+
+@keyframes dialogue-dot-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.55;
+  }
+  50% {
+    transform: translateY(-5px);
+    opacity: 1;
+  }
+}
+
+@keyframes dialogue-glow-main {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.07);
+  }
+}
+
+@keyframes dialogue-glow-warm {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.dialogue-bubble-a {
+  opacity: 0;
+  animation: dialogue-bubble-a 5.2s ease-in-out infinite;
+}
+
+.dialogue-bubble-b {
+  opacity: 0;
+  animation: dialogue-bubble-b 5.2s ease-in-out infinite;
+}
+
+.dialogue-window-a {
+  opacity: 0;
+  animation: dialogue-window-a 5.2s ease-in-out infinite;
+}
+
+.dialogue-window-b {
+  opacity: 0;
+  animation: dialogue-window-b 5.2s ease-in-out infinite;
+}
+
+.dialogue-check {
+  opacity: 0;
+  animation: dialogue-check-pop 5.2s ease-in-out infinite;
+}
+
+.dialogue-dot {
+  animation: dialogue-dot-bounce 0.9s ease-in-out infinite;
+}
+
+.dialogue-glow-a {
+  opacity: 0.45;
+  animation: dialogue-glow-main 4.5s ease-in-out infinite;
+}
+
+.dialogue-glow-b {
+  opacity: 0.25;
+  animation: dialogue-glow-warm 5.5s ease-in-out 1s infinite;
+}
+
+/* Стрелки подсказки «свайпай, чтобы листать» на заставке. */
+@keyframes hint-nudge-left {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(-3px);
+  }
+}
+
+@keyframes hint-nudge-right {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(3px);
+  }
+}
+
+.hint-arrow-left {
+  animation: hint-nudge-left 1.4s ease-in-out infinite;
+}
+
+.hint-arrow-right {
+  animation: hint-nudge-right 1.4s ease-in-out infinite;
+}
+
 /* Металлический пробег света по брендовому заголовку: полоса пересекает
    белый текст слева направо, пауза, затем новый заход (стыки — на чисто
    белых участках градиента, поэтому переход незаметен). */
