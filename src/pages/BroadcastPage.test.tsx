@@ -6,7 +6,7 @@
  * (победитель / проигравший). Сокет здесь подменён эмиттером, чтобы гонять
  * НАСТОЯЩИЙ useDebateSocket настоящими событиями.
  */
-import { act, cleanup, configure, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, configure, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -293,6 +293,38 @@ describe("экран трансляции", () => {
 
     expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2);
     socket.__setConnected(true);
+  });
+
+  test("QR-код на голосование показан всегда и ведёт на страницу дебата", async () => {
+    mockApi();
+    renderBroadcast();
+    await screen.findByText(TOPIC);
+
+    // Карточка дублируется для мобильного и десктопного расположения,
+    // поэтому ищем все вхождения.
+    expect(screen.getAllByText("Голосуй с телефона").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/\/debate\/7/).length).toBeGreaterThan(0);
+
+    // QR генерируется асинхронно: дожидаемся svg-разметки кода
+    // (тёмные модули кода — path со stroke #0b0d1f).
+    await waitFor(() => {
+      expect(document.querySelector('path[stroke="#0b0d1f"]')).toBeTruthy();
+    });
+  });
+
+  test("кастомный текст сохраняется и выводится баннером на трансляции", async () => {
+    mockApi();
+    renderBroadcast();
+    await screen.findByText(TOPIC);
+
+    fireEvent.click(screen.getByLabelText("Кастомный текст на трансляции"));
+    const input = screen.getByPlaceholderText(/сканируйте QR/);
+    fireEvent.change(input, { target: { value: "Голосуем до перерыва!" } });
+    fireEvent.click(screen.getByRole("button", { name: "Показать" }));
+
+    expect(screen.getByText("Голосуем до перерыва!")).toBeTruthy();
+    // Значение легло в localStorage по ключу дебата.
+    expect(localStorage.getItem("dsu-broadcast-note-7")).toBe("Голосуем до перерыва!");
   });
 });
 

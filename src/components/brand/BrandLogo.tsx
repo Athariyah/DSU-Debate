@@ -1,8 +1,77 @@
+import { useId } from "react";
 import { motion } from "framer-motion";
 import { cn } from "../../utils/cn";
 
 interface BrandLogoMarkProps {
   className?: string;
+}
+
+/**
+ * Компактный знак бренда — тот же, что в фавиконке и иконках PWA:
+ * градиентный пузырь с «живыми» столбиками голосования + контур пузыря
+ * собеседника и орбита голосов. Чистый SVG, масштабируется без потерь.
+ * Используется в сайдбаре, в шапке трансляции и в центре QR-кода.
+ */
+export function BrandMark({ className }: BrandLogoMarkProps) {
+  const uid = useId();
+  const bubbleId = `brand-bubble-${uid}`;
+  const glowId = `brand-glow-${uid}`;
+
+  return (
+    <svg viewBox="0 0 64 64" className={className} aria-hidden="true">
+      <defs>
+        <linearGradient id={bubbleId} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#6366f1" />
+          <stop offset="0.55" stopColor="#8b5cf6" />
+          <stop offset="1" stopColor="#38bdf8" />
+        </linearGradient>
+        <radialGradient id={glowId} cx="0.2" cy="0.05" r="1">
+          <stop offset="0" stopColor="#6366f1" stopOpacity="0.55" />
+          <stop offset="1" stopColor="#6366f1" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+
+      {/* Тёмная плитка фона — как в иконке приложения. */}
+      <rect width="64" height="64" fill="#0a0c1e" />
+      <rect width="64" height="64" fill={`url(#${glowId})`} />
+
+      {/* Орбита «голосов» и спутники. */}
+      <circle
+        cx="32"
+        cy="28.5"
+        r="22"
+        fill="none"
+        stroke="#ffffff"
+        strokeOpacity="0.12"
+        strokeWidth="1"
+        strokeDasharray="1.5 6"
+        strokeLinecap="round"
+      />
+      <circle cx="52.5" cy="13.5" r="1.6" fill="#7dd3fc" />
+      <circle cx="12.5" cy="15" r="1.2" fill="#a78bfa" fillOpacity="0.9" />
+
+      {/* Задний пузырь: стекло собеседника. */}
+      <rect
+        x="31"
+        y="12"
+        width="22"
+        height="17"
+        rx="6"
+        fill="#ffffff"
+        fillOpacity="0.08"
+        stroke="#ffffff"
+        strokeOpacity="0.4"
+        strokeWidth="2"
+      />
+
+      {/* Передний пузырь: живое голосование. */}
+      <path d="M21 37L18 46L30 39Z" fill={`url(#${bubbleId})`} />
+      <rect x="14" y="18" width="28" height="21" rx="8" fill={`url(#${bubbleId})`} />
+      <rect x="20" y="25" width="4" height="8" rx="2" fill="#ffffff" />
+      <rect x="26" y="21" width="4" height="12" rx="2" fill="#ffffff" />
+      <rect x="32" y="23" width="4" height="10" rx="2" fill="#ffffff" />
+    </svg>
+  );
 }
 
 /**

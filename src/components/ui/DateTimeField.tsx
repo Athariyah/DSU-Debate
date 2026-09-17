@@ -109,6 +109,8 @@ interface DateTimeFieldProps {
 export function DateTimeField({ value, onChange, className }: DateTimeFieldProps) {
   const [parts, setParts] = useState(() => splitDateTime(value));
   const [openPanel, setOpenPanel] = useState<null | "date" | "time">(null);
+  /** Черновик прямого ввода времени с клавиатуры («ЧЧ:ММ»). */
+  const [timeDraft, setTimeDraft] = useState(() => splitDateTime(value).time);
   const [view, setView] = useState(() => {
     const selected = parts.date ? new Date(`${parts.date}T00:00`) : new Date();
     return { year: selected.getFullYear(), month: selected.getMonth() };
@@ -134,11 +136,39 @@ export function DateTimeField({ value, onChange, className }: DateTimeFieldProps
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [openPanel]);
 
+  // Черновик ввода следует за значением: выбор колесом или внешняя смена
+  // обновляют строку. Но если пользователь сам ввёл текущее значение —
+  // черновик не трогаем, иначе «9:05» перезаписалось бы на «09:05»
+  // прямо во время набора.
+  useEffect(() => {
+    setTimeDraft((draft) => (parseTimeDraft(draft) === parts.time ? draft : parts.time));
+  }, [parts.time]);
+
   function update(patch: Partial<{ date: string; time: string }>) {
     const next = { ...parts, ...patch };
     setParts(next);
     const iso = combineDateTime(next.date, next.time);
     if (iso) onChange(iso);
+  }
+
+  /** Прямой ввод времени (телефон и клавиатура): валидный черновик сразу
+   * обновляет значение, колёса подстраиваются. */
+  function onTimeDraftChange(raw: string) {
+    const cleaned = raw.replace(/[^\d:.]/g, "").slice(0, 5);
+    setTimeDraft(cleaned);
+    const parsed = parseTimeDraft(cleaned);
+    if (parsed) update({ time: parsed });
+  }
+
+  /** Потеря фокуса: доводим черновик до «ЧЧ:ММ» или возвращаем текущее значение. */
+  function commitTimeDraft() {
+    const parsed = parseTimeDraft(timeDraft);
+    if (parsed) {
+      if (parsed !== parts.time) update({ time: parsed });
+      setTimeDraft(parsed);
+    } else {
+      setTimeDraft(parts.time);
+    }
   }
 
   function togglePanel(panel: "date" | "time") {
@@ -281,19 +311,39 @@ export function DateTimeField({ value, onChange, className }: DateTimeFieldProps
                   </div>
                 </div>
               ) : (
-                <div className="flex gap-2">
-                  <TimeWheel
-                    label="Часы"
-                    values={HOURS}
-                    selected={Number.isFinite(currentHour) ? currentHour : 0}
-                    onPick={(hour) => update({ time: `${pad(hour)}:${pad(currentMinute)}` })}
+                <div>
+                  {/* Прямой ввод времени: работает и с физической клавиатуры,
+                      и с экранной (inputMode numeric) — колёса остаются как
+                      альтернативный способ. */}
+                  <input
+                    value={timeDraft}
+                    onChange={(event) => onTimeDraftChange(event.target.value)}
+                    onBlur={commitTimeDraft}
+                    placeholder="ЧЧ:ММ"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    enterKeyHint="done"
+                    aria-label="Ввести время с клавиатуры, часы и минуты"
+                    className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-center text-lg font-bold tabular-nums text-white outline-none transition placeholder:text-white/25 focus:border-indigo-300/50 focus:bg-indigo-400/10"
                   />
-                  <TimeWheel
-                    label="Минуты"
-                    values={MINUTES}
-                    selected={Number.isFinite(currentMinute) ? currentMinute : 0}
-                    onPick={(minute) => update({ time: `${pad(currentHour)}:${pad(minute)}` })}
-                  />
+                  <p className="mt-1.5 text-center text-[10px] font-medium text-white/30">
+                    Можно вписать с клавиатуры — например, 18:30
+                  </p>
+
+                  <div className="mt-2 flex gap-2">
+                    <TimeWheel
+                      label="Часы"
+                      values={HOURS}
+                      selected={Number.isFinite(currentHour) ? currentHour : 0}
+                      onPick={(hour) => update({ time: `${pad(hour)}:${pad(currentMinute)}` })}
+                    />
+                    <TimeWheel
+                      label="Минуты"
+                      values={MINUTES}
+                      selected={Number.isFinite(currentMinute) ? currentMinute : 0}
+                      onPick={(minute) => update({ time: `${pad(currentHour)}:${pad(minute)}` })}
+                    />
+                  </div>
                 </div>
               )}
             </div>
@@ -308,6 +358,20 @@ export function DateTimeField({ value, onChange, className }: DateTimeFieldProps
 function formatDateRu(datePart: string): string {
   const [year, month, day] = datePart.split("-");
   return `${day}.${month}.${year}`;
+}
+
+/**
+ * Разбирает черновик прямого ввода времени: «18:30», «9:05», «18.30»,
+ * а также без разделителя — «930» / «1830». Неполный или невалидный
+ * черновик возвращает null (значение ещё не готово).
+ */
+export function parseTimeDraft(raw: string): string | null {
+  const digits = raw.trim().replace(/[:.]/g, "");
+  if (!/^\d{3,4}$/.test(digits)) return null;
+  const hours = Number(digits.slice(0, -2));
+  const minutes = Number(digits.slice(-2));
+  if (hours > 23 || minutes > 59) return null;
+  return `${pad(hours)}:${pad(minutes)}`;
 }
 
 /** Кнопка-«шторка» поля: иконка-чип + значение + стрелка; переключает панель. */

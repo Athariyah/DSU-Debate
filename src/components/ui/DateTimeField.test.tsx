@@ -182,6 +182,50 @@ describe("DateTimeField", () => {
     expect(onChange).toHaveBeenLastCalledWith(new Date(2026, 8, 16, 9, 5).toISOString());
   });
 
+  test("время можно вписать с клавиатуры: «18:45» сразу отдаёт ISO", () => {
+    const onChange = vi.fn();
+    render(<DateTimeField value={LOCAL_DATE.toISOString()} onChange={onChange} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Время" }));
+    const input = screen.getByLabelText("Ввести время с клавиатуры, часы и минуты");
+
+    fireEvent.change(input, { target: { value: "18:45" } });
+
+    expect(onChange).toHaveBeenLastCalledWith(new Date(2026, 8, 16, 18, 45).toISOString());
+  });
+
+  test("ввод без разделителя «930» читается как 09:30, blur нормализует черновик", () => {
+    const onChange = vi.fn();
+    render(<DateTimeField value={LOCAL_DATE.toISOString()} onChange={onChange} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Время" }));
+    const input = screen.getByLabelText(
+      "Ввести время с клавиатуры, часы и минуты"
+    ) as HTMLInputElement;
+
+    fireEvent.change(input, { target: { value: "930" } });
+    expect(onChange).toHaveBeenLastCalledWith(new Date(2026, 8, 16, 9, 30).toISOString());
+
+    fireEvent.blur(input);
+    expect(input.value).toBe("09:30");
+  });
+
+  test("невалидное время не отправляется, а blur возвращает текущее значение", () => {
+    const onChange = vi.fn();
+    render(<DateTimeField value={LOCAL_DATE.toISOString()} onChange={onChange} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Время" }));
+    const input = screen.getByLabelText(
+      "Ввести время с клавиатуры, часы и минуты"
+    ) as HTMLInputElement;
+
+    fireEvent.change(input, { target: { value: "25:99" } });
+    expect(onChange).not.toHaveBeenCalled();
+
+    fireEvent.blur(input);
+    expect(input.value).toBe("17:30");
+  });
+
   test("пустое значение: плейсхолдер, а выбор дня отправляет ISO", () => {
     const onChange = vi.fn();
     render(<DateTimeField value="" onChange={onChange} />);

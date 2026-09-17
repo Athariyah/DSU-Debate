@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { NavLink } from "react-router-dom";
 import { cn } from "../../utils/cn";
 import { useAdminAuth } from "../../hooks/useAdminAuth";
+import { BrandMark } from "../brand/BrandLogo";
 
 const items = [
   { to: "/home", label: "Главная", icon: Home },
@@ -72,12 +73,15 @@ export function BottomNav() {
       <div className="absolute inset-y-0 left-0 z-30 hidden w-64 lg:block">
         <div className="flex h-full flex-col border-r border-white/10 bg-black/25 px-4 py-6 backdrop-blur-2xl">
           <div className="mb-6 flex items-center gap-3 px-2">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-400 via-violet-500 to-sky-400 shadow-[0_6px_18px_-6px_rgba(99,102,241,0.7)]">
-              <MessagesSquare size={18} strokeWidth={2.5} className="text-white" />
+            {/* Актуальный знак бренда — тот же, что в иконке приложения. */}
+            <span className="h-10 w-10 shrink-0 overflow-hidden rounded-xl shadow-[0_6px_18px_-6px_rgba(99,102,241,0.7)] ring-1 ring-white/15">
+              <BrandMark className="h-full w-full" />
             </span>
             <div className="min-w-0">
-              <p className="truncate text-[15px] font-extrabold tracking-tight text-white">DSU Debate</p>
-              <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-white/35">
+              <p className="truncate text-[15px] font-extrabold leading-5 tracking-tight text-white">DSU Debate</p>
+              {/* Явный leading-4 (16px при 10px шрифта): строка не может
+                  «срезаться» снизу ни при каком рендере. */}
+              <p className="block text-[10px] font-medium uppercase leading-4 tracking-[0.18em] text-white/35">
                 live голосования
               </p>
             </div>
@@ -107,8 +111,10 @@ export function BottomNav() {
                       )
                     }
                   >
-                    <Plus size={16} strokeWidth={2.75} />
-                    Создать
+                    {/* leading-none у подписи: строка текста равна кеглю, и
+                        плюс встаёт ровно по оптическому центру надписи. */}
+                    <Plus size={16} strokeWidth={2.75} className="shrink-0" />
+                    <span className="leading-none">Создать</span>
                   </NavLink>
                 </motion.div>
               )}
