@@ -16,6 +16,8 @@ export interface EventRecord {
   voting_duration_minutes: number | null;
   /** Фактический момент запуска активного голосования. */
   voting_started_at: Date | null;
+  /** TRUE — результаты скрыты от зрителей (закрытое голосование). */
+  votes_hidden: boolean;
   created_by: number;
   created_at: Date;
   updated_at: Date;

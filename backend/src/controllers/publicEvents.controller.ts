@@ -4,9 +4,14 @@ import { EventRecord } from "../types";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../middleware/errorHandler";
 import { votingEndsAt } from "../utils/votingWindow";
-import { computeEventResults } from "./vote.controller";
+import { computeEventResults, redactEventResults } from "./vote.controller";
 
 function publicEventResponse(event: EventRecord, results: Awaited<ReturnType<typeof computeEventResults>>) {
+  // Закрытое голосование (флажок «Скрыть голоса» в админке): участники и их
+  // описания видны, но цифры и проценты сервер зануляет — зритель не узнает
+  // расклад до раскрытия.
+  const votesHidden = Boolean(event.votes_hidden);
+  const visibleResults = votesHidden ? redactEventResults(results) : results;
   return {
     event: {
       id: event.id,
@@ -15,9 +20,10 @@ function publicEventResponse(event: EventRecord, results: Awaited<ReturnType<typ
       dateTime: event.date_time,
       votingDurationMinutes: event.voting_duration_minutes ?? null,
       votingEndsAt: votingEndsAt(event)?.toISOString() ?? null,
+      votesHidden,
       participantsCount: results.participants.length,
     },
-    participants: results.participants.map((participant) => ({
+    participants: visibleResults.participants.map((participant) => ({
       id: participant.participantId,
       eventId: event.id,
       name: participant.name,
@@ -25,7 +31,7 @@ function publicEventResponse(event: EventRecord, results: Awaited<ReturnType<typ
       votesCount: participant.votesCount,
       percentage: participant.percentage,
     })),
-    totalVotes: results.totalVotes,
+    totalVotes: visibleResults.totalVotes,
   };
 }
 

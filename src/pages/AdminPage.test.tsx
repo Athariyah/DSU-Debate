@@ -141,6 +141,67 @@ describe("таймер голосования", () => {
   });
 });
 
+describe("флажок «Скрыть голоса»", () => {
+  test("переключатель по умолчанию выключен и переключается кликом", async () => {
+    renderAdmin();
+    await screen.findByText("Тестовый дебат");
+
+    const toggle = screen.getByRole("switch", { name: "Скрыть голоса от зрителей" });
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    expect(screen.getByText("Выключено — голоса и проценты видны всем")).toBeTruthy();
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByText("Включено — зрителям участники без цифр")).toBeTruthy();
+  });
+
+  test("сохранение отправляет votesHidden на backend", async () => {
+    const bodies: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const method = init?.method ?? "GET";
+        if (method === "PUT") bodies.push(String(init?.body));
+        return {
+          ok: true,
+          status: 200,
+          json: async () =>
+            method === "GET"
+              ? {
+                  items: [
+                    { id: 3, title: "Тестовый дебат", status: "active", dateTime: DATE_TIME, participantsCount: 2 },
+                  ],
+                }
+              : {
+                  event: {
+                    id: 3,
+                    title: "Тестовый дебат",
+                    status: "active",
+                    dateTime: DATE_TIME,
+                    participantsCount: 2,
+                    votesHidden: true,
+                  },
+                },
+        };
+      })
+    );
+    setAdminToken("test-token");
+
+    render(
+      <MemoryRouter>
+        <AdminPage />
+      </MemoryRouter>
+    );
+    await screen.findByText("Тестовый дебат");
+
+    fireEvent.click(screen.getByRole("switch", { name: "Скрыть голоса от зрителей" }));
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+
+    await waitFor(() => expect(bodies.some((body) => body.includes("\"votesHidden\":true"))).toBe(true));
+    setAdminToken("");
+  });
+});
+
 describe("удаление мероприятия", () => {
   test("открывается собственное окно, системный confirm не используется", async () => {
     const confirmSpy = vi.spyOn(window, "confirm");

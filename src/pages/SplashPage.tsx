@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion, type PanInfo } from "framer-motion";
 import { MonitorPlay, Smartphone, Vote } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { BrandLogoMark } from "../components/brand/BrandLogo";
 import { Button } from "../components/ui/Button";
 import { cn } from "../utils/cn";
 
@@ -134,8 +135,9 @@ export function SplashPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1, duration: 0.4 }}
                 className={cn(
-                  "font-extrabold tracking-tight text-white",
-                  slide.art === "logo" ? "text-[34px]" : "text-[26px]"
+                  "font-extrabold tracking-tight",
+                  // Брендовый заголовок переливается пробегающим бликом.
+                  slide.art === "logo" ? "text-shimmer text-[34px]" : "text-[26px] text-white"
                 )}
               >
                 {slide.title}
@@ -314,18 +316,21 @@ function SlideArt({ art }: { art: Slide["art"] }) {
     );
   }
 
-  // Брендовый слайд: сам логотип (public/logo.svg) — плитка с пузырём
-  // живого голосования и надписью DSU Debate, парит поверх свечения.
+  // Брендовый слайд: новый минималистичный марк (components/brand/BrandLogo) —
+  // стеклянная плитка с монограммой «D», внутри живой эквалайзер голосов,
+  // снаружи орбита со спутниками; всё парит над дышащим свечением.
   return (
     <div className="relative flex h-52 w-52 items-center justify-center [@media(max-height:700px)]:h-40 [@media(max-height:700px)]:w-40">
-      <div className="absolute h-40 w-40 rounded-full bg-indigo-500/30 blur-3xl" />
-      <div className="absolute h-32 w-32 rounded-full bg-sky-400/20 blur-2xl" />
-      <motion.img
-        src="/logo.svg"
-        alt="Логотип DSU Debate"
-        className="animate-float-y relative h-44 w-44 rounded-[2.4rem] border border-white/10 shadow-[0_24px_60px_-16px_rgba(99,102,241,0.65)] [@media(max-height:700px)]:h-36 [@media(max-height:700px)]:w-36"
-      />
       <motion.span
+        aria-hidden
+        className="absolute h-40 w-40 rounded-full bg-indigo-500/30 blur-3xl"
+        animate={{ opacity: [0.5, 0.85, 0.5], scale: [1, 1.08, 1] }}
+        transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut" }}
+      />
+      <div aria-hidden className="absolute h-32 w-32 rounded-full bg-sky-400/20 blur-2xl" />
+      <BrandLogoMark className="relative h-44 w-44 [@media(max-height:700px)]:h-36 [@media(max-height:700px)]:w-36" />
+      <motion.span
+        aria-hidden
         className="absolute h-2 w-2 rounded-full bg-sky-300"
         animate={{ scale: [0, 1, 0], opacity: [0, 1, 0], x: [0, 14], y: [8, -30] }}
         transition={{ duration: 2.4, repeat: Infinity, ease: "easeOut" }}

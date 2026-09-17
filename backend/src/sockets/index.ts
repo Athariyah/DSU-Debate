@@ -93,3 +93,15 @@ export function broadcastEventStatusChanged(
   const io = getIO();
   io.to(debateRoom(eventId)).emit("event:status_changed", { eventId, status });
 }
+
+/**
+ * Транслирует переключение флажка «Скрыть голоса»: клиенты сразу прячут
+ * цифры или мгновенно раскрывают итоги без перезагрузки страницы.
+ */
+export function broadcastVoteVisibilityChanged(
+  eventId: number,
+  votesHidden: boolean
+): void {
+  const io = getIO();
+  io.to(debateRoom(eventId)).emit("event:votes_visibility", { eventId, votesHidden });
+}

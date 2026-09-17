@@ -16,6 +16,7 @@ interface BackendEvent {
   dateTime: string;
   votingDurationMinutes?: number | null;
   votingEndsAt?: string | null;
+  votesHidden?: boolean;
   participantsCount?: number;
 }
 
@@ -61,6 +62,7 @@ function mapPublicEvent(payload: BackendPublicEventResponse): DebateEvent {
     scheduledAt: payload.event.dateTime,
     votingDurationMinutes: payload.event.votingDurationMinutes ?? null,
     votingEndsAt: payload.event.votingEndsAt ?? null,
+    votesHidden: Boolean(payload.event.votesHidden),
     totalVotes: Number(payload.totalVotes ?? 0),
     participants,
   };
@@ -168,22 +170,25 @@ export interface AdminEventSummary {
   dateTime: string;
   /** Таймер голосования в минутах (null — выключен). */
   votingDurationMinutes: number | null;
+  /** true — зрители не видят голоса и проценты (закрытое голосование). */
+  votesHidden: boolean;
   participantsCount: number;
 }
 
 export async function listAdminDebates(status?: DebateEvent["status"]): Promise<AdminEventSummary[]> {
   const query = status ? `?status=${encodeURIComponent(status)}` : "";
   const response = await apiFetch<{ items: AdminEventSummary[] }>(`/admin/events${query}`, { auth: true });
-  // Старый backend мог не отдавать поле — нормализуем в null.
+  // Старый backend мог не отдавать поля — нормализуем в null/false.
   return response.items.map((item) => ({
     ...item,
     votingDurationMinutes: item.votingDurationMinutes ?? null,
+    votesHidden: item.votesHidden ?? false,
   }));
 }
 
 export async function updateDebate(
   eventId: number,
-  patch: Partial<Pick<AdminEventSummary, "title" | "status" | "votingDurationMinutes">> & {
+  patch: Partial<Pick<AdminEventSummary, "title" | "status" | "votingDurationMinutes" | "votesHidden">> & {
     dateTime?: string;
   }
 ): Promise<AdminEventSummary> {

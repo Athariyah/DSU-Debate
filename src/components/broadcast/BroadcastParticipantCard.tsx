@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Crown, TrendingDown } from "lucide-react";
+import { Crown, EyeOff, TrendingDown } from "lucide-react";
 import type { Participant } from "../../types";
 import { AnimatedNumber } from "../ui/AnimatedNumber";
 import { ProgressBar } from "../debate/ProgressBar";
@@ -21,6 +21,8 @@ interface BroadcastParticipantCardProps {
   winner?: boolean;
   /** Финал: карточка проигравшего. */
   loser?: boolean;
+  /** Закрытое голосование: цифры заменены «••» до раскрытия организатором. */
+  hidden?: boolean;
 }
 
 /**
@@ -34,6 +36,7 @@ export function BroadcastParticipantCard({
   leader = false,
   winner = false,
   loser = false,
+  hidden = false,
 }: BroadcastParticipantCardProps) {
   return (
     <motion.div
@@ -78,7 +81,12 @@ export function BroadcastParticipantCard({
           )}
         </div>
 
-        {winner ? (
+        {hidden ? (
+          <Chip className="border-white/10 bg-white/5 text-white/40">
+            <EyeOff size={14} />
+            Скрыто
+          </Chip>
+        ) : winner ? (
           <Chip className="border-amber-300/50 bg-amber-300/15 text-amber-200">
             <Crown size={14} />
             Победитель
@@ -94,33 +102,63 @@ export function BroadcastParticipantCard({
       </div>
 
       <div className="relative mt-[clamp(0.6rem,1.4vw,1.75rem)] flex items-end justify-between gap-4">
-        <p
-          className={cn(
-            "text-[clamp(1.9rem,4.6vw,5.5rem)] font-black leading-none tracking-tight tabular-nums",
-            winner ? "text-amber-200" : "text-white"
-          )}
-        >
-          <AnimatedNumber value={participant.percentage} suffix="%" />
-        </p>
+        {hidden ? (
+          <>
+            <p className="text-[clamp(1.9rem,4.6vw,5.5rem)] font-black leading-none tracking-tight text-white/25" aria-label="Процент скрыт">
+              ••%
+            </p>
+            <p className="shrink-0 text-right">
+              <span className="block text-[clamp(1.1rem,2.1vw,2.5rem)] font-bold leading-none text-white/25">
+                ••
+              </span>
+              <span className="mt-1 block text-[clamp(0.6rem,0.95vw,1.1rem)] uppercase tracking-[0.2em] text-white/30">
+                скрыто
+              </span>
+            </p>
+          </>
+        ) : (
+          <>
+            <p
+              className={cn(
+                "text-[clamp(1.9rem,4.6vw,5.5rem)] font-black leading-none tracking-tight tabular-nums",
+                winner ? "text-amber-200" : "text-white"
+              )}
+            >
+              <AnimatedNumber value={participant.percentage} suffix="%" />
+            </p>
 
-        <p className="shrink-0 text-right">
-          <span className="block text-[clamp(1.1rem,2.1vw,2.5rem)] font-bold leading-none tabular-nums text-white">
-            <AnimatedNumber value={participant.votesCount} />
-          </span>
-          <span className="mt-1 block text-[clamp(0.6rem,0.95vw,1.1rem)] uppercase tracking-[0.2em] text-white/40">
-            голосов
-          </span>
-        </p>
+            <p className="shrink-0 text-right">
+              <span className="block text-[clamp(1.1rem,2.1vw,2.5rem)] font-bold leading-none tabular-nums text-white">
+                <AnimatedNumber value={participant.votesCount} />
+              </span>
+              <span className="mt-1 block text-[clamp(0.6rem,0.95vw,1.1rem)] uppercase tracking-[0.2em] text-white/40">
+                голосов
+              </span>
+            </p>
+          </>
+        )}
       </div>
 
-      <ProgressBar
-        percentage={participant.percentage}
-        gradient={winner ? "from-amber-300 via-amber-400 to-orange-400" : GRADIENTS[index % GRADIENTS.length]}
-        className={cn(
-          "mt-[clamp(0.5rem,1vw,1.25rem)] h-[clamp(0.4rem,0.75vw,0.9rem)]",
-          loser && "opacity-60"
-        )}
-      />
+      {hidden ? (
+        // Пустая колея с медленным бликом: голосование идёт, цифры закрыты.
+        <div className="relative mt-[clamp(0.5rem,1vw,1.25rem)] h-[clamp(0.4rem,0.75vw,0.9rem)] overflow-hidden rounded-full bg-white/[0.07]">
+          <motion.div
+            aria-hidden
+            className="absolute inset-y-0 w-1/4 rounded-full bg-gradient-to-r from-transparent via-white/10 to-transparent"
+            animate={{ x: ["-130%", "420%"] }}
+            transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut", delay: index * 0.25 }}
+          />
+        </div>
+      ) : (
+        <ProgressBar
+          percentage={participant.percentage}
+          gradient={winner ? "from-amber-300 via-amber-400 to-orange-400" : GRADIENTS[index % GRADIENTS.length]}
+          className={cn(
+            "mt-[clamp(0.5rem,1vw,1.25rem)] h-[clamp(0.4rem,0.75vw,0.9rem)]",
+            loser && "opacity-60"
+          )}
+        />
+      )}
     </motion.div>
   );
 }

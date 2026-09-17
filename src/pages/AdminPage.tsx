@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Check, ChevronDown, ChevronUp, Pencil, Plus, Save, Timer, Trash2 } from "lucide-react";
+import { motion } from "framer-motion";
+import { Check, ChevronDown, ChevronUp, Eye, EyeOff, Pencil, Plus, Save, Timer, Trash2 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { TopBar } from "../components/layout/TopBar";
 import { Button } from "../components/ui/Button";
@@ -7,6 +8,7 @@ import { DateTimeField } from "../components/ui/DateTimeField";
 import { IconChip } from "../components/ui/IconChip";
 import { StatusSelect } from "../components/ui/StatusSelect";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
+import { cn } from "../utils/cn";
 import {
   createAdminParticipant,
   deleteAdminParticipant,
@@ -76,6 +78,7 @@ export function AdminPage() {
         status: event.status,
         dateTime: new Date(event.dateTime).toISOString(),
         votingDurationMinutes: event.votingDurationMinutes ?? null,
+        votesHidden: event.votesHidden ?? false,
       });
       setEvents((current) => current.map((item) => (item.id === saved.id ? saved : item)));
       if (saved.status === "active") await loadEvents();
@@ -267,6 +270,48 @@ export function AdminPage() {
                     className="w-16 shrink-0 rounded-xl border border-white/10 bg-black/25 px-2 py-1.5 text-center text-sm font-semibold tabular-nums text-white outline-none transition focus:border-indigo-300/50 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
                   />
                   <span className="text-xs text-white/45">мин</span>
+                </div>
+
+                {/* Закрытое голосование: пока флажок включён, зрители видят
+                    участников без голосов и процентов; сервер зануляет цифры
+                    в REST и live-обновлениях. Применяется по «Сохранить». */}
+                <div
+                  className={cn(
+                    "mt-3 flex items-center gap-3 rounded-2xl border px-3 py-2 transition-colors duration-300",
+                    event.votesHidden
+                      ? "border-indigo-300/30 bg-indigo-400/[0.08]"
+                      : "border-white/10 bg-white/5"
+                  )}
+                >
+                  <IconChip icon={event.votesHidden ? EyeOff : Eye} iconSize={15} tone={event.votesHidden ? "accent" : "neutral"} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold text-white">Скрыть голоса</p>
+                    <p className="truncate text-[11px] text-white/35">
+                      {event.votesHidden
+                        ? "Включено — зрителям участники без цифр"
+                        : "Выключено — голоса и проценты видны всем"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={event.votesHidden}
+                    aria-label="Скрыть голоса от зрителей"
+                    onClick={() => updateEventLocal(event.id, { votesHidden: !event.votesHidden })}
+                    className={cn(
+                      "relative h-[26px] w-11 shrink-0 rounded-full border transition-colors duration-300",
+                      event.votesHidden
+                        ? "border-indigo-300/50 bg-gradient-to-r from-indigo-500/80 via-violet-500/70 to-sky-400/80 shadow-[0_4px_16px_-4px_rgba(99,102,241,0.75),inset_0_1px_0_rgba(255,255,255,0.25)]"
+                        : "border-white/15 bg-black/30 shadow-[inset_0_2px_6px_rgba(0,0,0,0.35)]"
+                    )}
+                  >
+                    <motion.span
+                      aria-hidden
+                      className="absolute left-1 top-1 h-[18px] w-[18px] rounded-full bg-white shadow-[0_2px_6px_rgba(0,0,0,0.45)]"
+                      animate={{ x: event.votesHidden ? 18 : 0 }}
+                      transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                    />
+                  </button>
                 </div>
 
                 <div className="mt-3 flex flex-wrap gap-2">

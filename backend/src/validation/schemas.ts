@@ -45,6 +45,8 @@ export const updateEventSchema = z.object({
   status: eventStatusEnum.optional(),
   // null — явное выключение таймера (в отличие от «поле не передано»).
   votingDurationMinutes: votingDurationSchema.nullable().optional(),
+  // true — закрытое голосование: зрители не видят голоса и проценты.
+  votesHidden: z.boolean().optional(),
 });
 
 export const createParticipantSchema = z.object({

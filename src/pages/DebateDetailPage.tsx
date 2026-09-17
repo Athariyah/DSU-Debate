@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   CalendarClock,
   CheckCircle2,
+  EyeOff,
   Home,
   Link2,
   MonitorPlay,
@@ -64,11 +65,12 @@ export function DebateDetailPage() {
     loadEvent();
   }, [id, loadEvent]);
 
-  const { participants, totalVotes, eventStatus, status } = useDebateSocket({
+  const { participants, totalVotes, eventStatus, votesHidden, status } = useDebateSocket({
     eventId: event?.id,
     initialStatus: event?.status ?? "upcoming",
     initialParticipants: event?.participants ?? EMPTY_PARTICIPANTS,
     initialTotalVotes: event?.totalVotes ?? 0,
+    initialVotesHidden: event?.votesHidden ?? false,
   });
 
   // Таймер голосования: тикаем раз в секунду, пока дебат активен и есть
@@ -224,11 +226,18 @@ export function DebateDetailPage() {
 
         <div className="mt-6 space-y-3">
           {participants.map((p, idx) => (
-            <ParticipantResult key={p.id} participant={p} index={idx} highlighted={p.id === justVotedFor} />
+            <ParticipantResult key={p.id} participant={p} index={idx} highlighted={p.id === justVotedFor} hidden={votesHidden} />
           ))}
         </div>
 
-        <p className="mt-4 text-center text-xs text-white/30">Всего голосов: {totalVotes}</p>
+        {votesHidden ? (
+          <p className="mt-4 flex items-center justify-center gap-1.5 text-center text-xs text-white/30">
+            <EyeOff size={13} className="opacity-70" />
+            Результаты скрыты организатором
+          </p>
+        ) : (
+          <p className="mt-4 text-center text-xs text-white/30">Всего голосов: {totalVotes}</p>
+        )}
       </div>
 
       <div className="mx-auto w-full max-w-2xl space-y-2 px-5 pb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] pt-2 lg:px-8">
