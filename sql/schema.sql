@@ -79,6 +79,7 @@ CREATE TABLE IF NOT EXISTS events (
   date_time       TIMESTAMPTZ  NOT NULL,
   -- Фактический старт таймера: заполняется при переводе дебата в active.
   voting_started_at TIMESTAMPTZ,
+  parent_event_id INTEGER      REFERENCES events(id) ON DELETE CASCADE,
   created_by      INTEGER      NOT NULL,
   created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
   updated_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
@@ -96,9 +97,10 @@ CREATE INDEX IF NOT EXISTS idx_events_date_time ON events (date_time);
 
 -- Бизнес-правило: одновременно может быть только ОДИН активный дебат.
 -- Частичный уникальный индекс гарантирует это на уровне БД.
-CREATE UNIQUE INDEX IF NOT EXISTS uq_events_single_active
+CREATE UNIQUE INDEX IF NOT EXISTS uq_events_single_active_top
   ON events (status)
-  WHERE status = 'active';
+  WHERE status = 'active' AND parent_event_id IS NULL;
+CREATE INDEX IF NOT EXISTS idx_events_parent_id ON events(parent_event_id);
 
 DROP TRIGGER IF EXISTS set_updated_at_events ON events;
 CREATE TRIGGER set_updated_at_events

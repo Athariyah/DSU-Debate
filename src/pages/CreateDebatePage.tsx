@@ -20,12 +20,19 @@ function emptyParticipant(): DraftParticipant {
   return { id: crypto.randomUUID(), name: "", subtitle: "" };
 }
 
+interface DraftVoting {
+  id: string;
+  title: string;
+  participants: DraftParticipant[];
+}
+
 export function CreateDebatePage() {
   const navigate = useNavigate();
   const [title, setTitle] = useState("");
   const [eventType, setEventType] = useState<EventType>("debate");
   const [customTypeLabel, setCustomTypeLabel] = useState("");
   const [participants, setParticipants] = useState<DraftParticipant[]>([emptyParticipant(), emptyParticipant()]);
+  const [votings, setVotings] = useState<DraftVoting[]>([]);
   const [scheduledAt, setScheduledAt] = useState("");
   const [durationMinutes, setDurationMinutes] = useState("");
   const [hiddenFromPublic, setHiddenFromPublic] = useState(false);
@@ -72,6 +79,29 @@ export function CreateDebatePage() {
     setParticipants((prev) => [...prev, emptyParticipant()]);
   }
 
+  function addVoting() {
+    setVotings((prev) => [...prev, { id: crypto.randomUUID(), title: "", participants: [emptyParticipant(), emptyParticipant()] }]);
+  }
+  function updateVoting(id: string, patch: Partial<DraftVoting>) {
+    setVotings((prev) => prev.map((v) => (v.id === id ? { ...v, ...patch } : v)));
+  }
+  function removeVoting(id: string) {
+    setVotings((prev) => prev.filter((v) => v.id !== id));
+  }
+  function updateVotingParticipant(votingId: string, participantId: string, patch: Partial<DraftParticipant>) {
+    setVotings((prev) => prev.map((v) => v.id === votingId ? { ...v, participants: v.participants.map((p) => p.id === participantId ? { ...p, ...patch } : p) } : v));
+  }
+  function addVotingParticipant(votingId: string) {
+    setVotings((prev) => prev.map((v) => v.id === votingId ? { ...v, participants: [...v.participants, emptyParticipant()] } : v));
+  }
+  function removeVotingParticipant(votingId: string, participantId: string) {
+    setVotings((prev) => prev.map((v) => {
+      if (v.id !== votingId) return v;
+      if (v.participants.length <= 2) return v;
+      return { ...v, participants: v.participants.filter((p) => p.id !== participantId) };
+    }));
+  }
+
   async function handleSubmit() {
     setError(null);
     if (title.trim().length < 4) {
@@ -82,9 +112,23 @@ export function CreateDebatePage() {
       setError("Название типа мероприятия — минимум 2 символа");
       return;
     }
-    if (participants.some((p) => p.name.trim().length < 2)) {
+    // If votings exist, main participants may be empty (event container), otherwise require them
+    const hasVotings = votings.length > 0;
+    if (!hasVotings && participants.some((p) => p.name.trim().length < 2)) {
       setError("Заполните имена всех участников");
       return;
+    }
+    if (hasVotings) {
+      for (const v of votings) {
+        if (v.title.trim().length < 3) {
+          setError(`Введите тему голосования "${v.title || "без названия"}" (минимум 3 символа)`);
+          return;
+        }
+        if (v.participants.some((p) => p.name.trim().length < 2)) {
+          setError(`Заполните имена участников голосования "${v.title}"`);
+          return;
+        }
+      }
     }
     if (!scheduledAt) {
       setError("Выберите дату и время мероприятия");
@@ -94,12 +138,15 @@ export function CreateDebatePage() {
     setSubmitting(true);
     try {
       const parsedDuration = durationMinutes.trim() === "" ? null : Number(durationMinutes);
+      const hasVotingsSubmit = votings.length > 0;
+      const validMain = participants.filter((p) => p.name.trim().length >= 2);
+      const mainToSend = validMain.length >= 2 ? validMain.map((p) => ({ name: p.name.trim(), subtitle: p.subtitle.trim() || undefined })) : undefined;
       await createDebate({
         title: title.trim(),
-        format: participants.length,
+        format: (mainToSend?.length || 0) + votings.reduce((a, v) => a + v.participants.length, 0),
         eventType,
         customTypeLabel: eventType === "other" ? (customTypeLabel.trim() || null) : null,
-        participants: participants.map((p) => ({ name: p.name.trim(), subtitle: p.subtitle.trim() || undefined })),
+        participants: mainToSend ?? (hasVotingsSubmit ? undefined : participants.map((p) => ({ name: p.name.trim(), subtitle: p.subtitle.trim() || undefined }))),
         scheduledAt: new Date(scheduledAt).toISOString(),
         votingDurationMinutes:
           parsedDuration === null || !Number.isFinite(parsedDuration)
@@ -110,7 +157,12 @@ export function CreateDebatePage() {
         showLeaderboard,
         showStandings,
         showPodium,
-      });
+        votings: hasVotingsSubmit ? votings.map((v) => ({
+          title: v.title.trim(),
+          participants: v.participants.map((p) => ({ name: p.name.trim(), subtitle: p.subtitle.trim() || undefined })),
+          scheduledAt: new Date(scheduledAt).toISOString(),
+        })) : undefined,
+      } as any);
       // Запоминаем время для следующего создания
       try {
         localStorage.setItem("dsu-last-event-datetime", new Date(scheduledAt).toISOString());
@@ -234,6 +286,48 @@ export function CreateDebatePage() {
         </section>
 
         <section className="mt-6">
+          <div className="mb-2 flex items-center justify-between">
+            <label className="block text-xs font-semibold uppercase tracking-wide text-white/40">
+              Голосования в мероприятии
+            </label>
+            <button type="button" onClick={addVoting} className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-white/70 hover:bg-white/10 hover:text-white">
+              <Plus size={12} /> Добавить голосование
+            </button>
+          </div>
+          <p className="mb-2 text-[11px] leading-relaxed text-white/35">Можно создать сразу несколько голосований — каждое со своими участниками, статусом и трансляцией. Пусто — будет одно общее голосование.</p>
+          {votings.length === 0 ? (
+            <p className="rounded-2xl border border-dashed border-white/10 px-4 py-6 text-center text-xs text-white/30">Пока одно голосование — участники выше. Нажмите «Добавить голосование», чтобы разбить мероприятие на несколько.</p>
+          ) : (
+            <div className="space-y-3">
+              {votings.map((v, vIdx) => (
+                <div key={v.id} className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-white/10 text-[11px] font-semibold text-white">{vIdx+1}</span>
+                    <input value={v.title} onChange={(e) => updateVoting(v.id, { title: e.target.value })} placeholder={`Название голосования ${vIdx+1}`} className="w-full bg-transparent text-sm font-medium text-white placeholder:text-white/30 outline-none" />
+                    <button type="button" onClick={() => removeVoting(v.id)} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg hover:bg-white/10"><X size={14} className="text-white/40" /></button>
+                  </div>
+                  <div className="mt-2 space-y-2">
+                    {v.participants.map((p, pIdx) => (
+                      <div key={p.id} className="flex items-center gap-2 rounded-xl border border-white/5 bg-white/5 px-3 py-2">
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/10 text-[10px] font-semibold text-white">{pIdx+1}</span>
+                        <div className="min-w-0 flex-1 space-y-0.5">
+                          <input value={p.name} onChange={(e) => updateVotingParticipant(v.id, p.id, { name: e.target.value })} placeholder={`Имя участника ${pIdx+1}`} className="w-full bg-transparent text-xs font-medium text-white placeholder:text-white/30 outline-none" />
+                          <input value={p.subtitle} onChange={(e) => updateVotingParticipant(v.id, p.id, { subtitle: e.target.value })} placeholder="Позиция (необязательно)" className="w-full bg-transparent text-[11px] text-white/45 placeholder:text-white/25 outline-none" />
+                        </div>
+                        {v.participants.length > 2 && (
+                          <button type="button" onClick={() => removeVotingParticipant(v.id, p.id)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md hover:bg-white/10"><X size={12} className="text-white/30" /></button>
+                        )}
+                      </div>
+                    ))}
+                    <button type="button" onClick={() => addVotingParticipant(v.id)} className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-white/10 px-3 py-2 text-xs font-medium text-white/50 hover:border-white/20 hover:text-white/80"><Plus size={12} /> Добавить участника</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="mt-6">
           <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-white/40">
             Дата и время
           </label>
@@ -298,7 +392,7 @@ export function CreateDebatePage() {
                 aria-label="Скрыть мероприятие от обычных пользователей"
                 onClick={() => setHiddenFromPublic((value) => !value)}
                 className={cn(
-                  "relative h-[26px] w-11 shrink-0 rounded-full border transition-colors duration-300",
+                  "relative flex h-[26px] w-11 shrink-0 items-center rounded-full border transition-colors duration-300",
                   hiddenFromPublic
                     ? "border-amber-300/50 bg-gradient-to-r from-amber-500/80 via-orange-500/70 to-amber-400/80 shadow-[0_4px_16px_-4px_rgba(245,158,11,0.75),inset_0_1px_0_rgba(255,255,255,0.25)]"
                     : "border-white/15 bg-black/30 shadow-[inset_0_2px_6px_rgba(0,0,0,0.35)]"
@@ -306,7 +400,7 @@ export function CreateDebatePage() {
               >
                 <motion.span
                   aria-hidden
-                  className="absolute left-1 top-1 h-[18px] w-[18px] rounded-full bg-white shadow-[0_2px_6px_rgba(0,0,0,0.45)]"
+                  className="ml-1 h-[18px] w-[18px] shrink-0 rounded-full bg-white shadow-[0_2px_6px_rgba(0,0,0,0.45)]"
                   animate={{ x: hiddenFromPublic ? 18 : 0 }}
                   transition={{ type: "spring", stiffness: 500, damping: 30 }}
                 />
@@ -333,7 +427,7 @@ export function CreateDebatePage() {
                 aria-label="Скрыть голоса"
                 onClick={() => setVotesHidden((v) => !v)}
                 className={cn(
-                  "relative h-[26px] w-11 shrink-0 rounded-full border transition-colors duration-300",
+                  "relative flex h-[26px] w-11 shrink-0 items-center rounded-full border transition-colors duration-300",
                   votesHidden
                     ? "border-violet-300/50 bg-gradient-to-r from-violet-500/80 via-indigo-500/70 to-violet-400/80 shadow-[0_4px_16px_-4px_rgba(124,58,237,0.75),inset_0_1px_0_rgba(255,255,255,0.25)]"
                     : "border-white/15 bg-black/30 shadow-[inset_0_2px_6px_rgba(0,0,0,0.35)]"
@@ -341,7 +435,7 @@ export function CreateDebatePage() {
               >
                 <motion.span
                   aria-hidden
-                  className="absolute left-1 top-1 h-[18px] w-[18px] rounded-full bg-white shadow-[0_2px_6px_rgba(0,0,0,0.45)]"
+                  className="ml-1 h-[18px] w-[18px] shrink-0 rounded-full bg-white shadow-[0_2px_6px_rgba(0,0,0,0.45)]"
                   animate={{ x: votesHidden ? 18 : 0 }}
                   transition={{ type: "spring", stiffness: 500, damping: 30 }}
                 />
@@ -373,7 +467,7 @@ export function CreateDebatePage() {
                   aria-checked={item.value}
                   onClick={() => item.setter((v) => !v)}
                   className={cn(
-                    "relative h-[26px] w-11 shrink-0 rounded-full border transition-colors duration-300",
+                    "relative flex h-[26px] w-11 shrink-0 items-center rounded-full border transition-colors duration-300",
                     item.value
                       ? "border-indigo-300/50 bg-gradient-to-r from-indigo-500/80 via-violet-500/70 to-indigo-400/80 shadow-[0_4px_16px_-4px_rgba(99,102,241,0.75),inset_0_1px_0_rgba(255,255,255,0.25)]"
                       : "border-white/15 bg-black/30 shadow-[inset_0_2px_6px_rgba(0,0,0,0.35)]"
@@ -381,7 +475,7 @@ export function CreateDebatePage() {
                 >
                   <motion.span
                     aria-hidden
-                    className="absolute left-1 top-1 h-[18px] w-[18px] rounded-full bg-white shadow-[0_2px_6px_rgba(0,0,0,0.45)]"
+                    className="ml-1 h-[18px] w-[18px] shrink-0 rounded-full bg-white shadow-[0_2px_6px_rgba(0,0,0,0.45)]"
                     animate={{ x: item.value ? 18 : 0 }}
                     transition={{ type: "spring", stiffness: 500, damping: 30 }}
                   />

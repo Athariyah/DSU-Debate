@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS events (
   show_standings INTEGER NOT NULL DEFAULT 1 CHECK (show_standings IN (0,1)),
   show_podium INTEGER NOT NULL DEFAULT 1 CHECK (show_podium IN (0,1)),
   broadcast_message TEXT,
+  parent_event_id INTEGER REFERENCES events(id) ON DELETE CASCADE,
   created_by INTEGER NOT NULL REFERENCES admins(id) ON DELETE RESTRICT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
@@ -55,7 +56,8 @@ CREATE INDEX IF NOT EXISTS idx_events_status ON events(status);
 CREATE INDEX IF NOT EXISTS idx_events_date_time ON events(date_time);
 CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
 CREATE INDEX IF NOT EXISTS idx_events_custom_label ON events(custom_type_label);
-CREATE UNIQUE INDEX IF NOT EXISTS uq_events_single_active ON events(status) WHERE status = 'active';
+CREATE UNIQUE INDEX IF NOT EXISTS uq_events_single_active_top ON events(status) WHERE status = 'active' AND parent_event_id IS NULL;
+CREATE INDEX IF NOT EXISTS idx_events_parent_id ON events(parent_event_id);
 
 DROP TRIGGER IF EXISTS set_updated_at_events;
 CREATE TRIGGER set_updated_at_events BEFORE UPDATE ON events FOR EACH ROW

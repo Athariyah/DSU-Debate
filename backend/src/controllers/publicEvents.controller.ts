@@ -112,7 +112,7 @@ async function batchPublicEvents(eventRows: EventRecord[]) {
 export const listUpcomingEvents = asyncHandler(async (_req: Request, res: Response) => {
   const events = await pool.query<EventRecord>(
     `SELECT * FROM events
-     WHERE status = 'upcoming' AND ${PUBLIC_EVENT_FILTER}
+     WHERE status = 'upcoming' AND parent_event_id IS NULL AND ${PUBLIC_EVENT_FILTER}
      ORDER BY date_time ASC`
   );
   const responses = await batchPublicEvents(events.rows);
@@ -124,10 +124,10 @@ export const listCompletedEvents = asyncHandler(async (req: Request, res: Respon
   const page = Math.max(parseInt(String(req.query.page ?? "1"), 10) || 1, 1);
   const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? "20"), 10) || 20, 1), 100);
   const offset = (page - 1) * limit;
-  const count = await pool.query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM events WHERE status = 'completed' AND ${PUBLIC_EVENT_FILTER}`);
+  const count = await pool.query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM events WHERE status = 'completed' AND parent_event_id IS NULL AND ${PUBLIC_EVENT_FILTER}`);
   const events = await pool.query<EventRecord>(
     `SELECT * FROM events
-     WHERE status = 'completed' AND ${PUBLIC_EVENT_FILTER}
+     WHERE status = 'completed' AND parent_event_id IS NULL AND ${PUBLIC_EVENT_FILTER}
      ORDER BY date_time DESC LIMIT $1 OFFSET $2`,
     [limit, offset]
   );
@@ -141,6 +141,28 @@ export const getPublicEventById = asyncHandler(async (req: Request, res: Respons
   if (Number.isNaN(eventId)) {
     throw new ApiError(400, "VALIDATION_ERROR", "Некорректный id мероприятия");
   }
+  const data = await loadPublicEvent(eventId);
+  // include votings (public, filtered by hidden)
+  const votingsRows = await pool.query<EventRecord>(
+    `SELECT * FROM events WHERE parent_event_id = $1 AND ${PUBLIC_EVENT_FILTER} ORDER BY date_time ASC, id ASC`,
+    [eventId]
+  );
+  const votings = await batchPublicEvents(votingsRows.rows);
+  res.status(200).json({ ...data, votings });
+});
 
-  res.status(200).json(await loadPublicEvent(eventId));
+export const listPublicVotings = asyncHandler(async (req: Request, res: Response) => {
+  const eventId = parseInt(req.params.id, 10);
+  if (Number.isNaN(eventId)) {
+    throw new ApiError(400, "VALIDATION_ERROR", "Некорректный id мероприятия");
+  }
+  // ensure parent exists and is public
+  const parentCheck = await pool.query<EventRecord>(`SELECT * FROM events WHERE id=$1 AND ${PUBLIC_EVENT_FILTER}`, [eventId]);
+  if (parentCheck.rowCount===0) throw new ApiError(404, "EVENT_NOT_FOUND", "Мероприятие не найдено");
+  const votingsRows = await pool.query<EventRecord>(
+    `SELECT * FROM events WHERE parent_event_id = $1 AND ${PUBLIC_EVENT_FILTER} ORDER BY date_time ASC, id ASC`,
+    [eventId]
+  );
+  const votings = await batchPublicEvents(votingsRows.rows);
+  res.status(200).json(votings);
 });

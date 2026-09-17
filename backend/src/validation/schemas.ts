@@ -24,9 +24,25 @@ export const votingDurationSchema = z
   .min(1, "Таймер должен быть не меньше 1 минуты")
   .max(1440, "Таймер не может быть больше суток");
 
-const participantDraftSchema = z.object({
+export const participantDraftSchema = z.object({
   name: z.string().trim().min(1).max(255),
   description: z.string().trim().max(2000).optional().nullable(),
+});
+
+const votingDraftSchema = z.object({
+  title: z.string().trim().min(3).max(500),
+  status: eventStatusEnum.optional().default("upcoming"),
+  eventType: eventTypeEnum.optional().default("poll"),
+  customTypeLabel: z.string().trim().min(1).max(50).optional().nullable(),
+  dateTime: z.string().datetime({ offset: true }).optional(),
+  votingDurationMinutes: votingDurationSchema.nullable().optional(),
+  votesHidden: z.boolean().optional(),
+  hiddenFromPublic: z.boolean().optional(),
+  showLeaderboard: z.boolean().optional(),
+  showStandings: z.boolean().optional(),
+  showPodium: z.boolean().optional(),
+  broadcastMessage: z.string().trim().max(500).optional().nullable(),
+  participants: z.array(participantDraftSchema).min(2).optional(),
 });
 
 export const createEventSchema = z.object({
@@ -48,6 +64,12 @@ export const createEventSchema = z.object({
   // event and participants are persisted atomically in one transaction.
   // Число участников не ограничено сверху: минимум 2 (дебаты требуют сторон).
   participants: z.array(participantDraftSchema).min(2).optional(),
+  // Several votings (child events) can be created atomically together with the parent event.
+  votings: z.array(votingDraftSchema).max(20).optional(),
+});
+
+export const createVotingSchema = votingDraftSchema.extend({
+  // when creating via POST /events/:id/votings dateTime is optional and defaults to parent
 });
 
 export const updateEventSchema = z.object({

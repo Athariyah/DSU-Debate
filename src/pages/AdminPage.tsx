@@ -12,10 +12,12 @@ import { cn } from "../utils/cn";
 import type { EventType } from "../types";
 import {
   createAdminParticipant,
+  createAdminVoting,
   deleteAdminParticipant,
   deleteDebate,
   listAdminDebates,
   listAdminParticipants,
+  listAdminVotings,
   type AdminEventSummary,
   type AdminParticipant,
   updateAdminParticipant,
@@ -40,6 +42,7 @@ const EVENT_TYPE_OPTIONS: EventType[] = ["debate", "tournament", "poll", "compet
 export function AdminPage() {
   const [events, setEvents] = useState<AdminEventSummary[]>([]);
   const [participants, setParticipants] = useState<Record<number, AdminParticipant[]>>({});
+  const [votings, setVotings] = useState<Record<number, AdminEventSummary[]>>({});
   const [expanded, setExpanded] = useState<number | null>(null);
   const [editingTitleId, setEditingTitleId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -74,10 +77,22 @@ export function AdminPage() {
       return;
     }
     setExpanded(eventId);
-    if (participants[eventId]) return;
     try {
-      const loaded = await listAdminParticipants(eventId);
-      setParticipants((current) => ({ ...current, [eventId]: loaded }));
+      if (!participants[eventId]) {
+        const loaded = await listAdminParticipants(eventId);
+        setParticipants((current) => ({ ...current, [eventId]: loaded }));
+      }
+      if (!votings[eventId]) {
+        const loadedVotings = await listAdminVotings(eventId);
+        setVotings((current) => ({ ...current, [eventId]: loadedVotings }));
+        // also load participants for each voting
+        for (const v of loadedVotings) {
+          try {
+            const vp = await listAdminParticipants(v.id);
+            setParticipants((cur) => ({ ...cur, [v.id]: vp }));
+          } catch {}
+        }
+      }
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Не удалось загрузить участников");
     }
@@ -177,6 +192,50 @@ export function AdminPage() {
       setParticipants((current) => ({ ...current, [eventId]: [...(current[eventId] ?? []), created] }));
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : "Не удалось добавить участника");
+    }
+  }
+
+  async function addVoting(eventId: number) {
+    const title = window.prompt("Название нового голосования");
+    if (!title?.trim()) return;
+    try {
+      const created = await createAdminVoting(eventId, { title: title.trim(), participants: [{ name: "Участник 1", description: null }, { name: "Участник 2", description: null }] });
+      setVotings((cur) => ({ ...cur, [eventId]: [...(cur[eventId] ?? []), created] }));
+      // load its participants
+      const vp = await listAdminParticipants(created.id);
+      setParticipants((cur) => ({ ...cur, [created.id]: vp }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось создать голосование");
+    }
+  }
+
+  function updateVotingLocal(parentId: number, votingId: number, patch: Partial<AdminEventSummary>) {
+    setVotings((cur) => ({ ...cur, [parentId]: (cur[parentId] ?? []).map((v) => (v.id === votingId ? { ...v, ...patch } : v)) }));
+  }
+
+  async function saveVoting(parentId: number, voting: AdminEventSummary) {
+    setBusyId(voting.id);
+    setError(null);
+    try {
+      const saved = await updateDebate(voting.id, {
+        title: voting.title,
+        status: voting.status,
+        eventType: voting.eventType ?? "poll",
+        customTypeLabel: (voting as any).customTypeLabel ?? null,
+        dateTime: new Date(voting.dateTime).toISOString(),
+        votingDurationMinutes: voting.votingDurationMinutes ?? null,
+        votesHidden: voting.votesHidden ?? false,
+        hiddenFromPublic: voting.hiddenFromPublic ?? false,
+        showLeaderboard: (voting as any).showLeaderboard ?? true,
+        showStandings: (voting as any).showStandings ?? true,
+        showPodium: (voting as any).showPodium ?? true,
+        broadcastMessage: (voting as any).broadcastMessage ?? null,
+      });
+      setVotings((cur) => ({ ...cur, [parentId]: (cur[parentId] ?? []).map((v) => (v.id === saved.id ? saved : v)) }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось сохранить голосование");
+    } finally {
+      setBusyId(null);
     }
   }
 
@@ -342,7 +401,7 @@ export function AdminPage() {
                     aria-label="Скрыть голоса от зрителей"
                     onClick={() => updateEventLocal(event.id, { votesHidden: !event.votesHidden })}
                     className={cn(
-                      "relative h-[26px] w-11 shrink-0 rounded-full border transition-colors duration-300",
+                      "relative flex h-[26px] w-11 shrink-0 items-center rounded-full border transition-colors duration-300",
                       event.votesHidden
                         ? "border-indigo-300/50 bg-gradient-to-r from-indigo-500/80 via-violet-500/70 to-sky-400/80 shadow-[0_4px_16px_-4px_rgba(99,102,241,0.75),inset_0_1px_0_rgba(255,255,255,0.25)]"
                         : "border-white/15 bg-black/30 shadow-[inset_0_2px_6px_rgba(0,0,0,0.35)]"
@@ -350,7 +409,7 @@ export function AdminPage() {
                   >
                     <motion.span
                       aria-hidden
-                      className="absolute left-1 top-1 h-[18px] w-[18px] rounded-full bg-white shadow-[0_2px_6px_rgba(0,0,0,0.45)]"
+                      className="ml-1 h-[18px] w-[18px] shrink-0 rounded-full bg-white shadow-[0_2px_6px_rgba(0,0,0,0.45)]"
                       animate={{ x: event.votesHidden ? 18 : 0 }}
                       transition={{ type: "spring", stiffness: 500, damping: 30 }}
                     />
@@ -381,7 +440,7 @@ export function AdminPage() {
                     aria-label="Скрыть мероприятие от обычных пользователей"
                     onClick={() => updateEventLocal(event.id, { hiddenFromPublic: !event.hiddenFromPublic })}
                     className={cn(
-                      "relative h-[26px] w-11 shrink-0 rounded-full border transition-colors duration-300",
+                      "relative flex h-[26px] w-11 shrink-0 items-center rounded-full border transition-colors duration-300",
                       event.hiddenFromPublic
                         ? "border-amber-300/50 bg-gradient-to-r from-amber-500/80 via-orange-500/70 to-amber-400/80 shadow-[0_4px_16px_-4px_rgba(245,158,11,0.75),inset_0_1px_0_rgba(255,255,255,0.25)]"
                         : "border-white/15 bg-black/30 shadow-[inset_0_2px_6px_rgba(0,0,0,0.35)]"
@@ -389,7 +448,7 @@ export function AdminPage() {
                   >
                     <motion.span
                       aria-hidden
-                      className="absolute left-1 top-1 h-[18px] w-[18px] rounded-full bg-white shadow-[0_2px_6px_rgba(0,0,0,0.45)]"
+                      className="ml-1 h-[18px] w-[18px] shrink-0 rounded-full bg-white shadow-[0_2px_6px_rgba(0,0,0,0.45)]"
                       animate={{ x: event.hiddenFromPublic ? 18 : 0 }}
                       transition={{ type: "spring", stiffness: 500, damping: 30 }}
                     />
@@ -428,9 +487,9 @@ export function AdminPage() {
                         role="switch"
                         aria-checked={tab.val}
                         onClick={() => updateEventLocal(event.id, { [tab.key]: !tab.val } as any)}
-                        className={cn("relative h-[26px] w-11 shrink-0 rounded-full border transition-colors", tab.val ? "border-indigo-300/50 bg-gradient-to-r from-indigo-500/80 via-violet-500/70 to-indigo-400/80" : "border-white/15 bg-black/30")}
+                        className={cn("relative flex h-[26px] w-11 shrink-0 items-center rounded-full border transition-colors", tab.val ? "border-indigo-300/50 bg-gradient-to-r from-indigo-500/80 via-violet-500/70 to-indigo-400/80" : "border-white/15 bg-black/30")}
                       >
-                        <motion.span aria-hidden className="absolute left-1 top-1 h-[18px] w-[18px] rounded-full bg-white" animate={{ x: tab.val ? 18 : 0 }} transition={{ type: "spring", stiffness: 500, damping: 30 }} />
+                        <motion.span aria-hidden className="ml-1 h-[18px] w-[18px] shrink-0 rounded-full bg-white" animate={{ x: tab.val ? 18 : 0 }} transition={{ type: "spring", stiffness: 500, damping: 30 }} />
                       </button>
                     </div>
                   ))}
@@ -481,42 +540,114 @@ export function AdminPage() {
                 </div>
 
                 {isExpanded && (
-                  <div className="mt-4 space-y-2 border-t border-white/10 pt-4">
-                    {eventParticipants.map((participant) => (
-                      <div key={participant.id} className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                        <input
-                          value={participant.name}
-                          onChange={(inputEvent) => setParticipants((current) => ({
-                            ...current,
-                            [event.id]: current[event.id].map((item) => item.id === participant.id ? { ...item, name: inputEvent.target.value } : item),
-                          }))}
-                          className="w-full bg-transparent text-sm font-semibold text-white outline-none"
-                        />
-                        <input
-                          value={participant.description ?? ""}
-                          onChange={(inputEvent) => setParticipants((current) => ({
-                            ...current,
-                            [event.id]: current[event.id].map((item) => item.id === participant.id ? { ...item, description: inputEvent.target.value } : item),
-                          }))}
-                          placeholder="Описание / позиция"
-                          className="mt-1 w-full bg-transparent text-xs text-white/55 outline-none"
-                        />
-                        <div className="mt-2 flex gap-2">
-                          <Button variant="glass" onClick={() => void saveParticipant(event.id, participant)} disabled={busyId === participant.id}><Check size={14} />Сохранить</Button>
-                          <Button
-                            variant="ghost"
-                            className="text-rose-300"
-                            aria-label={`Удалить участника ${participant.name}`}
-                            onClick={() =>
-                              setPendingDelete({ kind: "participant", eventId: event.id, id: participant.id, name: participant.name })
-                            }
-                          >
-                            <Trash2 size={14} />
-                          </Button>
-                        </div>
+                  <div className="mt-4 space-y-4 border-t border-white/10 pt-4">
+                    {/* Main participants (if any) — for single-voting events */}
+                    {eventParticipants.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="px-1 text-[11px] font-semibold uppercase tracking-widest text-white/40">Участники мероприятия {event.votingsCount ? `(общие)` : ""}</p>
+                        {eventParticipants.map((participant) => (
+                          <div key={participant.id} className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                            <input
+                              value={participant.name}
+                              onChange={(inputEvent) => setParticipants((current) => ({
+                                ...current,
+                                [event.id]: current[event.id].map((item) => item.id === participant.id ? { ...item, name: inputEvent.target.value } : item),
+                              }))}
+                              className="w-full bg-transparent text-sm font-semibold text-white outline-none"
+                            />
+                            <input
+                              value={participant.description ?? ""}
+                              onChange={(inputEvent) => setParticipants((current) => ({
+                                ...current,
+                                [event.id]: current[event.id].map((item) => item.id === participant.id ? { ...item, description: inputEvent.target.value } : item),
+                              }))}
+                              placeholder="Описание / позиция"
+                              className="mt-1 w-full bg-transparent text-xs text-white/55 outline-none"
+                            />
+                            <div className="mt-2 flex gap-2">
+                              <Button variant="glass" onClick={() => void saveParticipant(event.id, participant)} disabled={busyId === participant.id}><Check size={14} />Сохранить</Button>
+                              <Button
+                                variant="ghost"
+                                className="text-rose-300"
+                                aria-label={`Удалить участника ${participant.name}`}
+                                onClick={() =>
+                                  setPendingDelete({ kind: "participant", eventId: event.id, id: participant.id, name: participant.name })
+                                }
+                              >
+                                <Trash2 size={14} />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                        <Button variant="glass" fullWidth onClick={() => void addParticipant(event.id)}><Plus size={15} />Добавить участника</Button>
                       </div>
-                    ))}
-                    <Button variant="glass" fullWidth onClick={() => void addParticipant(event.id)}><Plus size={15} />Добавить участника</Button>
+                    )}
+                    {eventParticipants.length === 0 && (
+                      <Button variant="glass" fullWidth onClick={() => void addParticipant(event.id)}><Plus size={15} />Добавить участника к мероприятию</Button>
+                    )}
+
+                    {/* Votings */}
+                    <div className="space-y-3 rounded-2xl border border-white/10 bg-black/20 p-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold text-white">Голосования ({(votings[event.id] ?? []).length})</p>
+                        <Button variant="glass" onClick={() => void addVoting(event.id)} className="py-1.5 text-xs"><Plus size={12} />Добавить голосование</Button>
+                      </div>
+                      {(votings[event.id] ?? []).length === 0 ? (
+                        <p className="rounded-xl border border-dashed border-white/10 px-3 py-4 text-center text-xs text-white/30">Пока нет отдельных голосований — используется общий список участников. Добавьте голосование, чтобы разбить мероприятие.</p>
+                      ) : (
+                        <div className="space-y-3">
+                          {(votings[event.id] ?? []).map((voting) => {
+                            const vParticipants = participants[voting.id] ?? [];
+                            return (
+                              <div key={voting.id} className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                                <div className="flex items-start justify-between gap-2">
+                                  <textarea value={voting.title} onChange={(e) => updateVotingLocal(event.id, voting.id, { title: e.target.value })} rows={2} className="w-full resize-none bg-transparent text-sm font-semibold text-white outline-none" placeholder="Название голосования" />
+                                  <Button variant="ghost" className="text-rose-300 p-1" onClick={() => setPendingDelete({ kind: "event", id: voting.id, title: voting.title })} aria-label="Удалить голосование"><Trash2 size={14} /></Button>
+                                </div>
+                                <div className="mt-2 flex items-center gap-2">
+                                  <StatusSelect value={voting.status} onChange={(status) => updateVotingLocal(event.id, voting.id, { status } as any)} />
+                                  <span className="text-[11px] text-white/30">ID: {voting.id}</span>
+                                </div>
+                                <DateTimeField className="mt-2" value={voting.dateTime} onChange={(iso) => updateVotingLocal(event.id, voting.id, { dateTime: iso })} />
+                                <div className="mt-2 flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+                                  <IconChip icon={Timer} iconSize={13} />
+                                  <input type="number" min={1} max={1440} value={voting.votingDurationMinutes ?? ""} onChange={(e) => { const raw = e.target.value.trim(); const parsed = raw === "" ? null : Number(raw); const minutes = parsed === null || !Number.isFinite(parsed) ? null : Math.min(1440, Math.max(1, Math.round(parsed))); updateVotingLocal(event.id, voting.id, { votingDurationMinutes: minutes } as any); }} placeholder="—" className="w-14 rounded-lg border border-white/10 bg-black/25 px-2 py-1 text-center text-xs text-white outline-none" />
+                                  <span className="text-[11px] text-white/40">мин</span>
+                                </div>
+                                <div className="mt-2 flex gap-2">
+                                  <Button variant="glass" onClick={() => void saveVoting(event.id, voting)} disabled={busyId === voting.id} className="py-1.5 text-xs"><Save size={13} />Сохранить</Button>
+                                </div>
+                                <div className="mt-3 rounded-xl border border-white/10 bg-black/20 p-2">
+                                  <p className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-widest text-white/40">Текст на трансляцию</p>
+                                  <div className="flex items-center gap-2">
+                                    <IconChip icon={MonitorPlay} iconSize={13} />
+                                    <input value={(voting as any).broadcastMessage ?? ""} onChange={(e) => updateVotingLocal(event.id, voting.id, { broadcastMessage: e.target.value } as any)} placeholder="Текст для экрана" maxLength={200} className="w-full bg-transparent text-xs text-white placeholder:text-white/30 outline-none" />
+                                  </div>
+                                  <div className="mt-1.5 flex gap-2">
+                                    <Button variant="glass" onClick={() => void saveVoting(event.id, voting)} disabled={busyId === voting.id} className="py-1.5 text-[11px]"><MonitorPlay size={12} />Показать</Button>
+                                    {(voting as any).broadcastMessage && <button type="button" onClick={() => updateVotingLocal(event.id, voting.id, { broadcastMessage: "" } as any)} className="text-[11px] text-white/40 hover:text-white">Очистить</button>}
+                                  </div>
+                                </div>
+                                <div className="mt-3 space-y-2">
+                                  <p className="px-1 text-[11px] font-semibold uppercase tracking-widest text-white/40">Участники голосования ({vParticipants.length})</p>
+                                  {vParticipants.map((participant) => (
+                                    <div key={participant.id} className="rounded-xl border border-white/10 bg-black/20 p-2">
+                                      <input value={participant.name} onChange={(e) => setParticipants((cur) => ({ ...cur, [voting.id]: cur[voting.id].map((it) => it.id === participant.id ? { ...it, name: e.target.value } : it) }))} className="w-full bg-transparent text-xs font-semibold text-white outline-none" />
+                                      <input value={participant.description ?? ""} onChange={(e) => setParticipants((cur) => ({ ...cur, [voting.id]: cur[voting.id].map((it) => it.id === participant.id ? { ...it, description: e.target.value } : it) }))} placeholder="Описание" className="mt-1 w-full bg-transparent text-[11px] text-white/55 outline-none" />
+                                      <div className="mt-1.5 flex gap-1.5">
+                                        <Button variant="glass" onClick={() => void saveParticipant(voting.id, participant)} disabled={busyId === participant.id} className="py-1 text-[11px]"><Check size={11} />Сохранить</Button>
+                                        <Button variant="ghost" className="text-rose-300 py-1 text-[11px]" onClick={() => setPendingDelete({ kind: "participant", eventId: voting.id, id: participant.id, name: participant.name })}><Trash2 size={11} /></Button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                  <Button variant="glass" fullWidth onClick={() => void addParticipant(voting.id)} className="py-1.5 text-xs"><Plus size={12} />Добавить участника</Button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </section>

@@ -100,7 +100,7 @@ export const getActiveEvent = asyncHandler(async (_req: Request, res: Response) 
   // для обычных пользователей их просто нет.
   const eventResult = await pool.query<EventRecord>(
     `SELECT * FROM events
-     WHERE status = 'active' AND COALESCE(hidden_from_public, FALSE) = FALSE
+     WHERE status = 'active' AND parent_event_id IS NULL AND COALESCE(hidden_from_public, FALSE) = FALSE
      ORDER BY date_time DESC LIMIT 1`
   );
 
@@ -122,6 +122,39 @@ export const getActiveEvent = asyncHandler(async (_req: Request, res: Response) 
   const votesHidden = Boolean(event.votes_hidden);
   const visibleResults = votesHidden ? redactEventResults(results) : results;
 
+  // include child votings for active parent event
+  const votingsRows = await pool.query<EventRecord>(`SELECT * FROM events WHERE parent_event_id = $1 ORDER BY date_time ASC, id ASC`, [event.id]);
+  const votings: any[] = [];
+  for (const v of votingsRows.rows) {
+    const vClient = await pool.connect();
+    try {
+      const vRes = await computeEventResults(vClient, v.id);
+      const vHidden = Boolean(v.votes_hidden);
+      const vVis = vHidden ? redactEventResults(vRes) : vRes;
+      votings.push({
+        event: {
+          id: v.id,
+          title: v.title,
+          status: v.status,
+          eventType: (v as any).event_type ?? "poll",
+          customTypeLabel: (v as any).custom_type_label ?? null,
+          dateTime: v.date_time,
+          votingDurationMinutes: v.voting_duration_minutes ?? null,
+          votingEndsAt: votingEndsAt(v)?.toISOString() ?? null,
+          votesHidden: vHidden,
+          participantsCount: vRes.participants.length,
+          showLeaderboard: (v as any).show_leaderboard === undefined || (v as any).show_leaderboard === null ? true : Boolean((v as any).show_leaderboard),
+          showStandings: (v as any).show_standings === undefined || (v as any).show_standings === null ? true : Boolean((v as any).show_standings),
+          showPodium: (v as any).show_podium === undefined || (v as any).show_podium === null ? true : Boolean((v as any).show_podium),
+          broadcastMessage: (v as any).broadcast_message ?? null,
+          parentEventId: event.id,
+        },
+        participants: vVis.participants.map((p: any) => ({ id: p.participantId, eventId: v.id, name: p.name, description: p.description, votesCount: p.votesCount, percentage: p.percentage })),
+        totalVotes: vVis.totalVotes,
+      });
+    } finally { vClient.release(); }
+  }
+
   res.status(200).json({
     event: {
       id: event.id,
@@ -138,6 +171,7 @@ export const getActiveEvent = asyncHandler(async (_req: Request, res: Response) 
       showStandings: (event as any).show_standings === undefined || (event as any).show_standings === null ? true : Boolean((event as any).show_standings),
       showPodium: (event as any).show_podium === undefined || (event as any).show_podium === null ? true : Boolean((event as any).show_podium),
       broadcastMessage: (event as any).broadcast_message ?? null,
+      parentEventId: (event as any).parent_event_id ?? null,
     },
     participants: visibleResults.participants.map((p) => ({
       id: p.participantId,
@@ -148,6 +182,7 @@ export const getActiveEvent = asyncHandler(async (_req: Request, res: Response) 
       percentage: p.percentage,
     })),
     totalVotes: visibleResults.totalVotes,
+    votings,
   });
 });
 

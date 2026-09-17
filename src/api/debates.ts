@@ -24,7 +24,11 @@ interface BackendEvent {
   showStandings?: boolean;
   showPodium?: boolean;
   broadcastMessage?: string | null;
+  parentEventId?: number | null;
+  parent_event_id?: number | null;
   participantsCount?: number;
+  votingsCount?: number;
+  votings?: BackendPublicEventResponse[];
 }
 
 interface BackendParticipant {
@@ -40,6 +44,7 @@ interface BackendPublicEventResponse {
   event: BackendEvent;
   participants: BackendParticipant[];
   totalVotes: number;
+  votings?: BackendPublicEventResponse[];
 }
 
 const USE_MOCKS = import.meta.env.VITE_USE_MOCKS === "true";
@@ -77,6 +82,9 @@ function mapPublicEvent(payload: BackendPublicEventResponse): DebateEvent {
     showStandings: (payload.event as any).showStandings ?? true,
     showPodium: (payload.event as any).showPodium ?? true,
     broadcastMessage: (payload.event as any).broadcastMessage ?? null,
+    parentEventId: (payload.event as any).parentEventId ?? (payload.event as any).parent_event_id ?? null,
+    votingsCount: (payload.event as any).votingsCount ?? (payload.votings?.length ?? 0),
+    votings: payload.votings?.map(mapPublicEvent) ?? undefined,
     totalVotes: Number(payload.totalVotes ?? 0),
     participants,
   };
@@ -197,7 +205,9 @@ export interface AdminEventSummary {
   showStandings: boolean;
   showPodium: boolean;
   broadcastMessage?: string | null;
+  parentEventId?: number | null;
   participantsCount: number;
+  votingsCount?: number;
 }
 
 export async function listAdminDebates(status?: DebateEvent["status"]): Promise<AdminEventSummary[]> {
@@ -215,6 +225,8 @@ export async function listAdminDebates(status?: DebateEvent["status"]): Promise<
     showStandings: (item as any).showStandings ?? true,
     showPodium: (item as any).showPodium ?? true,
     broadcastMessage: (item as any).broadcastMessage ?? null,
+    parentEventId: (item as any).parentEventId ?? (item as any).parent_event_id ?? null,
+    votingsCount: (item as any).votingsCount ?? 0,
   }));
 }
 
@@ -302,9 +314,24 @@ export async function createDebate(input: CreateDebateInput): Promise<DebateEven
       showStandings: input.showStandings ?? true,
       showPodium: input.showPodium ?? true,
       broadcastMessage: input.broadcastMessage ?? null,
-      participants: input.participants.map((participant) => ({
+      participants: input.participants ? input.participants.map((participant) => ({
         name: participant.name,
         description: participant.subtitle ?? null,
+      })) : undefined,
+      votings: input.votings?.map((v) => ({
+        title: v.title,
+        status: v.status ?? "upcoming",
+        eventType: v.eventType ?? "poll",
+        customTypeLabel: v.customTypeLabel ?? null,
+        dateTime: v.scheduledAt ?? input.scheduledAt,
+        votingDurationMinutes: v.votingDurationMinutes ?? null,
+        votesHidden: v.votesHidden ?? false,
+        hiddenFromPublic: v.hiddenFromPublic ?? false,
+        showLeaderboard: v.showLeaderboard ?? true,
+        showStandings: v.showStandings ?? true,
+        showPodium: v.showPodium ?? true,
+        broadcastMessage: v.broadcastMessage ?? null,
+        participants: v.participants.map((p) => ({ name: p.name, description: p.subtitle ?? null })),
       })),
     }),
   });
@@ -366,6 +393,56 @@ export async function updateMatchApi(matchId: number, data: Partial<import("../t
 }
 export async function deleteMatchApi(matchId: number): Promise<void> {
   await apiFetch(`/admin/matches/${matchId}`, { method: "DELETE", auth: true });
+}
+
+export async function listAdminVotings(eventId: number): Promise<AdminEventSummary[]> {
+  const response = await apiFetch<{ votings: AdminEventSummary[] }>(`/admin/events/${eventId}/votings`, { auth: true });
+  return response.votings.map((item) => ({
+    ...item,
+    eventType: (item as any).eventType ?? "poll",
+    customTypeLabel: (item as any).customTypeLabel ?? null,
+    votingDurationMinutes: item.votingDurationMinutes ?? null,
+    votesHidden: item.votesHidden ?? false,
+    hiddenFromPublic: item.hiddenFromPublic ?? false,
+    showLeaderboard: (item as any).showLeaderboard ?? true,
+    showStandings: (item as any).showStandings ?? true,
+    showPodium: (item as any).showPodium ?? true,
+    broadcastMessage: (item as any).broadcastMessage ?? null,
+    parentEventId: (item as any).parentEventId ?? (item as any).parent_event_id ?? null,
+    votingsCount: 0,
+  }));
+}
+
+export async function createAdminVoting(eventId: number, voting: { title: string; status?: string; eventType?: string; customTypeLabel?: string | null; dateTime?: string; votingDurationMinutes?: number | null; votesHidden?: boolean; hiddenFromPublic?: boolean; showLeaderboard?: boolean; showStandings?: boolean; showPodium?: boolean; broadcastMessage?: string | null; participants: { name: string; description?: string | null }[] }): Promise<AdminEventSummary> {
+  const response = await apiFetch<{ voting: AdminEventSummary }>(`/admin/events/${eventId}/votings`, {
+    method: "POST",
+    auth: true,
+    body: JSON.stringify({
+      title: voting.title,
+      status: voting.status ?? "upcoming",
+      eventType: voting.eventType ?? "poll",
+      customTypeLabel: voting.customTypeLabel ?? null,
+      dateTime: voting.dateTime,
+      votingDurationMinutes: voting.votingDurationMinutes ?? null,
+      votesHidden: voting.votesHidden ?? false,
+      hiddenFromPublic: voting.hiddenFromPublic ?? false,
+      showLeaderboard: voting.showLeaderboard ?? true,
+      showStandings: voting.showStandings ?? true,
+      showPodium: voting.showPodium ?? true,
+      broadcastMessage: voting.broadcastMessage ?? null,
+      participants: voting.participants,
+    }),
+  });
+  return response.voting;
+}
+
+export async function fetchVotings(eventId: number): Promise<BackendPublicEventResponse[]> {
+  try {
+    const response = await apiFetch<BackendPublicEventResponse[]>(`/events/${eventId}/votings`);
+    return response;
+  } catch {
+    return [];
+  }
 }
 
 function isNotFound(error: unknown): boolean {

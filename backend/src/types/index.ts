@@ -31,6 +31,7 @@ export interface EventRecord {
   /** Текст для экрана трансляции (крупно по центру) */
   broadcast_message?: string | null;
   broadcast_message_text?: string | null;
+  parent_event_id?: number | null;
   created_by: number;
   created_at: Date;
   updated_at: Date;

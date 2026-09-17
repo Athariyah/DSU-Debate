@@ -59,37 +59,52 @@ export function BroadcastPage() {
   );
   /** Кастомный текст организатора — выводится на трансляции баннером. */
   const [customText, setCustomText] = useState("");
+  const [selectedVotingId, setSelectedVotingId] = useState<number | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorDraft, setEditorDraft] = useState("");
   const revealedRef = useRef(false);
 
   // Заметка: приоритет — broadcast_message из БД (управляется из админки с телефона),
   // фолбэк — локальный localStorage (старый способ прямо на трансляции).
+  // Если есть голосования, приоритет — выбранному голосованию.
   useEffect(() => {
     if (!id) return;
-    if (event?.broadcastMessage) {
-      setCustomText(event.broadcastMessage);
+    const selected = event?.votings?.find((v) => v.id === selectedVotingId);
+    const source = selected?.broadcastMessage ?? event?.broadcastMessage;
+    if (source) {
+      setCustomText(source);
     } else {
       setCustomText(localStorage.getItem(noteKeyFor(id)) ?? "");
     }
-  }, [id, event?.broadcastMessage]);
+  }, [id, event?.broadcastMessage, event?.votings, selectedVotingId]);
 
-  // Live-обновление текста с админки: админ меняет в AdminPage -> сокет -> тут
+  // Live-обновление текста с админки: админ меняет в AdminPage -> сокет -> тут (поддерживаем и голосования)
   useEffect(() => {
     if (!id) return;
     const socket = getSocket();
+    const votingIds = new Set((event?.votings ?? []).map((v) => String(v.id)));
     const handler = (payload: { eventId: number; message: string | null }) => {
-      if (String(payload.eventId) !== String(id)) return;
+      const pid = String(payload.eventId);
+      const isParent = pid === String(id);
+      const isVoting = votingIds.has(pid);
+      if (!isParent && !isVoting) return;
+      // Если сообщение от голосования — авто-выбираем его
+      if (isVoting) setSelectedVotingId(payload.eventId);
       setCustomText(payload.message ?? "");
-      // Синхронизируем и локально для перезагрузки без сети
       if (payload.message) localStorage.setItem(noteKeyFor(String(id)), payload.message);
       else localStorage.removeItem(noteKeyFor(String(id)));
+      // Обновляем также event состояние для votings
+      setEvent((cur) => {
+        if (!cur) return cur;
+        if (isParent) return { ...cur, broadcastMessage: payload.message ?? null };
+        return { ...cur, votings: (cur.votings ?? []).map((v) => v.id === payload.eventId ? { ...v, broadcastMessage: payload.message ?? null } : v) };
+      });
     };
     socket.on("broadcast:message", handler);
     return () => {
       socket.off("broadcast:message", handler);
     };
-  }, [id]);
+  }, [id, event?.votings]);
 
   /** Назад в приложение: если экран открыт прямой ссылкой — на страницу дебата. */
   const goBack = useCallback(() => {
@@ -130,15 +145,27 @@ export function BroadcastPage() {
     void loadEvent();
   }, [loadEvent]);
 
+  // Авто-выбор голосования: если есть голосования, выбираем первое активное или первое
+  useEffect(() => {
+    if (!event?.votings?.length) {
+      setSelectedVotingId(null);
+      return;
+    }
+    if (selectedVotingId && event.votings.some((v) => v.id === selectedVotingId)) return;
+    const active = event.votings.find((v) => v.status === "active");
+    setSelectedVotingId(active ? active.id : event.votings[0].id);
+  }, [event?.votings, selectedVotingId]);
+
+  const selectedVoting = event?.votings?.find((v) => v.id === selectedVotingId) ?? null;
+  const displayEvent = selectedVoting ?? event;
   const { participants, totalVotes, eventStatus, votesHidden, status } = useDebateSocket({
-    eventId: event?.id,
-    initialStatus: event?.status ?? "upcoming",
-    initialParticipants: event?.participants ?? EMPTY_PARTICIPANTS,
-    initialTotalVotes: event?.totalVotes ?? 0,
-    initialVotesHidden: event?.votesHidden ?? false,
+    eventId: displayEvent?.id,
+    initialStatus: displayEvent?.status ?? "upcoming",
+    initialParticipants: displayEvent?.participants ?? EMPTY_PARTICIPANTS,
+    initialTotalVotes: displayEvent?.totalVotes ?? 0,
+    initialVotesHidden: displayEvent?.votesHidden ?? false,
     onPublicVisibility: (hidden) => {
       if (hidden) {
-        // Админ скрыл дебат: цифры больше не публикуются — прячем и экран.
         setHiddenFromPublic(true);
       } else {
         setHiddenFromPublic(false);
@@ -205,7 +232,7 @@ export function BroadcastPage() {
   );
 
   // Таймер голосования на большом экране: сколько осталось до автостопа.
-  const votingEndsAtMs = event?.votingEndsAt ? new Date(event.votingEndsAt).getTime() : null;
+  const votingEndsAtMs = (displayEvent ?? event)?.votingEndsAt ? new Date((displayEvent ?? event)!.votingEndsAt!).getTime() : null;
   const votingMsLeft =
     votingEndsAtMs !== null && eventStatus === "active"
       ? votingEndsAtMs - clock.getTime()
@@ -261,7 +288,7 @@ export function BroadcastPage() {
   }
 
   const finished = eventStatus === "completed";
-  const scheduled = new Date(event.scheduledAt);
+  const scheduled = new Date((displayEvent ?? event).scheduledAt);
   // QR-код ведёт на страницу голосования этого дебата на текущем хосте.
   const voteUrl = `${window.location.origin}/debate/${id}`;
 
@@ -336,11 +363,21 @@ export function BroadcastPage() {
       </header>
 
       <div className="px-[clamp(1rem,3vw,3.5rem)] pt-[clamp(0.75rem,2vw,2rem)]">
+        {event.votings && event.votings.length > 0 && (
+          <div className="mb-3 flex flex-wrap gap-1.5">
+            <button type="button" onClick={() => setSelectedVotingId(null)} className={cn("rounded-full border px-3 py-1 text-xs font-semibold", selectedVotingId === null ? "border-white bg-white text-black" : "border-white/15 bg-white/5 text-white/60 hover:bg-white/10")}>Общее</button>
+            {event.votings.map((v) => (
+              <button key={v.id} type="button" onClick={() => setSelectedVotingId(v.id)} className={cn("rounded-full border px-3 py-1 text-xs font-semibold", selectedVotingId === v.id ? "border-indigo-300 bg-indigo-500 text-white" : "border-white/15 bg-white/5 text-white/60 hover:bg-white/10")}>
+                {v.title.length > 24 ? v.title.slice(0,24) + "…" : v.title} · {v.status === "active" ? "●" : v.status === "completed" ? "✓" : "○"}
+              </button>
+            ))}
+          </div>
+        )}
         <p className="text-[clamp(0.65rem,0.95vw,1.1rem)] font-semibold uppercase tracking-[0.3em] text-indigo-300/70">
           Тема голосования
         </p>
         <h1 className="mt-2 max-w-[40ch] text-[clamp(1.5rem,3.8vw,4.5rem)] font-extrabold leading-[1.05] tracking-tight">
-          {event.title}
+          {displayEvent ? displayEvent.title : event.title}
         </h1>
         <p className="mt-2 text-[clamp(0.75rem,1.25vw,1.5rem)] text-white/45">
           {STATUS_TEXT[eventStatus]} · {scheduled.toLocaleDateString("ru-RU")},{" "}
@@ -461,7 +498,7 @@ export function BroadcastPage() {
       )}
 
       <WinnerReveal
-        topic={event.title}
+        topic={(displayEvent ?? event).title}
         standings={standings}
         totalVotes={totalVotes}
         open={revealOpen}

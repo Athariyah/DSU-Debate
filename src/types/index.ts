@@ -41,6 +41,9 @@ export interface DebateEvent {
   showPodium?: boolean;
   /** Текст для трансляции (крупно по центру) */
   broadcastMessage?: string | null;
+  parentEventId?: number | null;
+  votingsCount?: number;
+  votings?: DebateEvent[];
   totalVotes: number;
   participants: Participant[];
   coverGradient?: string;
@@ -113,6 +116,22 @@ export interface VoteUpdatePayload {
   participants: Participant[];
 }
 
+export interface VotingDraft {
+  title: string;
+  eventType?: EventType;
+  customTypeLabel?: string | null;
+  participants: { name: string; subtitle?: string }[];
+  scheduledAt?: string;
+  status?: DebateStatus;
+  votingDurationMinutes?: number | null;
+  votesHidden?: boolean;
+  hiddenFromPublic?: boolean;
+  showLeaderboard?: boolean;
+  showStandings?: boolean;
+  showPodium?: boolean;
+  broadcastMessage?: string | null;
+}
+
 export interface CreateDebateInput {
   title: string;
   /** Число участников (не ограничено сверху; минимум 2). */
@@ -131,5 +150,7 @@ export interface CreateDebateInput {
   showStandings?: boolean;
   showPodium?: boolean;
   broadcastMessage?: string | null;
+  /** Several votings (child events) created atomically with parent */
+  votings?: VotingDraft[];
 }
 export type CreateEventInput = CreateDebateInput;
