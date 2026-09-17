@@ -12,12 +12,15 @@ interface UseDebateSocketArgs {
   initialStatus: DebateStatus;
   initialParticipants: Participant[];
   initialTotalVotes: number;
+  /** Закрытое голосование: флажок «Скрыть голоса» из админки. */
+  initialVotesHidden: boolean;
 }
 
 interface UseDebateSocketResult {
   participants: Participant[];
   totalVotes: number;
   eventStatus: DebateStatus;
+  votesHidden: boolean;
   status: RealtimeStatus;
 }
 
@@ -40,6 +43,11 @@ interface StatusPayload {
   status: DebateStatus;
 }
 
+interface VisibilityPayload {
+  eventId: number;
+  votesHidden: boolean;
+}
+
 type RealtimePayload = VoteUpdatePayload | BackendRealtimePayload;
 
 export function useDebateSocket({
@@ -47,10 +55,12 @@ export function useDebateSocket({
   initialStatus,
   initialParticipants,
   initialTotalVotes,
+  initialVotesHidden,
 }: UseDebateSocketArgs): UseDebateSocketResult {
   const [participants, setParticipants] = useState<Participant[]>(initialParticipants);
   const [totalVotes, setTotalVotes] = useState(initialTotalVotes);
   const [eventStatus, setEventStatus] = useState<DebateStatus>(initialStatus);
+  const [votesHidden, setVotesHidden] = useState(initialVotesHidden);
   const [status, setStatus] = useState<RealtimeStatus>("connecting");
   const hasLiveConnection = useRef(false);
 
@@ -58,7 +68,8 @@ export function useDebateSocket({
     setParticipants(initialParticipants);
     setTotalVotes(initialTotalVotes);
     setEventStatus(initialStatus);
-  }, [eventId, initialParticipants, initialTotalVotes, initialStatus]);
+    setVotesHidden(initialVotesHidden);
+  }, [eventId, initialParticipants, initialTotalVotes, initialStatus, initialVotesHidden]);
 
   useEffect(() => {
     if (eventId === undefined || eventId === null) return;
@@ -90,6 +101,12 @@ export function useDebateSocket({
       if (Number(payload.eventId) === eventId) setEventStatus(payload.status);
     };
 
+    // Флажок «Скрыть голоса» переключился в админке: прячем/раскрываем цифры
+    // мгновенно. Числа прилетают отдельным vote:update до этого события.
+    const applyVisibility = (payload: VisibilityPayload) => {
+      if (Number(payload.eventId) === eventId) setVotesHidden(Boolean(payload.votesHidden));
+    };
+
     const handleConnect = () => {
       hasLiveConnection.current = true;
       setStatus("live");
@@ -105,6 +122,7 @@ export function useDebateSocket({
     socket.on("disconnect", handleDisconnect);
     socket.on("vote:update", applyUpdate);
     socket.on("event:status_changed", applyStatus);
+    socket.on("event:votes_visibility", applyVisibility);
 
     if (socket.connected) handleConnect();
 
@@ -121,10 +139,11 @@ export function useDebateSocket({
       socket.off("disconnect", handleDisconnect);
       socket.off("vote:update", applyUpdate);
       socket.off("event:status_changed", applyStatus);
+      socket.off("event:votes_visibility", applyVisibility);
       if (socket.connected) socket.emit("leave_debate", eventId);
       demoUnsubscribe?.();
     };
   }, [eventId]);
 
-  return { participants, totalVotes, eventStatus, status };
+  return { participants, totalVotes, eventStatus, votesHidden, status };
 }

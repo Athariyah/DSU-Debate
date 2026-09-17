@@ -294,3 +294,97 @@ body {
 .animate-float-y {
   animation: float-y 5s ease-in-out infinite;
 }
+
+/* ------------------------------------------------------------------ */
+/* Бренд-марк стартового экрана (components/brand/BrandLogo)          */
+/* ------------------------------------------------------------------ */
+
+/* Вращения внутри SVG: transform-box: view-box + origin center дают
+   поворот группы вокруг центра вьюбокса (60,60) — без вычислений
+   в рантайме и без скачков начальной точки. */
+@keyframes logo-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes logo-spin-reverse {
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+.logo-orbit {
+  transform-box: view-box;
+  transform-origin: center;
+  animation: logo-spin 28s linear infinite;
+}
+
+.logo-satellite {
+  transform-box: view-box;
+  transform-origin: center;
+  animation: logo-spin-reverse 11s linear infinite;
+}
+
+.logo-satellite-slow {
+  transform-box: view-box;
+  transform-origin: center;
+  animation: logo-spin 17s linear infinite;
+}
+
+/* «Эквалайзер голосов» внутри монограммы: transform-box: fill-box даёт
+   каждой плашке свой собственный центр — дышим из середины столбика. */
+@keyframes logo-bar-breathe {
+  0%,
+  100% {
+    transform: scaleY(0.55);
+  }
+  30% {
+    transform: scaleY(1);
+  }
+  55% {
+    transform: scaleY(0.72);
+  }
+  80% {
+    transform: scaleY(0.9);
+  }
+}
+
+.logo-bar {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: logo-bar-breathe 2.1s ease-in-out infinite;
+}
+
+/* Металлический пробег света по брендовому заголовку: полоса пересекает
+   белый текст слева направо, пауза, затем новый заход (стыки — на чисто
+   белых участках градиента, поэтому переход незаметен). */
+@keyframes text-shimmer-sweep {
+  0% {
+    background-position: 200% 0;
+  }
+  55% {
+    background-position: -140% 0;
+  }
+  100% {
+    background-position: -140% 0;
+  }
+}
+
+.text-shimmer {
+  background-image: linear-gradient(
+    105deg,
+    #ffffff 40%,
+    #c7d2fe 47.5%,
+    #7dd3fc 50%,
+    #c7d2fe 52.5%,
+    #ffffff 60%
+  );
+  background-size: 240% 100%;
+  background-position: 200% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: text-shimmer-sweep 6s ease-in-out infinite;
+}

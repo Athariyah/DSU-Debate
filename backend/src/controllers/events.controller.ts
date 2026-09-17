@@ -4,8 +4,13 @@ import { EventRecord } from "../types";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../middleware/errorHandler";
 import { createEventSchema, eventStatusEnum, updateEventSchema } from "../validation/schemas";
-import { broadcastEventStatusChanged } from "../sockets";
+import {
+  broadcastEventStatusChanged,
+  broadcastVoteUpdate,
+  broadcastVoteVisibilityChanged,
+} from "../sockets";
 import { votingEndsAt } from "../utils/votingWindow";
+import { computeEventResults, redactEventResults } from "./vote.controller";
 
 function serializeEvent(row: EventRecord & { participants_count?: string }) {
   return {
@@ -15,6 +20,7 @@ function serializeEvent(row: EventRecord & { participants_count?: string }) {
     dateTime: row.date_time,
     votingDurationMinutes: row.voting_duration_minutes ?? null,
     votingEndsAt: votingEndsAt(row)?.toISOString() ?? null,
+    votesHidden: Boolean(row.votes_hidden),
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -183,18 +189,20 @@ export const updateEvent = asyncHandler(async (req: Request, res: Response) => {
   if (!parsed.success) {
     throw new ApiError(400, "VALIDATION_ERROR", parsed.error.issues[0].message);
   }
-  const { title, dateTime, status, votingDurationMinutes } = parsed.data;
+  const { title, dateTime, status, votingDurationMinutes, votesHidden } = parsed.data;
 
   if (
     title === undefined &&
     dateTime === undefined &&
     status === undefined &&
-    votingDurationMinutes === undefined
+    votingDurationMinutes === undefined &&
+    votesHidden === undefined
   ) {
     throw new ApiError(400, "VALIDATION_ERROR", "Нет полей для обновления");
   }
 
   let previousActiveId: number | null = null;
+  let previousVotesHidden: boolean | null = null;
   const updatedEvent = await withTransaction(async (client) => {
     const existing = await client.query<EventRecord>(
       "SELECT * FROM events WHERE id = $1 FOR UPDATE",
@@ -203,6 +211,7 @@ export const updateEvent = asyncHandler(async (req: Request, res: Response) => {
     if (existing.rowCount === 0) {
       throw new ApiError(404, "EVENT_NOT_FOUND", "Мероприятие не найдено");
     }
+    previousVotesHidden = Boolean(existing.rows[0].votes_hidden);
 
     if (status === "active") {
       const participantsCount = await client.query<{ count: string }>(
@@ -260,6 +269,10 @@ export const updateEvent = asyncHandler(async (req: Request, res: Response) => {
       values.push(votingDurationMinutes);
       setClauses.push(`voting_duration_minutes = $${values.length}`);
     }
+    if (votesHidden !== undefined) {
+      values.push(votesHidden);
+      setClauses.push(`votes_hidden = $${values.length}`);
+    }
     values.push(eventId);
     const updated = await client.query<EventRecord>(
       `UPDATE events SET ${setClauses.join(", ")} WHERE id = $${values.length} RETURNING *`,
@@ -273,6 +286,21 @@ export const updateEvent = asyncHandler(async (req: Request, res: Response) => {
   }
   if (status) {
     broadcastEventStatusChanged(eventId, status);
+  }
+
+  // Переключили «Скрыть голоса»: рассылаем подписчикам дебата актуальные
+  // результаты (занулённые при скрытии, настоящие при раскрытии) и сам флаг.
+  // Цифры уходят РАНЬШЕ флага: тогда экран трансляции, увидев «раскрыть»,
+  // уже держит корректные результаты и сразу запускает показ итогов.
+  if (votesHidden !== undefined && previousVotesHidden !== null && votesHidden !== previousVotesHidden) {
+    const visibilityClient = await pool.connect();
+    try {
+      const results = await computeEventResults(visibilityClient, eventId);
+      broadcastVoteUpdate(votesHidden ? redactEventResults(results) : results);
+      broadcastVoteVisibilityChanged(eventId, votesHidden);
+    } finally {
+      visibilityClient.release();
+    }
   }
 
   const participantsCount = await pool.query<{ count: string }>(

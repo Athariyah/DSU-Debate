@@ -89,11 +89,12 @@ export function BroadcastPage() {
     void loadEvent();
   }, [loadEvent]);
 
-  const { participants, totalVotes, eventStatus, status } = useDebateSocket({
+  const { participants, totalVotes, eventStatus, votesHidden, status } = useDebateSocket({
     eventId: event?.id,
     initialStatus: event?.status ?? "upcoming",
     initialParticipants: event?.participants ?? EMPTY_PARTICIPANTS,
     initialTotalVotes: event?.totalVotes ?? 0,
+    initialVotesHidden: event?.votesHidden ?? false,
   });
 
   // Подстраховка для большого экрана: если realtime-соединения нет, регулярно
@@ -122,9 +123,11 @@ export function BroadcastPage() {
   }, []);
 
   // Итоги показываем один раз за переход в статус «завершён» — новые голоса
-  // не должны заново запускать анимацию.
+  // не должны заново запускать анимацию. Пока включён флажок «Скрыть голоса»,
+  // раскрытие ждёт: организатор снимает флажок — и зал видит настоящий финал
+  // (настоящие цифры к этому моменту уже пришли отдельным vote:update).
   useEffect(() => {
-    if (eventStatus !== "completed") {
+    if (eventStatus !== "completed" || votesHidden) {
       revealedRef.current = false;
       setRevealOpen(false);
       return;
@@ -132,7 +135,7 @@ export function BroadcastPage() {
     if (revealedRef.current) return;
     revealedRef.current = true;
     setRevealOpen(true);
-  }, [eventStatus]);
+  }, [eventStatus, votesHidden]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -201,10 +204,10 @@ export function BroadcastPage() {
         <div className="flex items-center gap-[clamp(0.75rem,2vw,2.5rem)]">
           <div className="text-right">
             <span className="block text-[clamp(1.1rem,2.1vw,2.5rem)] font-bold leading-none tabular-nums text-white">
-              <AnimatedNumber value={totalVotes} />
+              {votesHidden ? "••" : <AnimatedNumber value={totalVotes} />}
             </span>
             <span className="mt-1 block text-[clamp(0.55rem,0.85vw,1rem)] uppercase tracking-[0.2em] text-white/35">
-              всего голосов
+              {votesHidden ? "голоса скрыты" : "всего голосов"}
             </span>
           </div>
 
@@ -263,9 +266,13 @@ export function BroadcastPage() {
           {STATUS_TEXT[eventStatus]} · {scheduled.toLocaleDateString("ru-RU")},{" "}
           {scheduled.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })} ·{" "}
           {finished
-            ? "итоги подведены"
+            ? votesHidden
+              ? "итоги раскроет организатор"
+              : "итоги подведены"
             : eventStatus === "active"
-              ? "результаты обновляются в реальном времени"
+              ? votesHidden
+                ? "результаты скрыты организатором"
+                : "результаты обновляются в реальном времени"
               : "старт по расписанию"}
         </p>
       </div>
@@ -285,9 +292,10 @@ export function BroadcastPage() {
                 key={participant.id}
                 participant={participant}
                 index={index}
-                leader={eventStatus === "active" && standings.leaderUnique && standings.top[0]?.id === participant.id}
-                winner={finished && standings.winner?.id === participant.id}
-                loser={finished && standings.loser?.id === participant.id}
+                hidden={votesHidden}
+                leader={!votesHidden && eventStatus === "active" && standings.leaderUnique && standings.top[0]?.id === participant.id}
+                winner={!votesHidden && finished && standings.winner?.id === participant.id}
+                loser={!votesHidden && finished && standings.loser?.id === participant.id}
               />
             ))}
           </div>

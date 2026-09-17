@@ -14,9 +14,11 @@ interface ParticipantResultProps {
   participant: Participant;
   index: number;
   highlighted?: boolean;
+  /** Закрытое голосование: имя и позиция видны, цифры скрыты организатором. */
+  hidden?: boolean;
 }
 
-export function ParticipantResult({ participant, index, highlighted }: ParticipantResultProps) {
+export function ParticipantResult({ participant, index, highlighted, hidden }: ParticipantResultProps) {
   return (
     <motion.div
       layout
@@ -36,9 +38,15 @@ export function ParticipantResult({ participant, index, highlighted }: Participa
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
             <p className="truncate text-[15px] font-semibold text-white">{participant.name}</p>
-            <p className="shrink-0 text-[15px] font-bold text-white">
-              <AnimatedNumber value={participant.percentage} suffix="%" />
-            </p>
+            {hidden ? (
+              <p className="shrink-0 text-[15px] font-bold tabular-nums text-white/30" aria-label="Результат скрыт">
+                ••
+              </p>
+            ) : (
+              <p className="shrink-0 text-[15px] font-bold text-white">
+                <AnimatedNumber value={participant.percentage} suffix="%" />
+              </p>
+            )}
           </div>
           {participant.subtitle && (
             <p className="truncate text-xs text-white/45">{participant.subtitle}</p>
@@ -47,7 +55,20 @@ export function ParticipantResult({ participant, index, highlighted }: Participa
       </div>
 
       <div className="mt-3">
-        <ProgressBar percentage={participant.percentage} gradient={rankGradients[index % rankGradients.length]} />
+        {hidden ? (
+          // Пустая колея с мягким пробегающим бликом: голосование живое,
+          // но цифры закрыты до раскрытия организатором.
+          <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-white/[0.07] shadow-inner">
+            <motion.div
+              aria-hidden
+              className="absolute inset-y-0 w-1/3 rounded-full bg-gradient-to-r from-transparent via-white/15 to-transparent"
+              animate={{ x: ["-120%", "360%"] }}
+              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut", delay: index * 0.2 }}
+            />
+          </div>
+        ) : (
+          <ProgressBar percentage={participant.percentage} gradient={rankGradients[index % rankGradients.length]} />
+        )}
       </div>
     </motion.div>
   );

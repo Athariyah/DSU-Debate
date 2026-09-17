@@ -27,6 +27,8 @@ export interface DebateEvent {
   votingDurationMinutes?: number | null;
   /** Дедлайн голосования (ISO): фактический старт + длительность. */
   votingEndsAt?: string | null;
+  /** true — закрытое голосование: сервер зануляет цифры, показываем плашку «скрыто». */
+  votesHidden?: boolean;
   totalVotes: number;
   participants: Participant[];
   coverGradient?: string;

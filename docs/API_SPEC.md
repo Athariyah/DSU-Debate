@@ -75,6 +75,7 @@ Authorization: Bearer <token>
     "dateTime": "2026-09-14T16:00:00.000Z",
     "votingDurationMinutes": 60,
     "votingEndsAt": "2026-09-14T17:00:00.000Z",
+    "votesHidden": false,
     "participantsCount": 2
   },
   "participants": [
@@ -96,6 +97,12 @@ Authorization: Bearer <token>
 `dateTime + votingDurationMinutes` (или `null`). Та же пара полей есть в
 ответах `GET /events/active`, `GET /events/upcoming`, `GET /events/history`
 и в админских списках/карточках мероприятий.
+
+`votesHidden` — закрытое голосование (флажок «Скрыть голоса» в админке). Пока
+флаг `true`, сервер **зануляет** `votesCount`, `percentage` и `totalVotes` во
+всех публичных ответах (участники, их имена и описания остаются видимыми),
+поэтому расклад нельзя подсмотреть даже через API. Административные маршруты
+(`/admin/events*`) всегда отдают настоящие цифры.
 
 ### `POST /events/:id/vote`
 
@@ -157,6 +164,12 @@ Authorization: Bearer <token>
 CRUD отдельного мероприятия. При переводе в `active` backend проверяет минимум двух
 участников и автоматически завершает предыдущий active event.
 
+`PUT` также принимает `votesHidden` (boolean) — флажок «Скрыть голоса».
+При фактическом переключении подписчикам дебата сначала уходит `vote:update`
+с актуальными результатами (занулёнными при скрытии, настоящими при раскрытии),
+затем событие `event:votes_visibility` — большие экраны раскрывают итоги
+мгновенно, без перезагрузки.
+
 Таймер голосования: `PUT` принимает `votingDurationMinutes` (1–1440) и
 явно переданное `null` (сброс). У активного события с истёкшим таймером
 (`dateTime + длительность <= now`) фоновый обработчик раз в 15 секунд
@@ -184,9 +197,13 @@ Frontend подключается к тому же origin (`npm run dev` и `npm
 
 Сервер → клиент:
 
-- `vote:update` — `{ eventId, totalVotes, participants }` после успешного голоса;
+- `vote:update` — `{ eventId, totalVotes, participants }` после успешного голоса.
+  При включённом `votesHidden` цифры в payload занулены (закрытое голосование);
 - `event:status_changed` — `{ eventId, status }` после изменения статуса дебата
-  (включая автоматический перевод в `completed` по таймеру голосования).
+  (включая автоматический перевод в `completed` по таймеру голосования);
+- `event:votes_visibility` — `{ eventId, votesHidden }` после переключения
+  флажка «Скрыть голоса» в админке; перед ним уходит `vote:update` с
+  актуальными (или занулёнными) результатами.
 
 Экран трансляции `/broadcast/:id` (большие экраны) подписывается на те же два
 события через `join_debate` и обновляет голоса, проценты и статус без

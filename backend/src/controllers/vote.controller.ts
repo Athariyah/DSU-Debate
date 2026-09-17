@@ -72,6 +72,24 @@ export async function computeEventResults(
 }
 
 /**
+ * Занулённые результаты для закрытого голосования (флажок «Скрыть голоса»).
+ * Структура данных сохраняется — участники, их порядок и количество — но все
+ * цифры обнулены: зрителям нельзя слать расклад ни по HTTP-ответам, ни по
+ * realtime-трафику, а интерфейс показывает плашку «результаты скрыты».
+ */
+export function redactEventResults(results: EventResults): EventResults {
+  return {
+    eventId: results.eventId,
+    totalVotes: 0,
+    participants: results.participants.map((participant) => ({
+      ...participant,
+      votesCount: 0,
+      percentage: 0,
+    })),
+  };
+}
+
+/**
  * GET /api/events/active
  * Возвращает текущий активный дебат вместе с участниками и live-результатами.
  */
@@ -93,6 +111,11 @@ export const getActiveEvent = asyncHandler(async (_req: Request, res: Response) 
     client.release();
   }
 
+  // Закрытое голосование: цифры не покидают сервер — зрителю уходят
+  // занулённые результаты и флаг votesHidden для плашки «скрыто».
+  const votesHidden = Boolean(event.votes_hidden);
+  const visibleResults = votesHidden ? redactEventResults(results) : results;
+
   res.status(200).json({
     event: {
       id: event.id,
@@ -101,9 +124,10 @@ export const getActiveEvent = asyncHandler(async (_req: Request, res: Response) 
       dateTime: event.date_time,
       votingDurationMinutes: event.voting_duration_minutes ?? null,
       votingEndsAt: votingEndsAt(event)?.toISOString() ?? null,
+      votesHidden,
       participantsCount: results.participants.length,
     },
-    participants: results.participants.map((p) => ({
+    participants: visibleResults.participants.map((p) => ({
       id: p.participantId,
       eventId: event.id,
       name: p.name,
@@ -111,7 +135,7 @@ export const getActiveEvent = asyncHandler(async (_req: Request, res: Response) 
       votesCount: p.votesCount,
       percentage: p.percentage,
     })),
-    totalVotes: results.totalVotes,
+    totalVotes: visibleResults.totalVotes,
   });
 });
 
@@ -151,6 +175,7 @@ export const castVote = asyncHandler(async (req: Request, res: Response) => {
   let insertedVoteId: number | null = null;
   let insertedVoteCreatedAt: Date | null = null;
   let results: EventResults | null = null;
+  let votesHidden = false;
 
   await withTransaction(async (client) => {
     // Блокируем строку мероприятия на время транзакции, чтобы параллельные
@@ -166,6 +191,7 @@ export const castVote = asyncHandler(async (req: Request, res: Response) => {
     }
 
     const event = eventResult.rows[0];
+    votesHidden = Boolean(event.votes_hidden);
     if (event.status !== "active") {
       throw new ApiError(
         409,
@@ -255,7 +281,10 @@ export const castVote = asyncHandler(async (req: Request, res: Response) => {
       "Не удалось рассчитать результаты голосования"
     );
   }
-  broadcastVoteUpdate(results);
+  // При закрытом голосовании зрители не получают цифр ни по HTTP, ни через
+  // realtime-канал — рассылаем и отвечаем занулёнными результатами.
+  const payload = votesHidden ? redactEventResults(results) : results;
+  broadcastVoteUpdate(payload);
 
   res.status(201).json({
     success: true,
@@ -264,6 +293,6 @@ export const castVote = asyncHandler(async (req: Request, res: Response) => {
       participantId,
       createdAt: insertedVoteCreatedAt,
     },
-    results,
+    results: payload,
   });
 });

@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { ArrowRight, CalendarClock, Users } from "lucide-react";
+import { ArrowRight, CalendarClock, EyeOff, Users } from "lucide-react";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import type { DebateEvent } from "../../types";
@@ -89,10 +89,17 @@ export function ActiveDebateCard({ event, voted, onVoteClick }: ActiveDebateCard
           {voted ? "Результаты" : "Голосовать"}
           <ArrowRight size={16} />
         </Button>
-        {event.totalVotes > 0 && (
-          <span className="text-xs tabular-nums text-white/45">
-            {event.totalVotes} голосов
+        {event.votesHidden ? (
+          <span className="inline-flex items-center gap-1.5 text-xs text-white/45">
+            <EyeOff size={13} className="opacity-70" />
+            Результаты скрыты
           </span>
+        ) : (
+          event.totalVotes > 0 && (
+            <span className="text-xs tabular-nums text-white/45">
+              {event.totalVotes} голосов
+            </span>
+          )
         )}
       </div>
     </motion.div>
