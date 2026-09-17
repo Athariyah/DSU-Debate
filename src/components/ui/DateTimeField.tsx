@@ -1,14 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import {
-  CalendarDays,
-  Check,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  Clock,
-  type LucideIcon,
-} from "lucide-react";
+import { CalendarDays, Check, ChevronDown, Clock, type LucideIcon } from "lucide-react";
 import { cn } from "../../utils/cn";
 import { IconChip } from "./IconChip";
 
@@ -35,6 +27,16 @@ const MINUTES = Array.from({ length: 60 }, (_, minute) => minute);
 
 /** Высота одного значения в колесе времени, px. */
 const WHEEL_ITEM_HEIGHT = 44;
+/** Высота колеса, px (7.5rem): в поле зрения ~3 значения. */
+const WHEEL_HEIGHT = 120;
+/**
+ * Вертикальные отступы внутри скроллера: (H − item) / 2. Без них первое
+ * значение нельзя идеально выровнять по центру (scrollTop не уходит в
+ * минус), и расчёт «какое значение в центре» смещается — колесо после
+ * прокрутки «прыгает назад». С симметричными отступами центр i-го
+ * значения ровно на `i * WHEEL_ITEM_HEIGHT`.
+ */
+const WHEEL_INSET = (WHEEL_HEIGHT - WHEEL_ITEM_HEIGHT) / 2;
 
 /**
  * Разбирает ISO-строку на локальные части для полей `date` и `time`.
@@ -132,6 +134,23 @@ export function DateTimeField({ value, onChange, className }: DateTimeFieldProps
 
   const [currentHour, currentMinute] = (parts.time || "00:00").split(":").map(Number);
 
+  // Колёса месяца и года: смена месяца/года не шлёт ISO, пока день не
+  // выбран; если день уже выбран — дата обновляется (день «обрезается»,
+  // если в новом месяце его нет: 31 января → 28 февраля).
+  function applyCalendarShift(year: number, month: number) {
+    setView({ year, month });
+    if (!parts.date) return;
+    const day = Math.min(
+      Number(parts.date.split("-")[2]),
+      new Date(year, month + 1, 0).getDate()
+    );
+    update({ date: `${year}-${pad(month + 1)}-${pad(day)}` });
+  }
+
+  // Окно лет: два назад и три вперёд от текущего взгляда — дебаты обычно
+  // планируют в ближайшем будущем, но и прошлое доступно.
+  const yearOptions = Array.from({ length: 5 }, (_, i) => view.year - 2 + i);
+
   return (
     <div
       ref={rootRef}
@@ -176,12 +195,21 @@ export function DateTimeField({ value, onChange, className }: DateTimeFieldProps
               <PanelHeader title={openPanel === "date" ? "Выбор даты" : "Выбор времени"} onDone={() => setOpenPanel(null)} />
               {openPanel === "date" ? (
                 <div>
-                  <div className="mb-2 flex items-center justify-between">
-                    <MonthNavButton direction="prev" onClick={() => shiftMonth(view, -1, setView)} />
-                    <p className="text-sm font-bold tracking-wide text-white">
-                      {MONTHS[view.month]} {view.year}
-                    </p>
-                    <MonthNavButton direction="next" onClick={() => shiftMonth(view, 1, setView)} />
+                  <div className="mb-2 flex gap-2">
+                    <TimeWheel
+                      label="Месяц"
+                      values={Array.from({ length: 12 }, (_, month) => month)}
+                      selected={view.month}
+                      onPick={(month) => applyCalendarShift(view.year, month)}
+                      format={(month) => MONTHS[month]}
+                    />
+                    <TimeWheel
+                      label="Год"
+                      values={yearOptions}
+                      selected={view.year}
+                      onPick={(year) => applyCalendarShift(year, view.month)}
+                      format={(year) => String(year)}
+                    />
                   </div>
                   <div className="grid grid-cols-7 gap-1 text-center">
                     {WEEKDAYS.map((weekday, index) => (
@@ -251,11 +279,6 @@ function formatDateRu(datePart: string): string {
   return `${day}.${month}.${year}`;
 }
 
-function shiftMonth(view: { year: number; month: number }, delta: number, setView: (view: { year: number; month: number }) => void) {
-  const date = new Date(view.year, view.month + delta, 1);
-  setView({ year: date.getFullYear(), month: date.getMonth() });
-}
-
 /** Кнопка-«шторка» поля: иконка-чип + значение + стрелка; переключает панель. */
 function FieldToggle({
   icon: Icon,
@@ -323,67 +346,72 @@ function PanelHeader({ title, onDone }: { title: string; onDone: () => void }) {
   );
 }
 
-function MonthNavButton({ direction, onClick }: { direction: "prev" | "next"; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={direction === "prev" ? "Предыдущий месяц" : "Следующий месяц"}
-      className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/70 transition hover:border-white/20 hover:bg-white/10 hover:text-white active:scale-90"
-    >
-      {direction === "prev" ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
-    </button>
-  );
-}
-
 /**
- * Колесо выбора времени в духе будильника iPhone: вертикальный список
+ * Колесо выбора значения в духе будильника iPhone: вертикальный список
  * со snap-скроллом, центральная подсветка активного значения.
  * Нативный touch-скролл телефона + scroll-snap даёт «родное» ощущение,
  * на десктопе работает колесом мыши и кликами по значениям.
+ *
+ * Скроллер имеет симметричные вертикальные отступы (WHEEL_INSET), поэтому
+ * центр i-го значения ровно на `i * WHEEL_ITEM_HEIGHT` от начала скролла —
+ * и первому, и последнему значению доступно идеальное центрирование.
  */
 function TimeWheel({
   label,
   values,
   selected,
   onPick,
+  format = pad,
 }: {
   label: string;
   values: number[];
   selected: number;
   onPick: (value: number) => void;
+  /** Формат значения на строке колеса (по умолчанию — «07», «59»...). */
+  format?: (value: number) => string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   // Значение, стоящее в центре в этот момент (может опережать committed
   // `selected` на время прокрутки).
   const [center, setCenter] = useState(selected);
+  // Последнее значение, отправленное наружу этим колесом (скроллом или
+  // кликом). Эффект-синхронизация его пропускает: иначе каждый onPick
+  // возвращал бы ре-рендер родителя, и тот «дотягивал» scrollTop обратно
+  // к committed-значению — колесо прыгало бы назад посреди жеста.
+  const lastEmittedRef = useRef<number | null>(null);
 
-  const scrollOffsetFor = (value: number) => {
-    const el = containerRef.current;
-    const index = Math.max(0, values.indexOf(value));
-    if (!el) return index * WHEEL_ITEM_HEIGHT;
-    return index * WHEEL_ITEM_HEIGHT - el.clientHeight / 2 + WHEEL_ITEM_HEIGHT / 2;
-  };
+  const offsetFor = (value: number) =>
+    Math.max(0, values.indexOf(value)) * WHEEL_ITEM_HEIGHT;
 
-  // Внешняя смена значения (например, синхронизация с событием) —
-  // мгновенно доводим колесо до него.
+  // Внешняя смена значения (загрузка события, правка в другом месте) —
+  // мгновенно доводим колесо до него. При монтировании lastEmitted ещё
+  // null, поэтому колесо сразу встаёт на своё значение.
   useEffect(() => {
+    if (selected === lastEmittedRef.current) return;
+    lastEmittedRef.current = selected;
     const el = containerRef.current;
-    if (!el) return;
-    const target = scrollOffsetFor(selected);
-    if (Math.abs(el.scrollTop - target) > 1 && "scrollTop" in el) el.scrollTop = target;
+    const target = offsetFor(selected);
+    if (el && Math.abs(el.scrollTop - target) > 1) el.scrollTop = target;
     setCenter(values[Math.max(0, values.indexOf(selected))] ?? selected);
+    // values — константа на время жизни панели, учитывать её не нужно.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected]);
+
+  function pick(value: number) {
+    if (value === selected) return;
+    lastEmittedRef.current = value;
+    onPick(value);
+  }
 
   function syncFromScroll() {
     const el = containerRef.current;
     if (!el) return;
-    const index = Math.round((el.scrollTop - el.clientHeight / 2 + WHEEL_ITEM_HEIGHT / 2) / WHEEL_ITEM_HEIGHT);
-    const clamped = Math.max(0, Math.min(values.length - 1, index));
-    const value = values[clamped];
+    const raw = Math.round(el.scrollTop / WHEEL_ITEM_HEIGHT);
+    const index = Math.max(0, Math.min(values.length - 1, raw));
+    const value = values[index];
     if (value === undefined) return;
     setCenter(value);
-    if (value !== selected) onPick(value);
+    pick(value);
   }
 
   return (
@@ -391,7 +419,8 @@ function TimeWheel({
       <div
         role="group"
         aria-label={label}
-        className="no-scrollbar relative h-[7.5rem] w-full overflow-hidden"
+        className="no-scrollbar relative w-full overflow-hidden"
+        style={{ height: WHEEL_HEIGHT }}
       >
         {/* Центральная «линза» под активным значением. */}
         <div className="pointer-events-none absolute inset-x-0 top-1/2 h-11 -translate-y-1/2 rounded-xl border border-indigo-300/25 bg-indigo-400/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" />
@@ -402,28 +431,27 @@ function TimeWheel({
         <div
           ref={containerRef}
           onScroll={syncFromScroll}
-          className="no-scrollbar h-full snap-y snap-mandatory overflow-y-auto"
+          className="no-scrollbar wheel-scroller h-full snap-y snap-mandatory overflow-y-auto"
+          style={{ paddingTop: WHEEL_INSET, paddingBottom: WHEEL_INSET }}
         >
           {values.map((value) => (
             <button
               key={value}
               type="button"
               onClick={() => {
+                pick(value);
                 const el = containerRef.current;
                 // jsdom не реализует Element.scrollTo — прокидываем без ошибок.
                 if (el && typeof el.scrollTo === "function") {
-                  el.scrollTo({ top: scrollOffsetFor(value), behavior: "smooth" });
+                  el.scrollTo({ top: offsetFor(value), behavior: "smooth" });
                 }
-                onPick(value);
               }}
               className={cn(
                 "flex h-11 w-full snap-center items-center justify-center text-lg tabular-nums transition-colors duration-150",
-                value === center
-                  ? "font-bold text-indigo-200"
-                  : "text-white/35 hover:text-white/60"
+                value === center ? "font-bold text-indigo-200" : "text-white/35 hover:text-white/60"
               )}
             >
-              {pad(value)}
+              {format(value)}
             </button>
           ))}
         </div>

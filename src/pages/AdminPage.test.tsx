@@ -69,13 +69,13 @@ describe("поле даты и времени в панели администр
     await screen.findByText("Тестовый дебат");
 
     const dateButton = screen.getByRole("button", { name: "Дата" });
-    expect(screen.queryByText("Сентябрь 2026")).toBeNull();
+    expect(screen.queryByRole("group", { name: "Месяц" })).toBeNull();
 
     fireEvent.click(dateButton);
-    expect(screen.getByText("Сентябрь 2026")).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Месяц" })).toBeTruthy();
 
     fireEvent.click(dateButton);
-    await waitFor(() => expect(screen.queryByText("Сентябрь 2026")).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("group", { name: "Месяц" })).toBeNull());
   });
 
   test("выбор дня в календаре обновляет значение на кнопке", async () => {

@@ -54,14 +54,15 @@ describe("DateTimeField", () => {
     render(<DateTimeField value={LOCAL_DATE.toISOString()} onChange={() => {}} />);
     const dateButton = screen.getByRole("button", { name: "Дата" });
 
-    expect(screen.queryByText("Сентябрь 2026")).toBeNull();
+    expect(screen.queryByRole("group", { name: "Месяц" })).toBeNull();
     fireEvent.click(dateButton);
-    expect(screen.getByText("Сентябрь 2026")).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Месяц" })).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Год" })).toBeTruthy();
     expect(dateButton.getAttribute("aria-expanded")).toBe("true");
 
     fireEvent.click(dateButton);
     expect(dateButton.getAttribute("aria-expanded")).toBe("false");
-    await waitFor(() => expect(screen.queryByText("Сентябрь 2026")).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("group", { name: "Месяц" })).toBeNull());
   });
 
   test("панель времени тоже работает как переключатель", async () => {
@@ -87,19 +88,53 @@ describe("DateTimeField", () => {
     expect(onChange).toHaveBeenCalledWith(new Date(2026, 8, 20, 17, 30).toISOString());
   });
 
-  test("смена месяца листает календарь и сохраняет выбранный день", () => {
+  test("колесо месяца листает календарь и сохраняет выбранный день", () => {
     const onChange = vi.fn();
     render(<DateTimeField value={LOCAL_DATE.toISOString()} onChange={onChange} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Дата" }));
-    expect(screen.getByText("Сентябрь 2026")).toBeTruthy();
+    const monthWheel = screen.getByRole("group", { name: "Месяц" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Предыдущий месяц" }));
-    expect(screen.getByText("Август 2026")).toBeTruthy();
+    // Сентябрь 2026 без 31-го; в августе он есть — колесо реально листает.
+    expect(screen.queryByRole("button", { name: "31" })).toBeNull();
+    fireEvent.click(within(monthWheel).getByRole("button", { name: "Август" }));
+    expect(screen.getByRole("button", { name: "31" })).toBeTruthy();
+
+    // Смена месяца со снятым днём сразу отдаёт обновлённую дату (16.08),
+    // клик по 31-му — вторую смену.
+    expect(onChange).toHaveBeenLastCalledWith(new Date(2026, 7, 16, 17, 30).toISOString());
 
     fireEvent.click(screen.getByRole("button", { name: "31" }));
+    expect(onChange).toHaveBeenCalledTimes(2);
+    expect(onChange).toHaveBeenLastCalledWith(new Date(2026, 7, 31, 17, 30).toISOString());
+  });
+
+  test("колесо года меняет год у выбранной даты", () => {
+    const onChange = vi.fn();
+    render(<DateTimeField value={LOCAL_DATE.toISOString()} onChange={onChange} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Дата" }));
+    const yearWheel = screen.getByRole("group", { name: "Год" });
+
+    fireEvent.click(within(yearWheel).getByRole("button", { name: "2027" }));
     expect(onChange).toHaveBeenCalledTimes(1);
-    expect(onChange).toHaveBeenCalledWith(new Date(2026, 7, 31, 17, 30).toISOString());
+    expect(onChange).toHaveBeenCalledWith(new Date(2027, 8, 16, 17, 30).toISOString());
+  });
+
+  test("прокрутка колеса часов синхронизирует значение (не прыгает назад)", () => {
+    const onChange = vi.fn();
+    render(<DateTimeField value={LOCAL_DATE.toISOString()} onChange={onChange} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Время" }));
+    const hours = screen.getByRole("group", { name: "Часы" });
+    const scroller = hours.querySelector(".wheel-scroller") as HTMLElement;
+
+    // Доводим скролл до центра 9-го часа (17 → 9) и «отпускаем».
+    scroller.scrollTop = 9 * 44;
+    fireEvent.scroll(scroller);
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenLastCalledWith(new Date(2026, 8, 16, 9, 30).toISOString());
   });
 
   test("выбор часа и минут отдаёт наружу валидный ISO", () => {

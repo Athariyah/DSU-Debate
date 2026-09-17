@@ -164,7 +164,7 @@ export function ProfilePage() {
         </div>
 
         <p className="mt-10 border-t border-white/5 pt-5 text-center text-[11px] leading-relaxed text-white/30">
-          Платформа DSU Debate разработана для СНО ДГУ · от СНО ФИиИТ
+          Платформа DSU Debate разработана для СНО ДГУ от СНО ФИиИТ
         </p>
       </div>
 
