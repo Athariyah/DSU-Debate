@@ -17,6 +17,7 @@ function publicEventResponse(event: EventRecord, results: Awaited<ReturnType<typ
       id: event.id,
       title: event.title,
       status: event.status,
+      eventType: (event as any).event_type ?? event.event_type ?? "debate",
       dateTime: event.date_time,
       votingDurationMinutes: event.voting_duration_minutes ?? null,
       votingEndsAt: votingEndsAt(event)?.toISOString() ?? null,

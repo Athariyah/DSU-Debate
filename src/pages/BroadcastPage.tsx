@@ -248,6 +248,9 @@ export function BroadcastPage() {
       <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 px-[clamp(1rem,3vw,3.5rem)] pt-[clamp(1rem,2.5vw,2.5rem)]">
         <div className="flex min-w-0 items-center gap-4">
           <StatusPill status={eventStatus} />
+          <span className="hidden rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[clamp(0.6rem,0.85vw,1rem)] font-semibold uppercase tracking-[0.2em] text-white/40 sm:inline">
+            {event.eventType === "tournament" ? "Турнир" : event.eventType === "poll" ? "Опрос" : event.eventType === "competition" ? "Соревнование" : event.eventType === "quiz" ? "Квиз" : event.eventType === "other" ? "Мероприятие" : "Дебаты"}
+          </span>
           <span className="hidden text-[clamp(0.65rem,0.95vw,1.1rem)] font-semibold uppercase tracking-[0.35em] text-white/30 sm:inline">
             DSU Debate
           </span>

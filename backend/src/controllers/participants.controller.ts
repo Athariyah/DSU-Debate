@@ -33,12 +33,14 @@ export const createParticipant = asyncHandler(async (req: Request, res: Response
       throw new ApiError(404, "EVENT_NOT_FOUND", "Мероприятие не найдено");
     }
 
-    const countResult = await client.query<{ count: string }>(
-      "SELECT COUNT(*)::text AS count FROM participants WHERE event_id = $1",
+    const countResult = await client.query<{ count: number }>(
+      "SELECT COUNT(*) AS count FROM participants WHERE event_id = $1",
       [eventId]
     );
-    if (Number(countResult.rows[0].count) >= 3) {
-      throw new ApiError(400, "PARTICIPANTS_LIMIT", "У мероприятия может быть не более трёх участников");
+    const currentCount = Number((countResult.rows[0] as any).count);
+    // Для дебатов оставляем мягкий лимит 16, для турниров/опросов — до 64. Фактически ограничение — 64.
+    if (currentCount >= 64) {
+      throw new ApiError(400, "PARTICIPANTS_LIMIT", "У мероприятия может быть не более 64 участников");
     }
 
     const result = await client.query<ParticipantRecord>(

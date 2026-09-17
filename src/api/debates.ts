@@ -13,6 +13,7 @@ interface BackendEvent {
   id: number;
   title: string;
   status: "upcoming" | "active" | "completed";
+  eventType?: string;
   dateTime: string;
   votingDurationMinutes?: number | null;
   votingEndsAt?: string | null;
@@ -59,6 +60,7 @@ function mapPublicEvent(payload: BackendPublicEventResponse): DebateEvent {
     id: eventId,
     title: payload.event.title,
     status: payload.event.status,
+    eventType: (payload.event.eventType as any) ?? "debate",
     participantsCount: Number(payload.event.participantsCount ?? participants.length),
     scheduledAt: payload.event.dateTime,
     votingDurationMinutes: payload.event.votingDurationMinutes ?? null,
@@ -172,6 +174,7 @@ export interface AdminEventSummary {
   id: number;
   title: string;
   status: DebateEvent["status"];
+  eventType: DebateEvent["eventType"];
   dateTime: string;
   /** Таймер голосования в минутах (null — выключен). */
   votingDurationMinutes: number | null;
@@ -188,6 +191,7 @@ export async function listAdminDebates(status?: DebateEvent["status"]): Promise<
   // Старый backend мог не отдавать поля — нормализуем в null/false.
   return response.items.map((item) => ({
     ...item,
+    eventType: (item as any).eventType ?? "debate",
     votingDurationMinutes: item.votingDurationMinutes ?? null,
     votesHidden: item.votesHidden ?? false,
     hiddenFromPublic: item.hiddenFromPublic ?? false,
@@ -196,8 +200,9 @@ export async function listAdminDebates(status?: DebateEvent["status"]): Promise<
 
 export async function updateDebate(
   eventId: number,
-  patch: Partial<Pick<AdminEventSummary, "title" | "status" | "votingDurationMinutes" | "votesHidden" | "hiddenFromPublic">> & {
+  patch: Partial<Pick<AdminEventSummary, "title" | "status" | "eventType" | "votingDurationMinutes" | "votesHidden" | "hiddenFromPublic">> & {
     dateTime?: string;
+    eventType?: DebateEvent["eventType"];
   }
 ): Promise<AdminEventSummary> {
   const response = await apiFetch<{ event: AdminEventSummary }>(`/admin/events/${eventId}`, {
@@ -267,6 +272,7 @@ export async function createDebate(input: CreateDebateInput): Promise<DebateEven
       title: input.title,
       dateTime: input.scheduledAt,
       status: "upcoming",
+      eventType: input.eventType ?? "debate",
       votingDurationMinutes: input.votingDurationMinutes ?? null,
       hiddenFromPublic: input.hiddenFromPublic ?? false,
       participants: input.participants.map((participant) => ({
@@ -310,6 +316,29 @@ export async function logoutAdmin(): Promise<void> {
 
 export function isAdminAuthenticated(): boolean {
   return Boolean(getAdminToken());
+}
+
+export async function fetchLeaderboard(eventId: number): Promise<{ eventId: number; items: import("../types").LeaderboardEntry[] }> {
+  return apiFetch(`/events/${eventId}/leaderboard`);
+}
+export async function fetchPodium(eventId: number): Promise<{ eventId: number; podium: import("../types").PodiumEntry[] }> {
+  return apiFetch(`/events/${eventId}/podium`);
+}
+export async function fetchStandings(eventId: number): Promise<{ items: import("../types").TournamentStanding[] }> {
+  return apiFetch(`/events/${eventId}/standings`);
+}
+export async function fetchMatches(eventId: number): Promise<{ items: import("../types").Match[] }> {
+  return apiFetch(`/events/${eventId}/matches`);
+}
+
+export async function createMatchApi(eventId: number, data: Partial<import("../types").Match>): Promise<{ match: import("../types").Match }> {
+  return apiFetch(`/admin/events/${eventId}/matches`, { method: "POST", auth: true, body: JSON.stringify(data) });
+}
+export async function updateMatchApi(matchId: number, data: Partial<import("../types").Match>): Promise<{ match: import("../types").Match }> {
+  return apiFetch(`/admin/matches/${matchId}`, { method: "PUT", auth: true, body: JSON.stringify(data) });
+}
+export async function deleteMatchApi(matchId: number): Promise<void> {
+  await apiFetch(`/admin/matches/${matchId}`, { method: "DELETE", auth: true });
 }
 
 function isNotFound(error: unknown): boolean {

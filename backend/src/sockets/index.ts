@@ -21,6 +21,9 @@ export function debateRoom(eventId: number): string {
  */
 export function initSocketServer(httpServer: HttpServer): Server {
   const io = new Server(httpServer, {
+    transports: ["websocket"],
+    pingInterval: 25000,
+    pingTimeout: 20000,
     cors: {
       // Та же политика, что и у REST-API (см. config/cors.ts): при локальном
       // хостинге по умолчанию разрешены любые источники, чтобы Live Server,
@@ -117,4 +120,24 @@ export function broadcastPublicVisibilityChanged(
 ): void {
   const io = getIO();
   io.to(debateRoom(eventId)).emit("event:public_visibility", { eventId, hiddenFromPublic });
+}
+
+export function broadcastMatchUpdate(eventId: number, match: unknown): void {
+  const io = getIO();
+  io.to(debateRoom(eventId)).emit("match:update", { eventId, match });
+}
+
+export function broadcastStandingsUpdate(eventId: number, standings: unknown): void {
+  const io = getIO();
+  io.to(debateRoom(eventId)).emit("standings:update", { eventId, standings });
+}
+
+export function broadcastLeaderboardUpdate(eventId: number, leaderboard: unknown): void {
+  const io = getIO();
+  io.to(debateRoom(eventId)).emit("leaderboard:update", { eventId, leaderboard });
+}
+
+export function broadcastPodiumUpdate(eventId: number, podium: unknown): void {
+  const io = getIO();
+  io.to(debateRoom(eventId)).emit("podium:update", { eventId, podium });
 }

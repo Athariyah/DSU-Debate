@@ -1,8 +1,6 @@
-# DSU Debate Backend
+# DSU Debate Backend (SQLite)
 
-Express + Socket.io + PostgreSQL API. База данных — **встроенная**: приложение
-само создаёт и запускает кластер PostgreSQL на этом компьютере
-(`backend/.localdb`), поэтому отдельно устанавливать PostgreSQL не нужно.
+Express + Socket.io + SQLite (better-sqlite3, WAL) API. База — один файл `backend/.localdb/database.sqlite`, без отдельного процесса PostgreSQL.
 
 ## Быстрый старт
 
@@ -12,136 +10,139 @@ npm install
 npm run dev
 ```
 
-Что происходит при первом запуске (см. `src/localdb`):
+Что происходит при первом запуске:
 
-1. бинарники PostgreSQL (`initdb`, `postgres`, `pg_ctl`) берутся из
-   npm-пакета `embedded-postgres` — под вашу ОС и архитектуру;
-2. в `backend/.localdb/postgres` создаётся кластер (UTF-8, только `127.0.0.1`,
-   порт `55432`);
-3. создаётся база `dsu_debate`;
-4. применяются миграции из `../sql/migrations`;
-5. создаётся локальный администратор `admin@dsu.local` / `ChangeMe123!`
-   (в режиме разработки; смените пароль через `ADMIN_PASSWORD`);
-6. API слушает <http://127.0.0.1:4000> (`/api/health/ready` для проверки).
+1. создаётся файл `backend/.localdb/database.sqlite` (если нет) с `journal_mode=WAL`, `synchronous=NORMAL`, `foreign_keys=ON`;
+2. применяется полная схема `sql/schema.sqlite.sql` (admins, events с `event_type`, participants, votes, matches, tournament_standings, leaderboards, podiums);
+3. применяются миграции из `../sql/migrations` через санитайзер (транслируются PG-конструкции в SQLite, `BEGIN/COMMIT` и `DO $$` удаляются);
+4. создаётся администратор `admin@dsu.local` / `ChangeMe123!` (в dev; смените через `ADMIN_PASSWORD`);
+5. API слушает <http://127.0.0.1:4000> (`/api/health/ready` → `{"status":"ready","database":"ok","db":"sqlite"}`).
 
-При завершении процесса (Ctrl+C) PostgreSQL останавливается, данные остаются на
-диске. Если БД уже запущена другим процессом, backend её переиспользует и не
-останавливает.
+Данные — один файл; WAL-файлы `database.sqlite-wal`/`-shm` живут рядом пока процесс открыт.
 
-Особенности поведения во время работы:
-
-- перезапуск кода наблюдателем (ts-node-dev, nodemon) идёт с сигналом SIGTERM и
-  **не** останавливает PostgreSQL — сайт не «прыгает» при каждом сохранении
-  файла;
-- если процесс PostgreSQL упал (или его убили), backend замечает ошибку
-  соединения и поднимает его заново автоматически;
-- ошибки соединения с БД в режиме разработки отдаются клиенту вместе с
-  причиной (`details` в JSON ответа 500), полный стек — в логе backend.
-
-## Управление локальной БД
+## Управление SQLite
 
 | Команда | Действие |
-| --- | --- |
-| `npm run db:local` | создать (при первом запуске) и запустить БД в фоне |
-| `npm run db:local:status` | состояние: порт, версия, размер данных, путь к логам |
-| `npm run db:local:stop` | остановить БД (данные сохраняются) |
-| `npm run db:local:restart` | перезапустить |
-| `npm run db:local:doctor` | диагностика: бинарники, путь, порт, кластер, миграции |
-| `npm run db:local:logs` | последние строки лога PostgreSQL |
-| `npm run admin:list` | список администраторов в базе |
-| `npm run admin:reset -- --email=... --password=...` | задать новый пароль администратору |
+|---|---|
+| `npm run db:check` | к какой БД подключается (`sqlite://… (WAL)`) + версия + таблицы |
+| `npm run db:migrate` | применить миграции вручную |
+| `npm run db:migrate:pg -- --dump=./dump.sql` | импорт pg_dump INSERT/COPY в SQLite |
+| `npm run admin:list` | список администраторов |
+| `npm run admin:reset -- --email=... --password=...` | сменить пароль |
 | `npm run admin:add -- --email=... --password=...` | добавить администратора |
+
+Бэкап и сброс:
+
+```bash
+# бэкап (горячий, консистентный)
+sqlite3 backend/.localdb/database.sqlite ".backup backend/.localdb/backup.db"
+# или дамп
+sqlite3 backend/.localdb/database.sqlite .dump > backup.sql
+# полный сброс
+rm backend/.localdb/database.sqlite* && npm run dev
+```
+
+Старые команды `db:local`, `db:local:status`, `db:local:logs` и т.п. оставлены как заглушки для совместимости (пишут предупреждение и используют SQLite).
 
 Данные и логи:
 
 ```
-backend/.localdb/postgres        # кластер (PGDATA) — это и есть ваши данные
-backend/.localdb/logs/postgres.log
+backend/.localdb/database.sqlite        # данные (WAL)
+backend/.localdb/database.sqlite-wal    # WAL (пока открыт)
+backend/.localdb/logs/                  # логи приложения (не PG)
 ```
-
-Бэкап = копия папки `backend/.localdb` при остановленной БД. Полный сброс =
-удалить `backend/.localdb` и запустить backend снова.
 
 ## Настройки
 
-Файл `backend/.env` (образец — [`.env.example`](.env.example), файл в
-`.gitignore`). Значения по умолчанию рабочие, поэтому `.env` не обязателен.
+Файл `backend/.env` (`.env.example` в `.gitignore`). Значения по умолчанию рабочие.
 
 | Переменная | По умолчанию | Назначение |
-| --- | --- | --- |
-| `LOCAL_DATABASE` | `auto` | `false` — не запускать встроенную БД |
-| `LOCAL_DB_DIR` | `backend/.localdb` | каталог данных и логов |
-| `LOCAL_DB_PORT` | `55432` | порт локального сервера |
-| `LOCAL_DB_USER` / `LOCAL_DB_PASSWORD` | `postgres` / `postgres` | суперпользователь кластера |
-| `LOCAL_DB_NAME` | `dsu_debate` | имя базы приложения |
-| `LOCAL_DB_BIN_DIR` | — | каталог `bin` уже установленного PostgreSQL |
-| `LOCAL_DB_TIMEOUT_MS` | `120000` | таймаут инициализации/запуска, мс |
+|---|---|---|
+| `SQLITE_PATH` / `SQLITE_FILE` / `DB_PATH` | `backend/.localdb/database.sqlite` | путь к файлу БД (`:memory:` для тестов/E2E) |
 | `PORT` | `4000` | порт API |
 | `JWT_SECRET` / `JWT_EXPIRES_IN` | `dev-only-secret` / `8h` | сессии администратора |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | `admin@dsu.local` / `ChangeMe123!` (dev) | локальный админ |
-| `CORS_ORIGIN` | `*` в режиме разработки, явный список в production | источники браузера, откуда разрешено обращаться к API |
-| `TRUST_PROXY` | `0` | число хопов при работе за прокси |
-| `COOKIE_SECURE` | `false` | `true`, если сайт доступен только по HTTPS |
-| `ALLOW_ADMIN_REGISTRATION` / `ADMIN_REGISTRATION_KEY` | `false` / — | самостоятельная регистрация админов |
+| `CORS_ORIGIN` | `*` в dev, явный список в prod | разрешённые origins |
+| `TRUST_PROXY` | `0` | хопы за прокси |
+| `COOKIE_SECURE` | `false` | `true` для HTTPS-only |
+| `ALLOW_ADMIN_REGISTRATION` | `false` | самостоятельная регистрация |
 
-## Внешняя БД (необязательно)
+Старые PG-переменные (`DATABASE_URL`, `DB_HOST`, `PGHOST`…) игнорируются с предупреждением `[db] ВНИМАНИЕ: ... использует SQLite`; используйте `SQLITE_PATH`.
 
-Если у вас уже есть PostgreSQL (свой сервер или managed-кластер), задайте
-подключение — тогда встроенная БД не запускается:
+## Внешняя БД (SQLite файл на диске/сети)
+
+Достаточно указать файл:
 
 ```env
-DATABASE_URL=postgresql://dsu:dsu@localhost:5432/dsu_debate
-# или отдельными переменными:
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=dsu_debate
-DB_USER=dsu
-DB_PASSWORD=dsu
-DB_SSLMODE=prefer          # disable | allow | prefer | require | verify-ca | verify-full
-LOCAL_DATABASE=false       # если встроенную запускать не нужно вовсе
+SQLITE_PATH=/data/dsu/database.sqlite
 ```
 
-Стандартные libpq-переменные (`PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`,
-`PGDATABASE`, `PGSSLMODE`) тоже распознаются. Проверить подключение без запуска
-API:
+Для тестов:
+
+```bash
+SQLITE_PATH=:memory: npm test
+SQLITE_PATH=./tmp/test.db npm run dev
+```
+
+Проверить подключение:
 
 ```bash
 npm run db:check
 ```
 
-Команда печатает целевое подключение (без пароля), состояние TLS, версию
-сервера, список таблиц и применённые миграции.
+## Миграция PostgreSQL → SQLite
 
-## Миграции
+Была Postgres (`backend/.localdb/postgres` кластер порт 55432). Для переноса без потерь:
 
-Миграции лежат в `../sql/migrations` и применяются автоматически перед стартом
-backend. Вручную:
+```bash
+# dump (если Postgres ещё жив)
+pg_dump --data-only --inserts --column-inserts --no-owner --no-privileges \
+  -h 127.0.0.1 -U postgres -d dsu_debate -f dump.sql
+
+# импорт
+node ../tools/migrate-pg-to-sqlite.mjs --dump=./dump.sql --sqlite=./.localdb/database.sqlite
+# или прямой копией
+PG_DUMP_URL=postgres://postgres:postgres@127.0.0.1:55432/dsu_debate \
+  node ../tools/migrate-pg-to-sqlite.mjs --from-pg
+
+# или shell
+../tools/pg-dump-to-sqlite.sh "postgres://..." "./.localdb/database.sqlite"
+```
+
+Детали трансляции типов (`ENUM→TEXT CHECK`, `TIMESTAMPTZ→TEXT ISO`, `INET→TEXT`…) и верификация — `../docs/MIGRATION_SQLITE.md`.
+
+## Миграции приложения
+
+Миграции в `../sql/migrations` применяются автоматически при старте. Вручную:
 
 ```bash
 npm run db:migrate
 ```
 
+`backend/src/db/migrate.ts` санитайзит PG-синтаксис для SQLite (`DO $$`, `CREATE TYPE/EXTENSION`, `COMMENT ON` удаляются, `BEGIN/COMMIT` вне транзакции игнорируются). `schema_migrations` хранит версии; 007 `event_type` идемпотентна.
+
 ## Администратор
 
-При первом старте создаётся администратор, если его ещё нет (существующий
-аккаунт никогда не перезаписывается). В режиме разработки это
-`admin@dsu.local` / `ChangeMe123!`; свои значения задаются через
-`ADMIN_EMAIL`/`ADMIN_PASSWORD`, но они действуют только при создании аккаунта.
-Посмотреть список и сменить пароль:
+При первом старте создаётся администратор если нет (не перезаписывает существующего). `ADMIN_EMAIL`/`ADMIN_PASSWORD` действуют только при создании.
 
 ```bash
 npm run admin:list
 npm run admin:reset -- --email=admin@dsu.local --password=НовыйПароль123
 ```
 
-Вход выполняется во фронтенде через раздел «Профиль»; JWT также ставится в
-HttpOnly cookie, Bearer-токен оставлен для совместимости с ручными
-API-клиентами.
+Вход — во фронтенде «Профиль»; JWT в HttpOnly cookie + Bearer.
 
-Публичная регистрация администратора закрыта: чтобы включить её, задайте
-`ALLOW_ADMIN_REGISTRATION=true` и `ADMIN_REGISTRATION_KEY`.
+## Новые доменные таблицы
 
-## Проверки
+- `events.event_type` (`debate|tournament|poll|competition|quiz|other`)
+- `matches` — пары участников по раундам
+- `tournament_standings` — wins/losses/draws/points/position
+- `leaderboards` — универсальный лидерборд (score/rank)
+- `podiums` — топ-3
+
+Индексы: `idx_events_status/type`, `idx_votes_event_participant`, `idx_leaderboards_event_score` и т.д. Транзакции `BEGIN IMMEDIATE` защищают anti-fraud.
+
+## Checks
 
 ```bash
 npm run typecheck
@@ -149,6 +150,4 @@ npm run test
 npm run build
 ```
 
-Полный REST и Socket.io контракт — [../docs/API_SPEC.md](../docs/API_SPEC.md).
-Локальный хостинг целиком (Windows, Live Server, бэкапы, диагностика) —
-[../docs/LOCAL_HOSTING.md](../docs/LOCAL_HOSTING.md).
+REST/Socket контракт — `../docs/API_SPEC.md`, хостинг — `../docs/LOCAL_HOSTING.md`, миграция — `../docs/MIGRATION_SQLITE.md`.

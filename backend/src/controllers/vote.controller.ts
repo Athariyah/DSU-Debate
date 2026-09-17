@@ -1,13 +1,13 @@
 import { Request, Response } from "express";
 import { isIP } from "node:net";
-import { PoolClient } from "pg";
-import { pool, withTransaction } from "../config/db";
+import { pool, withTransaction, PoolClient } from "../config/db";
 import { EventRecord, EventResults, ParticipantResult } from "../types";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../middleware/errorHandler";
 import { castVoteSchema } from "../validation/schemas";
-import { broadcastVoteUpdate } from "../sockets";
+import { broadcastLeaderboardUpdate, broadcastPodiumUpdate, broadcastVoteUpdate } from "../sockets";
 import { isVotingWindowOpen, votingEndsAt } from "../utils/votingWindow";
+import { eventResultsCache, leaderboardCache } from "../utils/cache";
 
 /**
  * Извлекает реальный IP-адрес клиента из запроса.
@@ -33,13 +33,15 @@ export async function computeEventResults(
   client: PoolClient,
   eventId: number
 ): Promise<EventResults> {
+  // Кэш для чтения вне транзакции — ускоряет повторные запросы трансляции
+  // Внутри транзакции голоса кэш не используется, чтобы не отдать устаревшие данные
   const aggregation = await client.query<{
     id: number;
     name: string;
     description: string | null;
     votes_count: string;
   }>(
-    `SELECT p.id, p.name, p.description, COUNT(v.id)::text AS votes_count
+    `SELECT p.id, p.name, p.description, COUNT(v.id) AS votes_count
      FROM participants p
      LEFT JOIN votes v ON v.participant_id = p.id
      WHERE p.event_id = $1
@@ -296,6 +298,29 @@ export const castVote = asyncHandler(async (req: Request, res: Response) => {
   // realtime-канал — рассылаем и отвечаем занулёнными результатами.
   const payload = votesHidden ? redactEventResults(results) : results;
   broadcastVoteUpdate(payload);
+  // Инвалидируем кэш агрегатов и транслируем лидерборд/пьедестал (если голос открытый)
+  eventResultsCache.invalidate(eventId);
+  leaderboardCache.invalidate(eventId);
+  if (!votesHidden) {
+    try {
+      const leaderboardRows = payload.participants
+        .map((p) => ({ participantId: p.participantId, name: p.name, description: p.description, score: p.votesCount }))
+        .sort((a, b) => b.score - a.score);
+      let rank = 1;
+      let lastScore: number | null = null;
+      let lastRank = 1;
+      const ranked = leaderboardRows.map((r, idx) => {
+        const curRank = lastScore !== null && r.score === lastScore ? lastRank : idx + 1;
+        lastScore = r.score;
+        lastRank = curRank;
+        return { ...r, rank: curRank };
+      });
+      broadcastLeaderboardUpdate(eventId, { eventId, items: ranked });
+      // Пьедестал — топ-3
+      const podium = ranked.slice(0, 3).map((r, idx) => ({ place: idx + 1, participantId: r.participantId, name: r.name }));
+      broadcastPodiumUpdate(eventId, { eventId, podium });
+    } catch {}
+  }
 
   res.status(201).json({
     success: true,

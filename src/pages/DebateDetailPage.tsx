@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, lazy, Suspense, useMemo, memo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   CalendarClock,
@@ -28,6 +28,12 @@ import type { DebateEvent, Participant } from "../types";
 
 import { formatCountdown } from "../utils/formatCountdown";
 
+const LeaderboardTab = lazy(() => import("../components/event/LeaderboardTab").then(m => ({ default: m.LeaderboardTab })));
+const StandingsTab = lazy(() => import("../components/event/StandingsTab").then(m => ({ default: m.StandingsTab })));
+const PodiumTab = lazy(() => import("../components/event/PodiumTab").then(m => ({ default: m.PodiumTab })));
+
+const ParticipantResultMemo = memo(ParticipantResult);
+
 const EMPTY_PARTICIPANTS: Participant[] = [];
 
 export function DebateDetailPage() {
@@ -43,6 +49,7 @@ export function DebateDetailPage() {
   const [hiddenFromPublic, setHiddenFromPublic] = useState(false);
   const votedRecord = event ? getVotedParticipant(event.id) : null;
   const [justVotedFor, setJustVotedFor] = useState<number | null>(votedRecord?.participantId ?? null);
+  const [activeTab, setActiveTab] = useState<"vote" | "leaders" | "table" | "podium">("vote");
   const isAdmin = isAdminAuthenticated();
 
   const loadEvent = useCallback(() => {
@@ -100,6 +107,10 @@ export function DebateDetailPage() {
     const timer = window.setInterval(() => setNowTick(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, [eventStatus, endsAtMs]);
+
+  const voteList = useMemo(() => participants.map((p, idx) => (
+    <ParticipantResultMemo key={p.id} participant={p} index={idx} highlighted={p.id === justVotedFor} hidden={votesHidden} />
+  )), [participants, justVotedFor, votesHidden]);
 
   async function copyLink() {
     setMenuOpen(false);
@@ -267,20 +278,61 @@ export function DebateDetailPage() {
           </div>
         )}
 
-        <div className="mt-6 space-y-3">
-          {participants.map((p, idx) => (
-            <ParticipantResult key={p.id} participant={p} index={idx} highlighted={p.id === justVotedFor} hidden={votesHidden} />
+        {/* Тип мероприятия — визуальный контекст */}
+        <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-white/40">
+          {event.eventType === "tournament" ? "Турнир" : event.eventType === "poll" ? "Опрос" : event.eventType === "competition" ? "Соревнование" : event.eventType === "quiz" ? "Квиз" : event.eventType === "other" ? "Мероприятие" : "Дебаты"}
+        </div>
+
+        {/* Вкладки: Голосование / Лидеры / Таблица / Пьедестал — сохраняем привычный UI, не ломаем логику */}
+        <div className="mt-5 flex gap-1.5 overflow-x-auto rounded-2xl border border-white/10 bg-black/20 p-1">
+          {([
+            ["vote", "Голосование"],
+            ["leaders", "Лидеры"],
+            ["table", "Таблица"],
+            ["podium", "Пьедестал"],
+          ] as const).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setActiveTab(key)}
+              className={cn("whitespace-nowrap rounded-xl px-4 py-2 text-sm font-medium transition", activeTab === key ? "bg-white text-black shadow" : "text-white/60 hover:text-white hover:bg-white/10")}
+            >
+              {label}
+            </button>
           ))}
         </div>
 
-        {votesHidden ? (
-          <p className="mt-4 flex items-center justify-center gap-1.5 text-center text-xs text-white/30">
-            <EyeOff size={13} className="opacity-70" />
-            Результаты скрыты организатором
-          </p>
-        ) : (
-          <p className="mt-4 text-center text-xs text-white/30">Всего голосов: {totalVotes}</p>
-        )}
+        <div className="mt-6">
+          {activeTab === "vote" && (
+            <>
+              <div className="space-y-3">
+                {voteList}
+              </div>
+              {votesHidden ? (
+                <p className="mt-4 flex items-center justify-center gap-1.5 text-center text-xs text-white/30">
+                  <EyeOff size={13} className="opacity-70" />
+                  Результаты скрыты организатором
+                </p>
+              ) : (
+                <p className="mt-4 text-center text-xs text-white/30">Всего голосов: {totalVotes}</p>
+              )}
+            </>
+          )}
+          {activeTab === "leaders" && (
+            <Suspense fallback={<div className="h-20 animate-pulse rounded-2xl bg-white/5" />}>
+              <LeaderboardTab eventId={event.id} />
+            </Suspense>
+          )}
+          {activeTab === "table" && (
+            <Suspense fallback={<div className="h-20 animate-pulse rounded-2xl bg-white/5" />}>
+              <StandingsTab eventId={event.id} />
+            </Suspense>
+          )}
+          {activeTab === "podium" && (
+            <Suspense fallback={<div className="h-20 animate-pulse rounded-2xl bg-white/5" />}>
+              <PodiumTab eventId={event.id} />
+            </Suspense>
+          )}
+        </div>
       </div>
 
       <div className="mx-auto w-full max-w-2xl space-y-2 px-5 pb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] pt-2 lg:px-8">

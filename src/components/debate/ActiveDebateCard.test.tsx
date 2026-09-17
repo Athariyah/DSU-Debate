@@ -13,6 +13,7 @@ const event: DebateEvent = {
   id: 1,
   title: "Нужен ли четырёхдневный рабочий день?",
   status: "active",
+  eventType: "debate",
   participantsCount: 3,
   scheduledAt: new Date(2026, 8, 18, 17, 0).toISOString(),
   totalVotes: 47,

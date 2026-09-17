@@ -14,6 +14,7 @@ export const loginSchema = z.object({
 });
 
 export const eventStatusEnum = z.enum(["upcoming", "active", "completed"]);
+export const eventTypeEnum = z.enum(["debate", "tournament", "poll", "competition", "quiz", "other"]);
 
 // Длительность таймера голосования в минутах: 1..1440 (сутки).
 // null/отсутствие — таймер выключен, голосование идёт до смены статуса.
@@ -32,6 +33,7 @@ export const createEventSchema = z.object({
   title: z.string().trim().min(3).max(500),
   dateTime: z.string().datetime({ offset: true }),
   status: eventStatusEnum.optional().default("upcoming"),
+  eventType: eventTypeEnum.optional().default("debate"),
   votingDurationMinutes: votingDurationSchema.nullable().optional(),
   // TRUE — дебат скрыт от обычных пользователей (виден только администраторам).
   hiddenFromPublic: z.boolean().optional(),
@@ -45,6 +47,7 @@ export const updateEventSchema = z.object({
   title: z.string().trim().min(3).max(500).optional(),
   dateTime: z.string().datetime({ offset: true }).optional(),
   status: eventStatusEnum.optional(),
+  eventType: eventTypeEnum.optional(),
   // null — явное выключение таймера (в отличие от «поле не передано»).
   votingDurationMinutes: votingDurationSchema.nullable().optional(),
   // true — закрытое голосование: зрители не видят голоса и проценты.
@@ -73,4 +76,27 @@ export const castVoteSchema = z.object({
   deviceFingerprint: z
     .string()
     .regex(UUID_V4_REGEX, "deviceFingerprint должен быть валидным UUID v4"),
+});
+
+export const createMatchSchema = z.object({
+  eventId: z.number().int().positive(),
+  round: z.number().int().min(1).optional().default(1),
+  participant1Id: z.number().int().positive(),
+  participant2Id: z.number().int().positive(),
+  winnerId: z.number().int().positive().nullable().optional(),
+  score1: z.number().int().min(0).optional().default(0),
+  score2: z.number().int().min(0).optional().default(0),
+  status: z.enum(["upcoming", "active", "completed", "draw"]).optional().default("upcoming"),
+  scheduledAt: z.string().datetime({ offset: true }).nullable().optional(),
+});
+
+export const updateMatchSchema = z.object({
+  round: z.number().int().min(1).optional(),
+  participant1Id: z.number().int().positive().optional(),
+  participant2Id: z.number().int().positive().optional(),
+  winnerId: z.number().int().positive().nullable().optional(),
+  score1: z.number().int().min(0).optional(),
+  score2: z.number().int().min(0).optional(),
+  status: z.enum(["upcoming", "active", "completed", "draw"]).optional(),
+  scheduledAt: z.string().datetime({ offset: true }).nullable().optional(),
 });

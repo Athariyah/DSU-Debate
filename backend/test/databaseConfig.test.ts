@@ -28,7 +28,6 @@ const DB_ENV_VARS = [
   "PGPASSWORD",
   "PGDATABASE",
   "PGSSLMODE",
-  // Встроенная локальная БД.
   "LOCAL_DATABASE",
   "LOCAL_DB_DIR",
   "LOCAL_DB_PORT",
@@ -37,6 +36,9 @@ const DB_ENV_VARS = [
   "LOCAL_DB_NAME",
   "LOCAL_DB_BIN_DIR",
   "LOCAL_DB_TIMEOUT_MS",
+  "SQLITE_PATH",
+  "SQLITE_FILE",
+  "DB_PATH",
 ];
 
 const savedEnv = new Map<string, string | undefined>();
@@ -54,45 +56,41 @@ function setEnv(values: Record<string, string>): void {
   Object.assign(process.env, values);
 }
 
-test("по умолчанию использует встроенную БД на этом компьютере", () => {
+test("по умолчанию использует SQLite в backend/.localdb/database.sqlite", () => {
   setEnv({});
-
   const config = resolveDatabaseConfig();
-
-  assert.equal(config.localEmbedded, true);
-  assert.equal(
-    config.connectionString,
-    "postgresql://postgres:postgres@127.0.0.1:55432/dsu_debate"
-  );
-  assert.equal(config.sslMode, "disable");
+  assert.equal((config as any).isSqlite, true);
+  assert.ok(config.sqlitePath.endsWith("database.sqlite"));
+  assert.ok(config.sqlitePath.includes(".localdb"));
   assert.equal(config.ssl, false);
   assert.equal(config.isRemote, false);
+  assert.ok(config.safeTarget.startsWith("sqlite://"));
 });
 
-test("LOCAL_DB_* настраивают встроенную БД", () => {
-  setEnv({
-    LOCAL_DB_PORT: "6000",
-    LOCAL_DB_USER: "dsu",
-    LOCAL_DB_PASSWORD: "p@ss/wo:rd#1",
-    LOCAL_DB_NAME: "my_debate_db",
-  });
-
+test("SQLITE_PATH настраивает путь к файлу", () => {
+  setEnv({ SQLITE_PATH: "/tmp/custom.db" });
   const config = resolveDatabaseConfig();
-
-  assert.equal(config.localEmbedded, true);
-  assert.equal(
-    config.connectionString,
-    "postgresql://dsu:p%40ss%2Fwo%3Ard%231@127.0.0.1:6000/my_debate_db"
-  );
-  // Пароль никогда не попадает в логи.
-  assert.ok(!config.safeTarget.includes("p@ss"));
+  assert.equal(config.sqlitePath, "/tmp/custom.db");
+  assert.ok(config.safeTarget.includes("/tmp/custom.db"));
 });
 
-test("настройки встроенной БД по умолчанию лежат в backend/.localdb", () => {
+test("SQLITE_PATH=:memory: для тестов", () => {
+  setEnv({ SQLITE_PATH: ":memory:" });
+  const config = resolveDatabaseConfig();
+  assert.equal(config.sqlitePath, ":memory:");
+  assert.equal(config.safeTarget, "sqlite://:memory: (WAL)");
+});
+
+test("SQLITE_PATH относительный — резолвится от backendRoot", () => {
+  setEnv({ SQLITE_PATH: "./data/test.db" });
+  const config = resolveDatabaseConfig();
+  assert.ok(path.isAbsolute(config.sqlitePath));
+  assert.ok(config.sqlitePath.endsWith(path.join("data", "test.db")));
+});
+
+test("настройки встроенной БД по умолчанию лежат в backend/.localdb (совместимость)", () => {
   setEnv({});
-
   const settings = resolveLocalDatabaseSettings();
-
   assert.equal(settings.port, 55432);
   assert.equal(settings.user, "postgres");
   assert.equal(settings.database, "dsu_debate");
@@ -103,94 +101,23 @@ test("настройки встроенной БД по умолчанию ле�
   assert.ok(settings.logFile.includes("logs"));
 });
 
-test("LOCAL_DB_DIR задаёт каталог данных", () => {
+test("LOCAL_DB_DIR задаёт каталог данных (совместимость)", () => {
   setEnv({ LOCAL_DB_DIR: "./my-local-db" });
-
   const settings = resolveLocalDatabaseSettings();
-
   assert.ok(settings.rootDir.endsWith("my-local-db"));
   assert.ok(settings.dataDir.endsWith("postgres"));
 });
 
-test("внешняя БД отключает встроенную", () => {
-  setEnv({ DB_HOST: "localhost", DB_NAME: "dsu_debate" });
-
+test("PostgreSQL переменные игнорируются (проект теперь на SQLite)", () => {
+  setEnv({ DATABASE_URL: "postgresql://dsu:secret@db.example.com:5432/db?sslmode=require" });
   const config = resolveDatabaseConfig();
-
-  assert.equal(config.localEmbedded, false);
-  assert.equal(config.isRemote, false);
+  // Теперь это SQLite, а не postgres
+  assert.equal((config as any).isSqlite, true);
+  assert.ok(config.sqlitePath.endsWith("database.sqlite"));
 });
 
-test("использует DATABASE_URL и вырезает из неё sslmode", () => {
-  setEnv({
-    DATABASE_URL: "postgresql://dsu_debate:secret@db.example.com:5432/dsu_debatedb?sslmode=require",
-  });
-
+test("собирает путь из SQLITE_FILE", () => {
+  setEnv({ SQLITE_FILE: "/tmp/from-sqlite-file.db" });
   const config = resolveDatabaseConfig();
-
-  assert.equal(
-    config.connectionString,
-    "postgresql://dsu_debate:secret@db.example.com:5432/dsu_debatedb"
-  );
-  assert.equal(config.sslMode, "require");
-  assert.deepEqual(config.ssl, { rejectUnauthorized: false });
-  assert.equal(config.isRemote, true);
-  assert.equal(config.localEmbedded, false);
-});
-
-test("собирает строку подключения из отдельных DB_* переменных", () => {
-  setEnv({
-    DB_HOST: "db.example.com",
-    DB_PORT: "5432",
-    DB_NAME: "dsu_debatedb",
-    DB_USER: "dsu_debate",
-    DB_PASSWORD: "p@ss/wo:rd#1",
-  });
-
-  const config = resolveDatabaseConfig();
-
-  assert.equal(
-    config.connectionString,
-    "postgresql://dsu_debate:p%40ss%2Fwo%3Ard%231@db.example.com:5432/dsu_debatedb"
-  );
-  // Удалённый хост по умолчанию пробует TLS и умеет откатываться на plaintext.
-  assert.equal(config.sslMode, "prefer");
-  assert.equal(config.sslCanFallback, true);
-  // Пароль никогда не попадает в логи.
-  assert.ok(!config.safeTarget.includes("p@ss"));
-});
-
-test("для локального хоста TLS по умолчанию отключён", () => {
-  setEnv({ DATABASE_URL: "postgresql://dsu:dsu@127.0.0.1:5432/dsu_debate" });
-
-  const config = resolveDatabaseConfig();
-
-  assert.equal(config.sslMode, "disable");
-  assert.equal(config.ssl, false);
-  assert.equal(config.isRemote, false);
-});
-
-test("DB_SSLMODE переопределяет sslmode из строки подключения", () => {
-  setEnv({
-    DATABASE_URL: "postgresql://dsu:dsu@db.example.com:5432/dsu?sslmode=disable",
-    DB_SSLMODE: "verify-full",
-  });
-
-  const config = resolveDatabaseConfig();
-
-  assert.equal(config.sslMode, "verify-full");
-  assert.deepEqual(config.ssl, { rejectUnauthorized: true });
-  assert.equal(config.sslCanFallback, false);
-});
-
-test("бросает понятную ошибку, если подключение не задано, а встроенная БД выключена", () => {
-  setEnv({ LOCAL_DATABASE: "false" });
-
-  assert.throws(() => resolveDatabaseConfig(), /Database connection is not configured/);
-});
-
-test("бросает ошибку на неизвестном режиме SSL", () => {
-  setEnv({ DB_HOST: "db.example.com", DB_SSLMODE: "yes-please" });
-
-  assert.throws(() => resolveDatabaseConfig(), /Unknown database SSL mode/);
+  assert.equal(config.sqlitePath, "/tmp/from-sqlite-file.db");
 });

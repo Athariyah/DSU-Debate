@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { Loader2, Plus, Timer, Type, UserX, Users, X } from "lucide-react";
+import { Flame, Loader2, Plus, Timer, Trophy, Type, UserX, Users, X } from "lucide-react";
+import type { EventType } from "../types";
 import { TopBar } from "../components/layout/TopBar";
 import { Button } from "../components/ui/Button";
 import { DateTimeField } from "../components/ui/DateTimeField";
@@ -22,6 +23,7 @@ function emptyParticipant(): DraftParticipant {
 export function CreateDebatePage() {
   const navigate = useNavigate();
   const [title, setTitle] = useState("");
+  const [eventType, setEventType] = useState<EventType>("debate");
   const [participants, setParticipants] = useState<DraftParticipant[]>([emptyParticipant(), emptyParticipant()]);
   const [scheduledAt, setScheduledAt] = useState("");
   /** Опциональный таймер голосования, минуты (пусто — выключен). */
@@ -64,6 +66,7 @@ export function CreateDebatePage() {
       await createDebate({
         title: title.trim(),
         format: participants.length,
+        eventType,
         participants: participants.map((p) => ({ name: p.name.trim(), subtitle: p.subtitle.trim() || undefined })),
         scheduledAt: new Date(scheduledAt).toISOString(),
         votingDurationMinutes:
@@ -95,7 +98,29 @@ export function CreateDebatePage() {
       <div className="no-scrollbar mx-auto flex-1 w-full max-w-3xl overflow-y-auto px-5 pb-8 pt-2 lg:px-8 lg:pt-6">
         <section>
           <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-white/40">
-            Тема дебата
+            Тип мероприятия
+          </label>
+          <div className="grid grid-cols-3 gap-2 lg:grid-cols-6">
+            {([
+              ["debate", "Дебаты", Type],
+              ["tournament", "Турнир", Trophy],
+              ["poll", "Опрос", Users],
+              ["competition", "Конкурс", Flame],
+              ["quiz", "Квиз", Type],
+              ["other", "Другое", Type],
+            ] as const).map(([value, label, Icon]) => (
+              <button key={value} type="button" onClick={() => setEventType(value as EventType)} className={cn("flex flex-col items-center gap-1 rounded-2xl border px-3 py-3 text-xs font-medium transition", eventType === value ? "border-indigo-400/50 bg-indigo-500/20 text-white shadow" : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10")}>
+                <Icon size={16} />
+                {label}
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-[11px] text-white/30">Дебаты, турниры и опросы используют одинаковые голосования, но трансляция и таблиц�� адаптируются.</p>
+        </section>
+
+        <section className="mt-6">
+          <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-white/40">
+            Тема мероприятия
           </label>
           <div className="glass-panel flex items-center gap-3 rounded-2xl border border-white/10 px-4 py-3.5">
             <IconChip icon={Type} iconSize={15} />

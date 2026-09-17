@@ -4,6 +4,7 @@
  */
 
 export type DebateStatus = "upcoming" | "active" | "completed";
+export type EventType = "debate" | "tournament" | "poll" | "competition" | "quiz" | "other";
 
 export interface Participant {
   id: number;
@@ -20,6 +21,7 @@ export interface DebateEvent {
   id: number;
   title: string;
   status: DebateStatus;
+  eventType?: EventType;
   participantsCount: number;
   /** ISO timestamp; backend calls this `dateTime`. */
   scheduledAt: string;
@@ -34,6 +36,48 @@ export interface DebateEvent {
   totalVotes: number;
   participants: Participant[];
   coverGradient?: string;
+}
+
+export interface Match {
+  id: number;
+  eventId: number;
+  round: number;
+  participant1Id: number;
+  participant2Id: number;
+  winnerId: number | null;
+  score1: number;
+  score2: number;
+  status: "upcoming" | "active" | "completed" | "draw";
+  scheduledAt: string | null;
+}
+
+export interface TournamentStanding {
+  id: number;
+  event_id: number;
+  participant_id: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  points: number;
+  position: number | null;
+  name: string;
+  description: string | null;
+}
+
+export interface LeaderboardEntry {
+  participantId: number;
+  name: string;
+  description?: string | null;
+  score: number;
+  rank: number;
+}
+
+export interface PodiumEntry {
+  place: number;
+  participantId: number;
+  name: string;
+  description?: string | null;
+  score?: number;
 }
 
 export interface VoteRequestPayload {
@@ -61,6 +105,7 @@ export interface CreateDebateInput {
   title: string;
   /** Число участников (не ограничено сверху; минимум 2). */
   format: number;
+  eventType?: EventType;
   participants: { name: string; subtitle?: string }[];
   scheduledAt: string;
   /** Опциональный таймер голосования, минуты. */

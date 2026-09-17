@@ -13,11 +13,12 @@ import {
 import { votingEndsAt } from "../utils/votingWindow";
 import { computeEventResults, redactEventResults } from "./vote.controller";
 
-function serializeEvent(row: EventRecord & { participants_count?: string }) {
+function serializeEvent(row: EventRecord & { participants_count?: string; event_type?: string }) {
   return {
     id: row.id,
     title: row.title,
     status: row.status,
+    eventType: (row as any).event_type ?? row.event_type ?? "debate",
     dateTime: row.date_time,
     votingDurationMinutes: row.voting_duration_minutes ?? null,
     votingEndsAt: votingEndsAt(row)?.toISOString() ?? null,
@@ -39,7 +40,7 @@ export const createEvent = asyncHandler(async (req: Request, res: Response) => {
   if (!parsed.success) {
     throw new ApiError(400, "VALIDATION_ERROR", parsed.error.issues[0].message);
   }
-  const { title, dateTime, status, votingDurationMinutes, hiddenFromPublic, participants } = parsed.data;
+  const { title, dateTime, status, eventType, votingDurationMinutes, hiddenFromPublic, participants } = parsed.data;
   const adminId = req.admin!.adminId;
 
   if (status === "active" && (!participants || participants.length < 2)) {
@@ -60,11 +61,11 @@ export const createEvent = asyncHandler(async (req: Request, res: Response) => {
 
     const inserted = await client.query<EventRecord>(
       `INSERT INTO events (
-         title, status, date_time, voting_duration_minutes, voting_started_at, hidden_from_public, created_by
+         title, status, event_type, date_time, voting_duration_minutes, voting_started_at, hidden_from_public, created_by
        )
-       VALUES ($1, $2, $3, $4, CASE WHEN $2 = 'active'::event_status THEN now() ELSE NULL END, $5, $6)
+       VALUES ($1, $2, $3, $4, $5, CASE WHEN $2 = 'active' THEN now() ELSE NULL END, $6, $7)
        RETURNING *`,
-      [title, status, dateTime, votingDurationMinutes ?? null, hiddenFromPublic ?? false, adminId]
+      [title, status, eventType ?? "debate", dateTime, votingDurationMinutes ?? null, hiddenFromPublic ?? false, adminId]
     );
 
     if (participants) {
@@ -191,12 +192,13 @@ export const updateEvent = asyncHandler(async (req: Request, res: Response) => {
   if (!parsed.success) {
     throw new ApiError(400, "VALIDATION_ERROR", parsed.error.issues[0].message);
   }
-  const { title, dateTime, status, votingDurationMinutes, votesHidden, hiddenFromPublic } = parsed.data;
+  const { title, dateTime, status, eventType, votingDurationMinutes, votesHidden, hiddenFromPublic } = parsed.data;
 
   if (
     title === undefined &&
     dateTime === undefined &&
     status === undefined &&
+    eventType === undefined &&
     votingDurationMinutes === undefined &&
     votesHidden === undefined &&
     hiddenFromPublic === undefined
@@ -269,6 +271,10 @@ export const updateEvent = asyncHandler(async (req: Request, res: Response) => {
     if (status !== undefined) {
       values.push(status);
       setClauses.push(`status = $${values.length}`);
+    }
+    if (eventType !== undefined) {
+      values.push(eventType);
+      setClauses.push(`event_type = $${values.length}`);
     }
     if (votingDurationMinutes !== undefined) {
       values.push(votingDurationMinutes);
