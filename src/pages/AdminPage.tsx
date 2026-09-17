@@ -6,6 +6,7 @@ import { Button } from "../components/ui/Button";
 import { DateTimeField } from "../components/ui/DateTimeField";
 import { IconChip } from "../components/ui/IconChip";
 import { StatusSelect } from "../components/ui/StatusSelect";
+import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import {
   createAdminParticipant,
   deleteAdminParticipant,
@@ -18,6 +19,11 @@ import {
   updateDebate,
 } from "../api/debates";
 
+/** Что собираемся удалить — окно подтверждения спрашивает перед запросом. */
+type PendingDelete =
+  | { kind: "event"; id: number; title: string }
+  | { kind: "participant"; eventId: number; id: number; name: string };
+
 export function AdminPage() {
   const [events, setEvents] = useState<AdminEventSummary[]>([]);
   const [participants, setParticipants] = useState<Record<number, AdminParticipant[]>>({});
@@ -27,6 +33,9 @@ export function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Вместо системного window.confirm — собственное окно подтверждения
+  // в стилистике приложения (ConfirmDialog).
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
 
   async function loadEvents() {
     setError(null);
@@ -77,21 +86,40 @@ export function AdminPage() {
     }
   }
 
-  async function removeEvent(eventId: number) {
-    if (!window.confirm("Удалить мероприятие вместе с участниками и голосами?")) return;
-    setBusyId(eventId);
+  async function runPendingDelete() {
+    if (!pendingDelete) return;
+    if (pendingDelete.kind === "event") {
+      const eventId = pendingDelete.id;
+      setBusyId(eventId);
+      try {
+        await deleteDebate(eventId);
+        setEvents((current) => current.filter((event) => event.id !== eventId));
+        setParticipants((current) => {
+          const next = { ...current };
+          delete next[eventId];
+          return next;
+        });
+      } catch (removeError) {
+        setError(removeError instanceof Error ? removeError.message : "Не удалось удалить мероприятие");
+      } finally {
+        setBusyId(null);
+        setPendingDelete(null);
+      }
+      return;
+    }
+    const { eventId, id: participantId } = pendingDelete;
+    setBusyId(participantId);
     try {
-      await deleteDebate(eventId);
-      setEvents((current) => current.filter((event) => event.id !== eventId));
-      setParticipants((current) => {
-        const next = { ...current };
-        delete next[eventId];
-        return next;
-      });
+      await deleteAdminParticipant(participantId);
+      setParticipants((current) => ({
+        ...current,
+        [eventId]: current[eventId].filter((participant) => participant.id !== participantId),
+      }));
     } catch (removeError) {
-      setError(removeError instanceof Error ? removeError.message : "Не удалось удалить мероприятие");
+      setError(removeError instanceof Error ? removeError.message : "Не удалось удалить участника");
     } finally {
       setBusyId(null);
+      setPendingDelete(null);
     }
   }
 
@@ -117,21 +145,7 @@ export function AdminPage() {
     }
   }
 
-  async function removeParticipant(eventId: number, participantId: number) {
-    if (!window.confirm("Удалить участника и его голоса?")) return;
-    setBusyId(participantId);
-    try {
-      await deleteAdminParticipant(participantId);
-      setParticipants((current) => ({
-        ...current,
-        [eventId]: current[eventId].filter((participant) => participant.id !== participantId),
-      }));
-    } catch (removeError) {
-      setError(removeError instanceof Error ? removeError.message : "Не удалось удалить участника");
-    } finally {
-      setBusyId(null);
-    }
-  }
+
 
   async function addParticipant(eventId: number) {
     const name = window.prompt("Имя нового участника");
@@ -258,7 +272,14 @@ export function AdminPage() {
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button variant="glass" onClick={() => void saveEvent(event)} disabled={busyId === event.id}><Save size={15} />Сохранить</Button>
                   <Button variant="ghost" onClick={() => void toggleParticipants(event.id)}>{isExpanded ? <ChevronUp size={15} className="text-white opacity-70" /> : <ChevronDown size={15} className="text-white opacity-70" />}Участники</Button>
-                  <Button variant="ghost" className="text-rose-300" onClick={() => void removeEvent(event.id)} disabled={busyId === event.id}><Trash2 size={15} />Удалить</Button>
+                  <Button
+                    variant="ghost"
+                    className="text-rose-300"
+                    onClick={() => setPendingDelete({ kind: "event", id: event.id, title: event.title })}
+                    disabled={busyId === event.id}
+                  >
+                    <Trash2 size={15} />Удалить
+                  </Button>
                 </div>
 
                 {isExpanded && (
@@ -284,7 +305,16 @@ export function AdminPage() {
                         />
                         <div className="mt-2 flex gap-2">
                           <Button variant="glass" onClick={() => void saveParticipant(event.id, participant)} disabled={busyId === participant.id}><Check size={14} />Сохранить</Button>
-                          <Button variant="ghost" className="text-rose-300" onClick={() => void removeParticipant(event.id, participant.id)}><Trash2 size={14} /></Button>
+                          <Button
+                            variant="ghost"
+                            className="text-rose-300"
+                            aria-label={`Удалить участника ${participant.name}`}
+                            onClick={() =>
+                              setPendingDelete({ kind: "participant", eventId: event.id, id: participant.id, name: participant.name })
+                            }
+                          >
+                            <Trash2 size={14} />
+                          </Button>
                         </div>
                       </div>
                     ))}
@@ -296,6 +326,22 @@ export function AdminPage() {
           })}
         </div>
       </div>
+
+      {/* Собственное окно подтверждения удаления — вместо системного confirm. */}
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title={pendingDelete?.kind === "participant" ? "Удалить участника?" : "Удалить мероприятие?"}
+        message={
+          pendingDelete?.kind === "participant"
+            ? `«${pendingDelete.name}» и все его голоса будут удалены. Действие необратимо.`
+            : pendingDelete
+              ? `«${pendingDelete.title}» будет удалено вместе с участниками и голосами. Действие необратимо.`
+              : ""
+        }
+        busy={busyId !== null}
+        onConfirm={() => void runPendingDelete()}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 }

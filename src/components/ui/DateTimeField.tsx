@@ -49,6 +49,21 @@ const WHEEL_COPIES = 3;
 const YEAR_SPAN = 101;
 
 /**
+ * Мышь/трекпад против пальца: на «тонком» указателе включаем десктопные
+ * способы крутить колесо — перетаскивание мышью, пошаговое колесо мыши
+ * и стрелки клавиатуры. CSS scroll-snap при этом отключаем, чтобы не
+ * конфликтовать с программным скроллом (на телефоне snap остаётся —
+ * там он даёт «родное» ощущение барабана).
+ */
+const FINE_POINTER =
+  typeof window !== "undefined" &&
+  typeof window.matchMedia === "function" &&
+  window.matchMedia("(pointer: fine)").matches;
+
+/** Накопленный deltaY колеса мыши, после которого делаем один шаг значения. */
+const WHEEL_STEP_DELTA = 40;
+
+/**
  * Разбирает ISO-строку на локальные части для полей `date` и `time`.
  * Пустая или невалидная строка даёт пустые части — поле остаётся незаполненным.
  */
@@ -365,8 +380,11 @@ function PanelHeader({ title, onDone }: { title: string; onDone: () => void }) {
 /**
  * Колесо выбора значения в духе будильника iPhone: вертикальный список
  * со snap-скроллом, центральная подсветка активного значения.
- * Нативный touch-скролл телефона + scroll-snap даёт «родное» ощущение,
- * на десктопе работает колесом мыши и кликами по значениям.
+ * Нативный touch-скролл телефона + scroll-snap даёт «родное» ощущение.
+ * На десктопе (pointer: fine) — свои эргономичные управления: колесо мыши
+ * крутит по одному значению за нотч, список можно перетаскивать мышью
+ * (с доводкой до ближайшего значения), работают стрелки клавиатуры
+ * и клики по значениям.
  *
  * Лента циклическая: значений WHEEL_COPIES копий подряд, «домой» —
  * средняя. Когда центр уходит в крайнюю копию, скролл мгновенно переносят
@@ -401,6 +419,13 @@ function TimeWheel({
   // возвращал бы ре-рендер родителя, и тот «дотягивал» scrollTop обратно
   // к committed-значению — колесо прыгало бы назад посреди жеста.
   const lastEmittedRef = useRef<number | null>(null);
+  // Перетаскивание мышью (десктоп): захват указателя включаем после порога
+  // в пару пикселей, чтобы обычный клик по значению продолжал работать.
+  const dragRef = useRef({ pointerId: null as number | null, active: false, pending: 0, lastY: 0, moved: 0 });
+  // Аккумулятор deltaY колеса мыши для пошаговой прокрутки.
+  const wheelAccRef = useRef(0);
+  // Подавить click по значению сразу после перетаскивания.
+  const suppressClickRef = useRef(false);
 
   const homeIndexFor = (value: number) => count + Math.max(0, values.indexOf(value));
 
@@ -445,6 +470,85 @@ function TimeWheel({
     pick(value);
   }
 
+  /** Шаг на одно значение в направлении dir — колесо мыши и стрелки. */
+  function stepBy(dir: number) {
+    const el = containerRef.current;
+    if (!el) return;
+    const current = Math.round(el.scrollTop / WHEEL_ITEM_HEIGHT);
+    const target = Math.max(0, Math.min(total - 1, current + dir));
+    el.scrollTo({ top: target * WHEEL_ITEM_HEIGHT, behavior: "smooth" });
+  }
+
+  // Колесо мыши на десктопе: один нотч — ровно одно значение, без
+  // прострела сразу нескольких пунктов. React вешает onWheel пассивно
+  // (preventDefault невозможен), поэтому — нативный слушатель.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || !FINE_POINTER) return;
+    function onWheel(event: WheelEvent) {
+      event.preventDefault();
+      const scale = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? WHEEL_HEIGHT : 1;
+      wheelAccRef.current += event.deltaY * scale;
+      while (Math.abs(wheelAccRef.current) >= WHEEL_STEP_DELTA) {
+        const dir = wheelAccRef.current > 0 ? 1 : -1;
+        wheelAccRef.current -= dir * WHEEL_STEP_DELTA;
+        stepBy(dir);
+      }
+    }
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function onPointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    if (!FINE_POINTER || event.pointerType !== "mouse" || event.button !== 0) return;
+    dragRef.current = { pointerId: event.pointerId, active: false, pending: 0, lastY: event.clientY, moved: 0 };
+  }
+
+  function onPointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    const drag = dragRef.current;
+    if (drag.pointerId !== event.pointerId) return;
+    const el = containerRef.current;
+    if (!el) return;
+    const dy = event.clientY - drag.lastY;
+    drag.lastY = event.clientY;
+    if (!drag.active) {
+      drag.pending += dy;
+      if (Math.abs(drag.pending) < 4) return;
+      drag.active = true;
+      el.setPointerCapture(event.pointerId);
+      drag.moved += Math.abs(drag.pending);
+      el.scrollTop -= drag.pending;
+      return;
+    }
+    drag.moved += Math.abs(dy);
+    el.scrollTop -= dy;
+  }
+
+  function onPointerEnd(event: React.PointerEvent<HTMLDivElement>) {
+    const drag = dragRef.current;
+    if (drag.pointerId !== event.pointerId) return;
+    const el = containerRef.current;
+    if (el && drag.active) {
+      // Доводим до ближайшего значения.
+      const target = Math.max(0, Math.min(total - 1, Math.round(el.scrollTop / WHEEL_ITEM_HEIGHT)));
+      el.scrollTo({ top: target * WHEEL_ITEM_HEIGHT, behavior: "smooth" });
+      if (drag.moved > 6) suppressClickRef.current = true;
+    }
+    dragRef.current = { pointerId: null, active: false, pending: 0, lastY: 0, moved: 0 };
+  }
+
+  function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (!FINE_POINTER) return;
+    if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+      event.preventDefault();
+      stepBy(1);
+    } else if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+      event.preventDefault();
+      stepBy(-1);
+    }
+  }
+
   return (
     <div className="flex min-w-0 flex-1 flex-col items-center gap-2">
       <div
@@ -462,7 +566,20 @@ function TimeWheel({
         <div
           ref={containerRef}
           onScroll={syncFromScroll}
-          className="no-scrollbar wheel-scroller h-full snap-y snap-mandatory overflow-y-auto"
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerEnd}
+          onPointerCancel={onPointerEnd}
+          onKeyDown={onKeyDown}
+          tabIndex={0}
+          aria-label={`${label}: прокрутка, перетаскивание или стрелки`}
+          className={cn(
+            "no-scrollbar wheel-scroller h-full overflow-y-auto rounded-xl outline-none",
+            "focus-visible:ring-2 focus-visible:ring-indigo-300/40",
+            FINE_POINTER
+              ? "snap-none cursor-grab select-none active:cursor-grabbing"
+              : "snap-y snap-mandatory"
+          )}
           style={{ paddingTop: WHEEL_INSET, paddingBottom: WHEEL_INSET }}
         >
           {Array.from({ length: WHEEL_COPIES }, (_, copy) =>
@@ -473,6 +590,10 @@ function TimeWheel({
                   key={`${copy}-${i}`}
                   type="button"
                   onClick={() => {
+                    if (suppressClickRef.current) {
+                      suppressClickRef.current = false;
+                      return;
+                    }
                     pick(value);
                     const el = containerRef.current;
                     // jsdom не реализует Element.scrollTo — прокидываем без ошибок.
