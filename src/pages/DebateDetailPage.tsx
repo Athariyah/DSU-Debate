@@ -414,30 +414,21 @@ export function DebateDetailPage() {
               </span>
               <span className="text-xs text-emerald-200/60">Можно изменить, пока голосование активно</span>
             </div>
-            {canVote || timerExpired ? (
-              <div className="grid grid-cols-2 gap-2">
-                {canVote ? (
-                  <Button fullWidth onClick={() => setVoteModalOpen(true)}>Изменить голос</Button>
-                ) : (
-                  <Button fullWidth disabled>Время вышло</Button>
-                )}
-                <Button variant="glass" fullWidth onClick={() => navigate("/home")}>
-                  <Home size={16} />
-                  На главный
-                </Button>
-              </div>
-            ) : (
+            <div className="grid grid-cols-2 gap-2">
+              <Button fullWidth disabled={!canVote} onClick={() => canVote && setVoteModalOpen(true)}>
+                {canVote ? "Изменить голос" : timerExpired ? "Время вышло" : "Изменить голос"}
+              </Button>
               <Button variant="glass" fullWidth onClick={() => navigate("/home")}>
                 <Home size={16} />
                 На главный
               </Button>
-            )}
+            </div>
           </>
-        ) : canVote ? (
-          <Button fullWidth onClick={() => setVoteModalOpen(true)}>Голосовать</Button>
-        ) : timerExpired ? (
-          <Button fullWidth disabled>Время голосования истекло</Button>
-        ) : null}
+        ) : (
+          <Button fullWidth disabled={!canVote} onClick={() => canVote && setVoteModalOpen(true)}>
+            {canVote ? "Голосовать" : timerExpired ? "Время голосования истекло" : "Голосовать"}
+          </Button>
+        )}
       </div>
 
       <VoteModal
@@ -492,7 +483,7 @@ function VotingTab({ voting, isActive, votesHidden, onVoted }: { voting: any; is
       ) : (
         <p className="text-center text-xs text-white/30">Всего голосов: {totalVotes}</p>
       )}
-      {isActive && <Button fullWidth onClick={() => setVoteModalForVoting(true)}>Голосовать</Button>}
+      <Button fullWidth disabled={!isActive} onClick={() => isActive && setVoteModalForVoting(true)}>Голосовать</Button>
       {justVoted && <p className="text-center text-xs text-emerald-300">Ваш голос за {participants.find(pp => pp.id === justVoted)?.name} учтён</p>}
       <VoteModal event={localVoting as any} open={voteModalForVoting} preselectedParticipantId={justVoted} onClose={() => setVoteModalForVoting(false)} onVoted={(pid) => { setJustVoted(pid); setVoteModalForVoting(false); onVoted(); }} />
     </div>
