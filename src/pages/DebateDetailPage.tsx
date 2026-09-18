@@ -404,7 +404,13 @@ export function DebateDetailPage() {
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-2xl space-y-2 px-5 pb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] pt-2 lg:px-8">
+      {(() => {
+        // Когда открыта вкладка голосования из списка votings — нижняя панель голосования не нужна (кнопка уже внутри VotingTab)
+        const hasVotings = (event.votings?.length ?? 0) > 0;
+        const isVotingTab = activeTab.startsWith("vote");
+        if (hasVotings && isVotingTab) return null;
+        return (
+        <div className="mx-auto w-full max-w-2xl space-y-2 px-5 pb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] pt-2 lg:px-8">
         {voted ? (
           <>
             <div className="glass-panel flex flex-col items-center justify-center gap-1 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-6 py-4 text-center">
@@ -415,8 +421,8 @@ export function DebateDetailPage() {
               <span className="text-xs text-emerald-200/60">Можно изменить, пока голосование активно</span>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <Button fullWidth disabled={!canVote} onClick={() => canVote && setVoteModalOpen(true)}>
-                {canVote ? "Изменить голос" : timerExpired ? "Время вышло" : "Изменить голос"}
+              <Button fullWidth disabled={!canVote} onClick={() => setVoteModalOpen(true)}>
+                {canVote ? "Изменить голос" : timerExpired ? "Время вышло" : "Голосование закрыто"}
               </Button>
               <Button variant="glass" fullWidth onClick={() => navigate("/home")}>
                 <Home size={16} />
@@ -425,11 +431,13 @@ export function DebateDetailPage() {
             </div>
           </>
         ) : (
-          <Button fullWidth disabled={!canVote} onClick={() => canVote && setVoteModalOpen(true)}>
-            {canVote ? "Голосовать" : timerExpired ? "Время голосования истекло" : "Голосовать"}
+          <Button fullWidth disabled={!canVote} onClick={() => setVoteModalOpen(true)}>
+            {canVote ? "Голосовать" : timerExpired ? "Время голосования истекло" : "Голосование ещё не началось"}
           </Button>
         )}
       </div>
+        );
+      })()}
 
       <VoteModal
         event={event}
@@ -483,7 +491,7 @@ function VotingTab({ voting, isActive, votesHidden, onVoted }: { voting: any; is
       ) : (
         <p className="text-center text-xs text-white/30">Всего голосов: {totalVotes}</p>
       )}
-      <Button fullWidth disabled={!isActive} onClick={() => isActive && setVoteModalForVoting(true)}>Голосовать</Button>
+      <Button fullWidth disabled={!isActive} onClick={() => setVoteModalForVoting(true)}>{isActive ? "Голосовать" : "Голосование ещё не началось"}</Button>
       {justVoted && <p className="text-center text-xs text-emerald-300">Ваш голос за {participants.find(pp => pp.id === justVoted)?.name} учтён</p>}
       <VoteModal event={localVoting as any} open={voteModalForVoting} preselectedParticipantId={justVoted} onClose={() => setVoteModalForVoting(false)} onVoted={(pid) => { setJustVoted(pid); setVoteModalForVoting(false); onVoted(); }} />
     </div>
