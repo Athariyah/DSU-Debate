@@ -1,6 +1,7 @@
 import express, { Application } from "express";
 import cors from "cors";
 import helmet from "helmet";
+import compression from "compression";
 import rateLimit from "express-rate-limit";
 import { env } from "./config/env";
 import { corsGuard, isOriginAllowed } from "./config/cors";
@@ -9,6 +10,7 @@ import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 import adminAuthRoutes from "./routes/admin.auth.routes";
 import adminEventsRoutes from "./routes/admin.events.routes";
 import adminParticipantsRoutes from "./routes/admin.participants.routes";
+import adminMatchesRoutes from "./routes/admin.matches.routes";
 import publicEventsRoutes from "./routes/public.events.routes";
 
 // Лимиты считаются по IP. В production за Caddy (TRUST_PROXY=1) каждый
@@ -41,7 +43,13 @@ export function createApp(): Application {
   const app = express();
   app.set("trust proxy", env.trustProxy);
 
-  app.use(helmet());
+  app.use(
+    helmet({
+      contentSecurityPolicy: false,
+    })
+  );
+  // Сжатие ответов — экономим трафик (важно для мобильных устройств и больших трансляций)
+  app.use(compression({ level: 6, threshold: 512 }));
   app.use(corsGuard());
   app.use(
     cors({
@@ -104,6 +112,7 @@ export function createApp(): Application {
   app.use("/api/admin/auth", authRateLimit, adminAuthRoutes);
   app.use("/api/admin/events", adminEventsRoutes);
   app.use("/api/admin/participants", adminParticipantsRoutes);
+  app.use("/api/admin", adminMatchesRoutes);
   app.use("/api/events", publicEventsRoutes);
   app.use(notFoundHandler);
   app.use(errorHandler);

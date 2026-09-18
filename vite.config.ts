@@ -12,8 +12,24 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const backendUrl = env.VITE_BACKEND_URL || "http://localhost:4000";
 
+  const isLive = mode === "live-server";
   return {
-    plugins: [react(), tailwindcss(), viteSingleFile()],
+    plugins: isLive ? [react(), tailwindcss(), viteSingleFile()] : [react(), tailwindcss()],
+    build: isLive
+      ? undefined
+      : {
+          sourcemap: false,
+          chunkSizeWarningLimit: 600,
+          rollupOptions: {
+            output: {
+              manualChunks: {
+                vendor: ["react", "react-dom", "react-router-dom"],
+                ui: ["framer-motion", "lucide-react"],
+                realtime: ["socket.io-client"],
+              },
+            },
+          },
+        },
     server: {
       host: "0.0.0.0",
       allowedHosts: true,

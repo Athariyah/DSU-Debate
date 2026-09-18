@@ -116,7 +116,7 @@ test("стрелка «назад» на экране создания возв�
   );
 
   // Дождёмся загрузки защищённого экрана создания.
-  await screen.findByText("Создать дебат");
+  await screen.findByText("Тип мероприятия");
   fireEvent.click(screen.getByLabelText("Назад"));
   expect(await screen.findByText("Мероприятия", {}, { timeout: 3000 })).toBeTruthy();
 });
@@ -135,14 +135,14 @@ test("стрелка «назад» на экране администриров
             </ProtectedRoute>
           }
         />
-        <Route path="/debates" element={<div>Страница дебатов</div>} />
+        <Route path="/debates" element={<div>Страница мероприятий</div>} />
       </Routes>
     </MemoryRouter>
   );
 
   await screen.findByText("Мероприятия", {}, { timeout: 3000 });
   fireEvent.click(screen.getByLabelText("Назад"));
-  expect(await screen.findByText("Страница дебатов", {}, { timeout: 3000 })).toBeTruthy();
+  expect(await screen.findByText("Страница мероприятий", {}, { timeout: 3000 })).toBeTruthy();
 });
 
 describe("гонка: запоздалый 401 со старым токеном не гасит свежую сессию", () => {

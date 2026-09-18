@@ -1,326 +1,154 @@
 /**
- * Конфигурация подключения к PostgreSQL.
+ * Конфигурация подключения к SQLite (better-sqlite3).
  *
- * Поддерживаются три сценария:
+ * SQLite — файловая БД, WAL-режим обеспечивает параллельное чтение/запись.
+ * Поддерживаются:
+ *   1) Явный путь через SQLITE_PATH / SQLITE_FILE / DB_PATH (приоритет)
+ *   2) По умолчанию: backend/.localdb/database.sqlite (локальный файл рядом с проектом)
+ *   3) Временно: совместимость с предыдущими PostgreSQL переменными DATABASE_URL / DB_HOST —
+ *      они игнорируются с предупреждением и используется SQLite.
  *
- * 0. Ничего не задано — используется ВСТРОЕННАЯ БД: PostgreSQL, который
- *    приложение само поднимает на этом компьютере (см. `src/localdb`).
- *    Адрес и параметры по умолчанию берутся из `LOCAL_DB_*`
- *    (по умолчанию `postgresql://postgres@127.0.0.1:55432/dsu_debate`).
- *    Отключается переменной `LOCAL_DATABASE=false`.
- *
- * 1. Готовая строка подключения — `DATABASE_URL`
- *    (`postgresql://user:password@host:5432/db?sslmode=require`).
- *
- * 2. Отдельные переменные — `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`,
- *    `DB_PASSWORD` (удобно, когда пароль хранится отдельным секретом).
- *    Стандартные libpq-переменные `PGHOST`, `PGPORT`, `PGUSER`,
- *    `PGPASSWORD`, `PGDATABASE` тоже распознаются.
- *
- * Если задан `DATABASE_URL` или `DB_HOST`, приложение считает, что база
- * внешняя, и встроенный PostgreSQL не запускает.
- *
- * SSL настраивается через `DB_SSLMODE` (или `sslmode=` внутри DATABASE_URL,
- * или libpq-овскую `PGSSLMODE`). Значения повторяют libpq:
- * disable | allow | prefer | require | verify-ca | verify-full.
+ * Для обратной совместимости сохраняются поля ssl/isRemote/localEmbedded,
+ * чтобы существующие проверки в env.ts не ломались.
  */
+import path from "path";
 import fs from "fs";
-import {
-  isLocalDatabaseEnabled,
-  localDatabaseUrl,
-  resolveLocalDatabaseSettings,
-} from "../localdb/settings";
+import { backendRoot } from "../localdb/settings";
 
 export type SslMode = "disable" | "allow" | "prefer" | "require" | "verify-ca" | "verify-full";
 
 export interface DatabaseSslOptions {
   rejectUnauthorized: boolean;
   ca?: string;
-  /** Аналог libpq `verify-ca`: цепочка проверяется, имя хоста — нет. */
   checkServerIdentity?: () => undefined;
 }
 
 export interface DatabaseConfig {
-  /** Готовая строка подключения (без SSL-параметров — они уходят в `ssl`). */
+  /** Путь к файлу SQLite */
+  sqlitePath: string;
+  /** Для совместимости — всегда sqlite:// */
   connectionString?: string;
   host?: string;
   port?: number;
   user?: string;
   password?: string;
   database?: string;
-  /** `false` — соединение без TLS, иначе объект с TLS-настройками. */
-  ssl: false | DatabaseSslOptions;
-  /** Итоговый режим SSL (для логов). */
+  ssl: false;
   sslMode: SslMode;
-  /** Режимы `allow`/`prefer` пробуют TLS и при неудаче откатываются на plaintext. */
   sslCanFallback: boolean;
-  /** Параметры ожидания готовности БД при старте. */
   connect: { retries: number; delayMs: number; timeoutMs: number };
   pool: { max: number; idleTimeoutMillis: number };
   applicationName: string;
-  /** `true`, если БД находится на другом хосте (облачная/управляемая). */
   isRemote: boolean;
-  /**
-   * `true`, если используется встроенная БД на этом компьютере: её нужно
-   * запустить перед подключением (и остановить при выходе).
-   */
   localEmbedded: boolean;
-  /** Описание подключения для логов — БЕЗ пароля. */
+  /** Признак SQLite — новый флаг */
+  isSqlite: boolean;
   safeTarget: string;
 }
 
-const SSL_MODES: SslMode[] = ["disable", "allow", "prefer", "require", "verify-ca", "verify-full"];
-
-/** Хосты, которые считаются локальными (там TLS обычно не нужен). */
-const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "0.0.0.0"]);
-
 function read(name: string): string | undefined {
-  const value = process.env[name];
-  if (value === undefined) return undefined;
-  const trimmed = value.trim();
-  return trimmed === "" ? undefined : trimmed;
+  const v = process.env[name];
+  if (v === undefined) return undefined;
+  const t = v.trim();
+  return t === "" ? undefined : t;
 }
 
 function firstDefined(...names: string[]): string | undefined {
-  for (const name of names) {
-    const value = read(name);
-    if (value !== undefined) return value;
+  for (const n of names) {
+    const v = read(n);
+    if (v !== undefined) return v;
   }
   return undefined;
 }
 
-function isLocalHost(host?: string): boolean {
-  if (!host) return true;
-  // Каталог unix-сокета (например /var/run/postgresql) — тоже локальный доступ.
-  if (host.startsWith("/")) return true;
-  return LOCAL_HOSTS.has(host.toLowerCase());
-}
-
 function parseIntOr(value: string | undefined, fallback: number): number {
   if (value === undefined) return fallback;
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  const p = Number.parseInt(value, 10);
+  return Number.isFinite(p) && p > 0 ? p : fallback;
 }
 
-function normalizeSslMode(value: string | undefined): SslMode | undefined {
-  if (!value) return undefined;
-  const normalized = value.trim().toLowerCase();
-  // Короткие псевдонимы на случай опечаток/привычек.
-  if (normalized === "true" || normalized === "1" || normalized === "yes" || normalized === "on") return "require";
-  if (normalized === "false" || normalized === "0" || normalized === "no" || normalized === "off") return "disable";
-  if (normalized === "no-verify") return "require";
-  return SSL_MODES.includes(normalized as SslMode) ? (normalized as SslMode) : undefined;
+export function backendRootForDb(): string {
+  return backendRoot();
 }
 
-function resolveSslMode(raw: string | undefined, host: string | undefined): SslMode {
-  const explicit = normalizeSslMode(raw);
-  if (explicit) return explicit;
-  if (raw) {
-    // Явно указанное, но неизвестное значение — лучше упасть, чем молча
-    // соединяться без шифрования.
-    throw new Error(
-      `Unknown database SSL mode "${raw}". Expected one of: ${SSL_MODES.join(", ")} (or true/false).`
-    );
+/** Определяет путь к SQLite файлу */
+export function resolveSqlitePath(): string {
+  const explicit =
+    firstDefined("SQLITE_PATH", "SQLITE_FILE", "DB_PATH", "LOCAL_DB_PATH") ??
+    firstDefined("SQLITE_DB", "SQLITE_DATABASE");
+
+  if (explicit) {
+    // Поддержка :memory: для тестов
+    if (explicit === ":memory:") return ":memory:";
+    // Относительный путь — относительно backendRoot
+    if (!path.isAbsolute(explicit)) {
+      return path.resolve(backendRoot(), explicit);
+    }
+    return explicit;
   }
-  // По умолчанию: локальная БД — без TLS, удалённая (облачная) — пробуем TLS
-  // и откатываемся на plaintext, если сервер его не поддерживает.
-  return isLocalHost(host) ? "disable" : "prefer";
+
+  // По умолчанию — backend/.localdb/database.sqlite (gitignore)
+  // Альтернативный вариант — backend/data.sqlite если каталог данных не создан
+  const defaultPath = path.join(backendRoot(), ".localdb", "database.sqlite");
+  return defaultPath;
 }
 
-function readCaCertificates(): string | undefined {
-  const caPath = firstDefined("DB_SSL_CA", "DB_SSLROOTCERT", "PGSSLROOTCERT");
-  if (!caPath) return undefined;
-  return fs.readFileSync(caPath, "utf8");
-}
-
-function buildSsl(mode: SslMode, ca: string | undefined): false | DatabaseSslOptions {
-  if (mode === "disable") return false;
-
-  const rejectUnauthorizedFromEnv = read("DB_SSL_REJECT_UNAUTHORIZED");
-  const rejectUnauthorized =
-    rejectUnauthorizedFromEnv === undefined
-      ? // Как в libpq: require не проверяет сертификат, verify-* — проверяет.
-        mode === "verify-ca" || mode === "verify-full"
-      : rejectUnauthorizedFromEnv === "true";
-
-  return {
-    rejectUnauthorized,
-    ...(ca ? { ca } : {}),
-    // verify-ca проверяет цепочку, но не имя хоста (как в libpq).
-    ...(mode === "verify-ca" ? { checkServerIdentity: () => undefined } : {}),
-  };
-}
-
-interface ParsedUrl {
-  connectionString: string;
-  host?: string;
-  port?: number;
-  user?: string;
-  database?: string;
-  sslMode?: string;
-  applicationName?: string;
-}
-
-/**
- * Разбирает `DATABASE_URL`: возвращает строку БЕЗ SSL-параметров (они
- * применяются отдельно через `ssl`) и извлечённые из неё значения.
- */
-function parseUrl(raw: string): ParsedUrl {
-  const url = new URL(raw);
-  const sslMode = url.searchParams.get("sslmode") ?? undefined;
-  const applicationName = url.searchParams.get("application_name") ?? undefined;
-
-  // SSL-параметры убираем из строки, чтобы pg не применил их сам
-  // (мы управляем TLS явно через конфиг пула).
-  url.searchParams.delete("sslmode");
-  url.searchParams.delete("sslrootcert");
-  url.searchParams.delete("sslcert");
-  url.searchParams.delete("sslkey");
-
-  return {
-    connectionString: url.toString(),
-    host: url.hostname || undefined,
-    port: url.port ? Number.parseInt(url.port, 10) : undefined,
-    user: url.username ? decodeURIComponent(url.username) : undefined,
-    database: url.pathname ? decodeURIComponent(url.pathname.replace(/^\//, "")) : undefined,
-    sslMode,
-    applicationName,
-  };
-}
-
-/** Собирает строку подключения из отдельных переменных. */
-function composeUrl(parts: {
-  host: string;
-  port?: number;
-  user?: string;
-  password?: string;
-  database?: string;
-}): string | undefined {
-  // Unix-сокет передаём как есть — через URL он не собирается.
-  if (parts.host.startsWith("/")) return undefined;
-
-  const url = new URL("postgresql://");
-  url.hostname = parts.host;
-  if (parts.port) url.port = String(parts.port);
-  if (parts.user) url.username = encodeURIComponent(parts.user);
-  if (parts.password) url.password = encodeURIComponent(parts.password);
-  if (parts.database) url.pathname = `/${encodeURIComponent(parts.database)}`;
-  return url.toString();
-}
-
-/**
- * Собирает итоговую конфигурацию подключения из переменных окружения.
- * Вызывается ПОСЛЕ `dotenv.config()` (см. config/env.ts).
- */
 export function resolveDatabaseConfig(): DatabaseConfig {
   const rawUrl = firstDefined("DATABASE_URL", "DB_URL");
   const host = firstDefined("DB_HOST", "PGHOST");
-  const port = parseIntOr(firstDefined("DB_PORT", "PGPORT"), 5432);
-  const user = firstDefined("DB_USER", "PGUSER");
-  const password = firstDefined("DB_PASSWORD", "PGPASSWORD");
-  const database = firstDefined("DB_NAME", "DB_DATABASE", "PGDATABASE");
 
-  let connectionString: string | undefined;
-  let resolvedHost = host;
-  let resolvedPort = port;
-  let resolvedUser = user;
-  let resolvedDatabase = database;
-  let urlSslMode: string | undefined;
-  let urlApplicationName: string | undefined;
-
-  // Встроенная БД на этом компьютере: включается, когда внешняя не задана
-  // и она не отключена явно (LOCAL_DATABASE=false).
-  const useLocalEmbedded = !rawUrl && !host && isLocalDatabaseEnabled();
-
-  if (rawUrl) {
-    const parsed = parseUrl(rawUrl);
-    connectionString = parsed.connectionString;
-    resolvedHost = parsed.host ?? resolvedHost;
-    resolvedPort = parsed.port ?? resolvedPort;
-    resolvedUser = parsed.user ?? resolvedUser;
-    resolvedDatabase = parsed.database ?? resolvedDatabase;
-    urlSslMode = parsed.sslMode;
-    urlApplicationName = parsed.applicationName;
+  // Предупреждение: проект перешёл на SQLite — старые postgres переменные игнорируются
+  if (rawUrl && rawUrl.startsWith("postgres")) {
+    console.warn(
+      `[db] ВНИМАНИЕ: обнаружена DATABASE_URL для PostgreSQL, но проект теперь использует SQLite. ` +
+        `Postgres URL игнорируется. Используйте SQLITE_PATH для задания пути или выполните миграцию через tools/migrate-pg-to-sqlite.ts.`
+    );
   } else if (host) {
-    connectionString = composeUrl({ host, port, user, password, database });
-  } else if (useLocalEmbedded) {
-    const local = resolveLocalDatabaseSettings();
-    connectionString = localDatabaseUrl(local);
-    resolvedHost = local.host;
-    resolvedPort = local.port;
-    resolvedUser = local.user;
-    resolvedDatabase = local.database;
-  } else {
-    throw new Error(
-      [
-        "Database connection is not configured and the built-in local PostgreSQL is disabled.",
-        "Either remove LOCAL_DATABASE=false to use the built-in database on this computer,",
-        "or point the backend at an existing PostgreSQL, for example:",
-        "  DATABASE_URL=postgresql://user:password@localhost:5432/dsu_debate",
-        "  DB_HOST=localhost DB_PORT=5432 DB_NAME=dsu_debate DB_USER=dsu DB_PASSWORD=dsu",
-      ].join("\n")
+    console.warn(
+      `[db] ВНИМАНИЕ: обнаружены DB_HOST/PGHOST для PostgreSQL, но проект теперь использует SQLite. Игнорируются.`
     );
   }
 
-  const sslMode = resolveSslMode(firstDefined("DB_SSLMODE", "DB_SSL", "PGSSLMODE") ?? urlSslMode, resolvedHost);
-  const ca = readCaCertificates();
-  const applicationName =
-    firstDefined("DB_APPLICATION_NAME", "PGAPPNAME") ?? urlApplicationName ?? "dsu-debate-backend";
+  const sqlitePath = resolveSqlitePath();
+  const safeTarget = sqlitePath === ":memory:" ? "sqlite://:memory: (WAL)" : `sqlite://${sqlitePath} (WAL)`;
 
-  const poolMax = parseIntOr(firstDefined("DB_POOL_MAX"), 20);
-  // libpq-подобный таймаут подключения — в секундах.
-  const connectTimeoutSec = parseIntOr(firstDefined("DB_CONNECT_TIMEOUT", "PGCONNECT_TIMEOUT"), 5);
+  const retries = parseIntOr(firstDefined("DB_CONNECT_RETRIES"), 3);
+  const delayMs = parseIntOr(firstDefined("DB_CONNECT_RETRY_DELAY_MS"), 500);
+  const timeoutMs = parseIntOr(firstDefined("DB_CONNECT_TIMEOUT", "PGCONNECT_TIMEOUT"), 5) * 1000;
 
   return {
-    connectionString,
-    // Отдельные поля нужны, если строка не собирается (unix-сокет).
-    host: connectionString ? undefined : resolvedHost,
-    port: connectionString ? undefined : resolvedPort,
-    user: connectionString ? undefined : resolvedUser,
-    password: connectionString ? undefined : password,
-    database: connectionString ? undefined : resolvedDatabase,
-    ssl: buildSsl(sslMode, ca),
-    sslMode,
-    sslCanFallback: sslMode === "allow" || sslMode === "prefer",
-    connect: {
-      retries: parseIntOr(firstDefined("DB_CONNECT_RETRIES"), 10),
-      delayMs: parseIntOr(firstDefined("DB_CONNECT_RETRY_DELAY_MS"), 3000),
-      // Для пула таймаут в миллисекундах.
-      timeoutMs: connectTimeoutSec * 1000,
-    },
+    sqlitePath,
+    connectionString: `sqlite://${sqlitePath}`,
+    host: undefined,
+    port: undefined,
+    user: undefined,
+    password: undefined,
+    database: sqlitePath,
+    ssl: false,
+    sslMode: "disable",
+    sslCanFallback: false,
+    connect: { retries, delayMs, timeoutMs },
     pool: {
-      max: poolMax,
+      max: parseIntOr(firstDefined("DB_POOL_MAX"), 1),
       idleTimeoutMillis: parseIntOr(firstDefined("DB_IDLE_TIMEOUT"), 30000),
     },
-    applicationName,
-    isRemote: !isLocalHost(resolvedHost),
-    localEmbedded: useLocalEmbedded,
-    safeTarget: describeTarget({
-      host: resolvedHost,
-      port: resolvedPort,
-      user: resolvedUser,
-      database: resolvedDatabase,
-      sslMode,
-    }),
+    applicationName: firstDefined("DB_APPLICATION_NAME", "PGAPPNAME") ?? "dsu-debate-backend",
+    isRemote: false,
+    localEmbedded: false,
+    isSqlite: true,
+    safeTarget,
   };
 }
 
-/** Строит строку вида `postgresql://user@host:5432/db (sslmode=prefer)` — без пароля. */
-function describeTarget(parts: {
-  host?: string;
-  port?: number;
-  user?: string;
-  database?: string;
-  sslMode: SslMode;
-}): string {
-  const credentials = parts.user ? `${parts.user}@` : "";
-  const host = parts.host ?? "localhost";
-  const port = parts.port ? `:${parts.port}` : "";
-  const database = parts.database ? `/${parts.database}` : "";
-  return `postgresql://${credentials}${host}${port}${database} (sslmode=${parts.sslMode})`;
+function describeTarget(parts: { sqlitePath: string }): string {
+  return parts.sqlitePath === ":memory:" ? "sqlite://:memory: (WAL)" : `sqlite://${parts.sqlitePath} (WAL)`;
 }
 
-/** Готовое описание подключения для логов (без пароля). */
 export function describeDatabaseConfig(config: DatabaseConfig): string {
   return config.safeTarget;
+}
+
+// Обратная совместимость: некоторые модули могут импортировать эти символы
+export function isLocalHost(): boolean {
+  return true;
 }

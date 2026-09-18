@@ -322,7 +322,7 @@ describe("экран трансляции", () => {
     fireEvent.change(input, { target: { value: "Голосуем до перерыва!" } });
     fireEvent.click(screen.getByRole("button", { name: "Показать" }));
 
-    expect(screen.getByText("Голосуем до перерыва!")).toBeTruthy();
+    expect(screen.getAllByText("Голосуем до перерыва!").length).toBeGreaterThan(0);
     // Значение легло в localStorage по ключу дебата.
     expect(localStorage.getItem("dsu-broadcast-note-7")).toBe("Голосуем до перерыва!");
   });
@@ -342,7 +342,7 @@ describe("маршрутизация", () => {
     window.history.pushState({}, "", "/");
     render(<App />);
 
-    expect(await screen.findByText("DSU Debate")).toBeTruthy();
+    expect(await screen.findByText("DSU Event")).toBeTruthy();
     expect(document.querySelector(".app-shell-bg")).toBeTruthy();
   });
 });

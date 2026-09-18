@@ -101,6 +101,67 @@ body {
   scrollbar-width: none;
 }
 
+/* Стилизованный скроллбар — тонкий, минималистичный, не отвлекает */
+.styled-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 8px;
+}
+.styled-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 10px 14px;
+  border-radius: 9999px;
+}
+.styled-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.32);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.styled-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.48);
+  background-clip: padding-box;
+}
+.styled-scrollbar::-webkit-scrollbar-corner {
+  background: transparent;
+}
+.scroll-rounded-clip {
+  /* use clip-path to round without disabling overflow */
+  clip-path: inset(0 round 1rem);
+  border-radius: 1rem;
+}
+.styled-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.32) transparent;
+  scrollbar-gutter: stable;
+  /* clip track inside rounded containers */
+  overflow-clip-margin: 8px;
+}
+
+/* Глобальный скролл — такой же тонкий и нейтральный */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+html::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+html::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 8px;
+  border-radius: 9999px;
+}
+html::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+html::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.24);
+  background-clip: padding-box;
+}
+
 .app-shell-bg {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.015) 55%, rgba(255, 255, 255, 0.03) 100%),

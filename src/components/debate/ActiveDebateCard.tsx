@@ -3,6 +3,7 @@ import { ArrowRight, CalendarClock, EyeOff, Users } from "lucide-react";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import type { DebateEvent } from "../../types";
+import { getEventTypeMeta } from "../../utils/eventType";
 
 interface ActiveDebateCardProps {
   event: DebateEvent;
@@ -11,7 +12,7 @@ interface ActiveDebateCardProps {
 }
 
 /**
- * Крупная карточка активного дебата на главном экране.
+ * Крупная карточка активного мероприятия на главном экране.
  *
  * Фон — НЕПРОЗРАЧНЫЙ градиент: раньше карточка была полупрозрачной и при
  * появлении «просвечивала» фиолетовый фон страницы (сначала синяя, потом
@@ -64,7 +65,10 @@ export function ActiveDebateCard({ event, voted, onVoteClick }: ActiveDebateCard
       </div>
 
       <div className="relative flex items-center justify-between gap-3">
-        <Badge tone="active">Активный дебат</Badge>
+        <div className="flex items-center gap-2">
+          <Badge tone="active">Активное мероприятие</Badge>
+          {(() => { const meta = getEventTypeMeta(event.eventType, event.customTypeLabel); const Icon = meta.Icon; return <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-white/40"><Icon size={10} />{meta.label}</span> })()}
+        </div>
         <LiveEqualizer />
       </div>
 

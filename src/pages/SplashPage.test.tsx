@@ -26,7 +26,7 @@ describe("карусель загрузочного экрана", () => {
   test("первый слайд — бренд, точки-индикаторы на месте", async () => {
     renderSplash();
 
-    expect(await screen.findByText("DSU Debate")).toBeTruthy();
+    expect(await screen.findByText("DSU Event")).toBeTruthy();
     expect(screen.getByText("Твой голос — решение в споре.")).toBeTruthy();
     expect(screen.getByText(/свайпай, чтобы листать/)).toBeTruthy();
     expect(screen.getAllByRole("tab")).toHaveLength(3);
@@ -35,7 +35,7 @@ describe("карусель загрузочного экрана", () => {
 
   test("тап по точке листает на нужный слайд", async () => {
     renderSplash();
-    await screen.findByText("DSU Debate");
+    await screen.findByText("DSU Event");
 
     fireEvent.click(screen.getByRole("tab", { name: "Слайд 2: Голосуй с телефона" }));
     expect(await screen.findByText("Голосуй с телефона")).toBeTruthy();
@@ -48,7 +48,7 @@ describe("карусель загрузочного экрана", () => {
 
   test("стрелки клавиатуры листают вперёд и назад", async () => {
     renderSplash();
-    await screen.findByText("DSU Debate");
+    await screen.findByText("DSU Event");
 
     fireEvent.keyDown(window, { key: "ArrowRight" });
     expect(await screen.findByText("Голосуй с телефона")).toBeTruthy();
@@ -66,7 +66,7 @@ describe("карусель загрузочного экрана", () => {
 
   test("после первого листания подсказка «свайпай» гаснет", async () => {
     renderSplash();
-    await screen.findByText("DSU Debate");
+    await screen.findByText("DSU Event");
 
     fireEvent.click(screen.getByRole("tab", { name: "Слайд 2: Голосуй с телефона" }));
     await screen.findByText("Голосуй с телефона");

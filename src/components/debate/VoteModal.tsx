@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Loader2, ShieldCheck, X } from "lucide-react";
 import { z } from "zod";
@@ -31,6 +31,15 @@ export function VoteModal({ event, open, onClose, onVoted, preselectedParticipan
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+
+  // Синхронизируем выбранного участника при открытии модалки (для смены голоса)
+  useEffect(() => {
+    if (open) {
+      setParticipantId(preselectedParticipantId ?? null);
+      setApiError(null);
+      setErrors({});
+    }
+  }, [open, preselectedParticipantId]);
 
   async function handleSubmit() {
     const result = voteSchema.safeParse({ firstName, lastName, participantId });
@@ -91,8 +100,8 @@ export function VoteModal({ event, open, onClose, onVoted, preselectedParticipan
 
             <div className="flex items-start justify-between">
               <div>
-                <h3 className="text-lg font-bold text-white">Представьтесь</h3>
-                <p className="mt-1 text-sm text-white/50">Чтобы ваш голос был учтён</p>
+                <h3 className="text-lg font-bold text-white">{preselectedParticipantId ? "Изменить голос" : "Представьтесь"}</h3>
+                <p className="mt-1 text-sm text-white/50">{preselectedParticipantId ? "Выберите другого участника" : "Чтобы ваш голос был учтён"}</p>
               </div>
               <button
                 onClick={onClose}
@@ -160,11 +169,11 @@ export function VoteModal({ event, open, onClose, onVoted, preselectedParticipan
 
             <div className="mt-2 flex items-center gap-1.5 pt-3 text-[11px] text-white/35">
               <ShieldCheck size={13} />
-              Один голос с одного устройства и IP-адреса
+              Один голос с одного устройства — можно изменить до конца голосования
             </div>
 
             <Button fullWidth className="mt-4" onClick={handleSubmit} disabled={submitting}>
-              {submitting ? <Loader2 size={18} className="animate-spin" /> : "Отправить голос"}
+              {submitting ? <Loader2 size={18} className="animate-spin" /> : preselectedParticipantId ? "Сохранить изменение" : "Отправить голос"}
             </Button>
           </motion.div>
         </motion.div>

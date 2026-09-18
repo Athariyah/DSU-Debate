@@ -207,13 +207,13 @@ describe("флажок «Скрыть от публики»", () => {
     renderAdmin();
     await screen.findByText("Тестовый дебат");
 
-    const toggle = screen.getByRole("switch", { name: "Скрыть дебат от обычных пользователей" });
+    const toggle = screen.getByRole("switch", { name: "Скрыть мероприятие от обычных пользователей" });
     expect(toggle.getAttribute("aria-checked")).toBe("false");
-    expect(screen.getByText("Выключено — дебат виден всем")).toBeTruthy();
+    expect(screen.getByText("Выключено — мероприятие видно всем")).toBeTruthy();
 
     fireEvent.click(toggle);
     expect(toggle.getAttribute("aria-checked")).toBe("true");
-    expect(screen.getByText("Включено — дебат виден только администраторам")).toBeTruthy();
+    expect(screen.getByText("Включено — мероприятие видно только администраторам")).toBeTruthy();
   });
 
   test("сохранение отправляет hiddenFromPublic на backend", async () => {
@@ -255,7 +255,7 @@ describe("флажок «Скрыть от публики»", () => {
     );
     await screen.findByText("Тестовый дебат");
 
-    fireEvent.click(screen.getByRole("switch", { name: "Скрыть дебат от обычных пользователей" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Скрыть мероприятие от обычных пользователей" }));
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
 
     await waitFor(() => expect(bodies.some((body) => body.includes("\"hiddenFromPublic\":true"))).toBe(true));

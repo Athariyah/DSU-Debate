@@ -1,13 +1,13 @@
 import { Request, Response } from "express";
 import { isIP } from "node:net";
-import { PoolClient } from "pg";
-import { pool, withTransaction } from "../config/db";
+import { pool, withTransaction, PoolClient } from "../config/db";
 import { EventRecord, EventResults, ParticipantResult } from "../types";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../middleware/errorHandler";
 import { castVoteSchema } from "../validation/schemas";
-import { broadcastVoteUpdate } from "../sockets";
+import { broadcastLeaderboardUpdate, broadcastPodiumUpdate, broadcastVoteUpdate } from "../sockets";
 import { isVotingWindowOpen, votingEndsAt } from "../utils/votingWindow";
+import { eventResultsCache, leaderboardCache } from "../utils/cache";
 
 /**
  * Извлекает реальный IP-адрес клиента из запроса.
@@ -33,13 +33,15 @@ export async function computeEventResults(
   client: PoolClient,
   eventId: number
 ): Promise<EventResults> {
+  // Кэш для чтения вне транзакции — ускоряет повторные запросы трансляции
+  // Внутри транзакции голоса кэш не используется, чтобы не отдать устаревшие данные
   const aggregation = await client.query<{
     id: number;
     name: string;
     description: string | null;
     votes_count: string;
   }>(
-    `SELECT p.id, p.name, p.description, COUNT(v.id)::text AS votes_count
+    `SELECT p.id, p.name, p.description, COUNT(v.id) AS votes_count
      FROM participants p
      LEFT JOIN votes v ON v.participant_id = p.id
      WHERE p.event_id = $1
@@ -98,12 +100,12 @@ export const getActiveEvent = asyncHandler(async (_req: Request, res: Response) 
   // для обычных пользователей их просто нет.
   const eventResult = await pool.query<EventRecord>(
     `SELECT * FROM events
-     WHERE status = 'active' AND COALESCE(hidden_from_public, FALSE) = FALSE
+     WHERE status = 'active' AND parent_event_id IS NULL AND COALESCE(hidden_from_public, FALSE) = FALSE
      ORDER BY date_time DESC LIMIT 1`
   );
 
   if (eventResult.rowCount === 0) {
-    throw new ApiError(404, "NO_ACTIVE_EVENT", "Сейчас нет активного дебата");
+    throw new ApiError(404, "NO_ACTIVE_EVENT", "Сейчас нет активного мероприятия");
   }
 
   const event = eventResult.rows[0];
@@ -120,16 +122,56 @@ export const getActiveEvent = asyncHandler(async (_req: Request, res: Response) 
   const votesHidden = Boolean(event.votes_hidden);
   const visibleResults = votesHidden ? redactEventResults(results) : results;
 
+  // include child votings for active parent event
+  const votingsRows = await pool.query<EventRecord>(`SELECT * FROM events WHERE parent_event_id = $1 ORDER BY date_time ASC, id ASC`, [event.id]);
+  const votings: any[] = [];
+  for (const v of votingsRows.rows) {
+    const vClient = await pool.connect();
+    try {
+      const vRes = await computeEventResults(vClient, v.id);
+      const vHidden = Boolean(v.votes_hidden);
+      const vVis = vHidden ? redactEventResults(vRes) : vRes;
+      votings.push({
+        event: {
+          id: v.id,
+          title: v.title,
+          status: v.status,
+          eventType: (v as any).event_type ?? "poll",
+          customTypeLabel: (v as any).custom_type_label ?? null,
+          dateTime: v.date_time,
+          votingDurationMinutes: v.voting_duration_minutes ?? null,
+          votingEndsAt: votingEndsAt(v)?.toISOString() ?? null,
+          votesHidden: vHidden,
+          participantsCount: vRes.participants.length,
+          showLeaderboard: (v as any).show_leaderboard === undefined || (v as any).show_leaderboard === null ? true : Boolean((v as any).show_leaderboard),
+          showStandings: (v as any).show_standings === undefined || (v as any).show_standings === null ? true : Boolean((v as any).show_standings),
+          showPodium: (v as any).show_podium === undefined || (v as any).show_podium === null ? true : Boolean((v as any).show_podium),
+          broadcastMessage: (v as any).broadcast_message ?? null,
+          parentEventId: event.id,
+        },
+        participants: vVis.participants.map((p: any) => ({ id: p.participantId, eventId: v.id, name: p.name, description: p.description, votesCount: p.votesCount, percentage: p.percentage })),
+        totalVotes: vVis.totalVotes,
+      });
+    } finally { vClient.release(); }
+  }
+
   res.status(200).json({
     event: {
       id: event.id,
       title: event.title,
       status: event.status,
+      eventType: (event as any).event_type ?? (event as any).eventType ?? "debate",
+      customTypeLabel: (event as any).custom_type_label ?? null,
       dateTime: event.date_time,
       votingDurationMinutes: event.voting_duration_minutes ?? null,
       votingEndsAt: votingEndsAt(event)?.toISOString() ?? null,
       votesHidden,
       participantsCount: results.participants.length,
+      showLeaderboard: (event as any).show_leaderboard === undefined || (event as any).show_leaderboard === null ? true : Boolean((event as any).show_leaderboard),
+      showStandings: (event as any).show_standings === undefined || (event as any).show_standings === null ? true : Boolean((event as any).show_standings),
+      showPodium: (event as any).show_podium === undefined || (event as any).show_podium === null ? true : Boolean((event as any).show_podium),
+      broadcastMessage: (event as any).broadcast_message ?? null,
+      parentEventId: (event as any).parent_event_id ?? null,
     },
     participants: visibleResults.participants.map((p) => ({
       id: p.participantId,
@@ -140,6 +182,7 @@ export const getActiveEvent = asyncHandler(async (_req: Request, res: Response) 
       percentage: p.percentage,
     })),
     totalVotes: visibleResults.totalVotes,
+    votings,
   });
 });
 
@@ -217,7 +260,7 @@ export const castVote = asyncHandler(async (req: Request, res: Response) => {
       throw new ApiError(
         409,
         "VOTING_CLOSED",
-        "Время голосования по этому дебату истекло"
+        "Время голосования по этому мероприятию истекло"
       );
     }
 
@@ -233,51 +276,56 @@ export const castVote = asyncHandler(async (req: Request, res: Response) => {
       );
     }
 
-    // --- ANTI-FRAUD: проверка дубликата по IP или device_fingerprint ---
-    const duplicateResult = await client.query<{
-      device_fingerprint: string;
-      ip_address: string;
-    }>(
-      `SELECT device_fingerprint, ip_address
-       FROM votes
-       WHERE event_id = $1 AND device_fingerprint = $2
-       LIMIT 1`,
+    // --- ANTI-FRAUD: один голос на устройство, но разрешаем менять выбор ---
+    const existingVote = await client.query<{ id: number; participant_id: number }>(
+      `SELECT id, participant_id FROM votes WHERE event_id = $1 AND device_fingerprint = $2 LIMIT 1`,
       [eventId, deviceFingerprint]
     );
 
-    if (duplicateResult.rowCount && duplicateResult.rowCount > 0) {
-      throw new ApiError(
-        409,
-        "DUPLICATE_VOTE",
-        "Вы уже голосовали в этом дебате"
-      );
-    }
-
-    // --- Запись голоса. UNIQUE(event_id, device_fingerprint) и
-    // UNIQUE(event_id, ip_address) в БД — второй рубеж защиты от гонок. ---
-    let insertResult;
-    try {
-      insertResult = await client.query<{ id: number; created_at: Date }>(
-        `INSERT INTO votes (event_id, participant_id, voter_name, device_fingerprint, ip_address)
-         VALUES ($1, $2, $3, $4, $5::inet)
-         RETURNING id, created_at`,
-        [eventId, participantId, voterName ?? null, deviceFingerprint, ipAddress]
-      );
-    } catch (err: unknown) {
-      // Код 23505 = unique_violation в PostgreSQL
-      if (
-        typeof err === "object" &&
-        err !== null &&
-        "code" in err &&
-        (err as { code?: string }).code === "23505"
-      ) {
-        throw new ApiError(409, "DUPLICATE_VOTE", "Вы уже голосовали в этом дебате");
+    if (existingVote.rowCount && existingVote.rowCount > 0) {
+      const existing = existingVote.rows[0];
+      if (existing.participant_id === participantId) {
+        throw new ApiError(409, "DUPLICATE_VOTE", "Вы уже голосовали за этого участника");
       }
-      throw err;
+      // Меняем голос — UPDATE вместо INSERT, сохраняем 1 запись на устройство
+      let updateResult;
+      try {
+        updateResult = await client.query<{ id: number; created_at: Date }>(
+          `UPDATE votes SET participant_id = $1, voter_name = $2, ip_address = $3::inet WHERE id = $4 RETURNING id, created_at`,
+          [participantId, voterName ?? null, ipAddress, existing.id]
+        );
+      } catch (err: unknown) {
+        if (typeof err === "object" && err !== null && "code" in err && (err as { code?: string }).code === "23505") {
+          throw new ApiError(409, "DUPLICATE_VOTE", "Вы уже голосовали в этом мероприятии");
+        }
+        throw err;
+      }
+      insertedVoteId = updateResult.rows[0].id;
+      insertedVoteCreatedAt = updateResult.rows[0].created_at;
+    } else {
+      // --- Запись голоса. UNIQUE(event_id, device_fingerprint) — второй рубеж защиты от гонок. ---
+      let insertResult;
+      try {
+        insertResult = await client.query<{ id: number; created_at: Date }>(
+          `INSERT INTO votes (event_id, participant_id, voter_name, device_fingerprint, ip_address)
+           VALUES ($1, $2, $3, $4, $5::inet)
+           RETURNING id, created_at`,
+          [eventId, participantId, voterName ?? null, deviceFingerprint, ipAddress]
+        );
+      } catch (err: unknown) {
+        if (
+          typeof err === "object" &&
+          err !== null &&
+          "code" in err &&
+          (err as { code?: string }).code === "23505"
+        ) {
+          throw new ApiError(409, "DUPLICATE_VOTE", "Вы уже голосовали в этом мероприятии");
+        }
+        throw err;
+      }
+      insertedVoteId = insertResult.rows[0].id;
+      insertedVoteCreatedAt = insertResult.rows[0].created_at;
     }
-
-    insertedVoteId = insertResult.rows[0].id;
-    insertedVoteCreatedAt = insertResult.rows[0].created_at;
 
     // --- Пересчёт процентов по ВСЕМ участникам этого дебата ---
     results = await computeEventResults(client, eventId);
@@ -296,6 +344,29 @@ export const castVote = asyncHandler(async (req: Request, res: Response) => {
   // realtime-канал — рассылаем и отвечаем занулёнными результатами.
   const payload = votesHidden ? redactEventResults(results) : results;
   broadcastVoteUpdate(payload);
+  // Инвалидируем кэш агрегатов и транслируем лидерборд/пьедестал (если голос открытый)
+  eventResultsCache.invalidate(eventId);
+  leaderboardCache.invalidate(eventId);
+  if (!votesHidden) {
+    try {
+      const leaderboardRows = payload.participants
+        .map((p) => ({ participantId: p.participantId, name: p.name, description: p.description, score: p.votesCount }))
+        .sort((a, b) => b.score - a.score);
+      let rank = 1;
+      let lastScore: number | null = null;
+      let lastRank = 1;
+      const ranked = leaderboardRows.map((r, idx) => {
+        const curRank = lastScore !== null && r.score === lastScore ? lastRank : idx + 1;
+        lastScore = r.score;
+        lastRank = curRank;
+        return { ...r, rank: curRank };
+      });
+      broadcastLeaderboardUpdate(eventId, { eventId, items: ranked });
+      // Пьедестал — топ-3
+      const podium = ranked.slice(0, 3).map((r, idx) => ({ place: idx + 1, participantId: r.participantId, name: r.name }));
+      broadcastPodiumUpdate(eventId, { eventId, podium });
+    } catch {}
+  }
 
   res.status(201).json({
     success: true,

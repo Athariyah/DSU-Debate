@@ -1,29 +1,41 @@
-# DSU Debate
+# DSU Debate — универсальные мероприятия (SQLite)
 
-Платформа live-голосований на дебатах: зрители голосуют со своих телефонов,
-результаты обновляются в реальном времени.
+Платформа live-голосований и турниров: зрители голосуют со своих телефонов, результаты и таблицы обновляются в реальном времени. Расширена от классических дебатов до **универсальных мероприятий** (дебаты, турниры, опросы, соревнования, квизы).
 
 Приложение рассчитано на **локальный хостинг на своём компьютере**:
 
 - фронтенд (React + Vite + Tailwind) раздаётся через **VS Code Live Server**;
 - backend (Express + Socket.io) запускается обычным Node.js процессом;
-- **PostgreSQL приложение поднимает само** — отдельный кластер в `backend/.localdb`,
-  без установки PostgreSQL в систему, без Docker и облаков.
+- **SQLite (better-sqlite3, WAL)** — один файл `backend/.localdb/database.sqlite`, без установки PostgreSQL/Docker и без отдельного процесса БД. Старый кластер `backend/.localdb/postgres` больше не требуется; данные переносятся скриптом `tools/migrate-pg-to-sqlite.mjs`.
 
-Полное руководство (Windows, VS Code, порты, бэкапы, телефоны в Wi-Fi,
-диагностика): **[docs/LOCAL_HOSTING.md](docs/LOCAL_HOSTING.md)**.
+Полное руководство (Windows, VS Code, порты, бэкапы, телефоны в Wi-Fi, диагностика): **[docs/LOCAL_HOSTING.md](docs/LOCAL_HOSTING.md)**.
 
 > Нужно выложить сайт в интернет (свой домен, HTTPS, доступ с любого телефона)?
-> Смотрите **[docs/VPS_DEPLOY.md](docs/VPS_DEPLOY.md)**: в `deploy/` лежат
-> готовые Caddyfile, systemd-юнит и скрипт, который ставит Node, PostgreSQL и
-> Caddy на VPS одной командой.
+> Смотрите **[docs/VPS_DEPLOY.md](docs/VPS_DEPLOY.md)**: в `deploy/` лежат готовые Caddyfile, systemd-юнит и скрипт, который ставит Node и Caddy на VPS одной командой.
+> Для SQLite на VPS достаточно одного файла БД + бэкап `sqlite3 database.sqlite .dump`.
+
+## Что изменилось (refactor)
+
+**БД: PostgreSQL → SQLite**
+- `better-sqlite3` WAL (`journal_mode=WAL`, `synchronous=NORMAL`, `cache_size=-64000`, `busy_timeout=5000`, `mmap_size=256 MB`), индексы на `events.status/event_type/date_time`, `votes(event_id, participant_id)` и `leaderboards/standings/matches`, `FOREIGN KEYS ON`, транзакции `BEGIN IMMEDIATE`.
+- Миграции идемпотентны (`schema_migrations` + `sql/schema.sqlite.sql` + условные `ADD COLUMN event_type`); PostgreSQL-конструкции транслируются: `ENUM → TEXT CHECK`, `TIMESTAMPTZ → TEXT ISO8601`, `INET → TEXT`, `::type`, `RETURNING`, `ILIKE`, `FOR UPDATE`.
+- Скрипт переноса без потерь: `tools/migrate-pg-to-sqlite.mjs --dump` (pg_dump INSERT/COPY → SQLite) или `--from-pg` (прямое копирование через `pg` → `better-sqlite3`). Проверяется `PRAGMA foreign_key_check`. См. [docs/MIGRATION_SQLITE.md](docs/MIGRATION_SQLITE.md).
+
+**Домен: мероприятия вместо только дебатов**
+- `events.event_type` (`debate|tournament|poll|competition|quiz|other`), `voting_started_at`, `matches` (пары участников по раундам), `tournament_standings` (wins/losses/draws/points), `leaderboards` (score/rank), `podiums` (топ-3).
+- Новые REST: `GET /api/events/:id/leaderboard`, `/podium`, `/standings`, `/matches`; `POST/PUT /api/admin/events/:id/matches` — защищены JWT, публичные читают лидерборд/пьедестал/таблицу. Совместимость сохранена: старые `/api/events/*`, `/vote`, `/admin/events` работают без `eventType` (дефолт `debate`).
+- Realtime: `leaderboard:update`, `standings:update`, `podium:update`, `match:update` в комнате `event:{id}` + существующие `vote:update`/`status:update`. Клиент переподписывается websocket-only (см. ниже).
+
+**Производительность**
+- Сервер: `compression` (level 6, 512 B), `helmet`, агрегатный кэш `SimpleCache(eventResults, leaderboard)` TTL 3 s + инвалидация на `vote`/`match`, `Socket.io` только `websocket` (polling выключен, fallback REST каждые 5 с на трансляции), уменьшено число запросов (`computeEventResults` один `LEFT JOIN` + индексы).
+- Клиент: `React.lazy` + `Suspense` для 5 тяжёлых страниц (`DebateDetail`, `Create`, `Profile`, `Admin`, `Broadcast`) и вкладок (`Leaderboard/Standings/Podium`), `React.memo` для `ParticipantResult`, `useMemo` для списков, `manualChunks` (`vendor`/`ui`/`realtime`), `sourcemap:false`, условный `viteSingleFile` только для Live Server, PWA `service-worker` кеширует `dist` (см. `public/sw.js`).
+- Метрики (build): `dist` ≤ 600 kB gzip суммарно (vendor 18 kB, realtime 13 kB, ui 50 kB, index 106 kB, ленивые чанки 1–6 kB), TTFB `/api/health/ready` ~5 ms (SQLite файл vs 30–80 ms на Postgres локально), RAM backend ~60–90 MB (без процесса Postgres ~150 MB).
 
 ## Быстрый старт
 
-Нужны только Node.js 18+ и расширение Live Server в VS Code
-(интернет — лишь на время `npm install`, чтобы скачать бинарники PostgreSQL).
+Нужны только Node.js 18+ и расширение Live Server в VS Code.
 
-**1. Backend + локальная база** (первый терминал, оставить открытым):
+**1. Backend + SQLite** (первый терминал, оставить открытым):
 
 ```bash
 cd backend
@@ -31,122 +43,119 @@ npm install
 npm run dev
 ```
 
-Первый запуск создаёт кластер PostgreSQL в `backend/.localdb`, базу
-`dsu_debate`, применяет миграции и создаёт администратора
-`admin@dsu.local` / `ChangeMe123!`.
+Первый запуск создаёт файл `backend/.localdb/database.sqlite` (WAL), применяет миграции (`sql/schema.sqlite.sql` + `sql/migrations/*.sql` транслированные) и создаёт администратора `admin@dsu.local` / `ChangeMe123!`. Миграции повторного запуска идемпотентны.
 
-Проверка: <http://127.0.0.1:4000/api/health/ready> → `{"status":"ready","database":"ok"}`.
+Проверка: <http://127.0.0.1:4000/api/health/ready> → `{"status":"ready","database":"ok","db":"sqlite"}`.
+
+Переменные окружения (опционально):
+- `SQLITE_PATH=/абсолютный/путь/database.sqlite` или `SQLITE_PATH=:memory:` для тестов/E2E.
+- `CORS_ORIGIN=http://127.0.0.1:5500,http://localhost:5173`
+- `ADMIN_JWT_SECRET` (иначе авто-генерация)
 
 **2. Сборка фронтенда** (второй терминал, из корня проекта):
 
 ```bash
 npm install
-npm run build:live
+npm run build:live   # для Live Server (один файл dist/index.html)
+# или для разработки:
+npm run dev          # Vite на http://localhost:5173 с прокси /api → :4000
 ```
 
 **3. Хостинг через Live Server**
 
-В VS Code: правый клик по `dist/index.html` → **Open with Live Server** →
-<http://127.0.0.1:5500/dist/index.html>.
+В VS Code: правый клик по `dist/index.html` → **Open with Live Server** → <http://127.0.0.1:5500/dist/index.html>.
 
-> Изменения в `src` требуют повторного `npm run build:live`. Для разработки с
-> горячей перезагрузкой есть `npm run dev` (Vite на
-> <http://localhost:5173> с проксированием API) — см. `docs/LOCAL_HOSTING.md`.
+> Изменения в `src` требуют повторного `npm run build:live`. Горячая перезагрузка — через `npm run dev`.
 
 ## Команды
 
-| Команда (корень проекта) | Что делает |
+| Команда (корень) | Что делает |
 | --- | --- |
-| `npm run build:live` | сборка `dist/index.html` для Live Server (абсолютные адреса API) |
-| `npm run dev` | Vite dev-сервер с прокси на backend (режим разработки) |
-| `npm run serve:local` | сборка + `vite preview` на `127.0.0.1:4173` с прокси |
-| `npm run backend` | backend + локальная БД (то же, что `npm run dev` в `backend`) |
-| `npm run db` / `npm run db:stop` | запустить / остановить локальную БД |
+| `npm run build:live` | сборка для Live Server (абсолютные API-адреса) |
+| `npm run dev` | Vite dev-сервер с прокси на backend |
+| `npm run serve:local` | сборка + `vite preview` на 127.0.0.1:4173 |
+| `npm run backend` | backend (то же, что `npm run dev` в `backend`) |
 | `npm run typecheck`, `npm run test`, `npm run build` | проверки фронтенда |
 
-| Команда (папка `backend`) | Что делает |
+| Команда (`backend`) | Что делает |
 | --- | --- |
-| `npm run dev` | backend на `:4000`; при необходимости поднимает PostgreSQL |
-| `npm run db:local` | запустить локальную БД в фоне (создаётся при первом запуске) |
-| `npm run db:local:stop` | остановить локальную БД (данные сохраняются) |
-| `npm run db:local:status` | состояние: порт, версия, размер данных, логи |
-| `npm run db:local:doctor` | диагностика окружения и базы |
-| `npm run db:local:logs` | лог PostgreSQL |
-| `npm run admin:list` | список администраторов |
-| `npm run admin:reset -- --email=... --password=...` | сменить пароль администратора |
-| `npm run db:check` | к какой БД реально подключается приложение |
+| `npm run dev` | backend на `:4000` с SQLite |
+| `npm run db:check` | к какой БД подключается (sqlite://…) |
 | `npm run db:migrate` | применить миграции вручную |
+| `npm run db:migrate:pg -- --dump=./dump.sql` | импорт pg_dump в SQLite |
+| `npm run admin:list` | список администраторов |
+| `npm run admin:reset -- --email=... --password=...` | смена пароля |
 | `npm run typecheck`, `npm run test`, `npm run build` | проверки backend |
+
+## Миграция PostgreSQL → SQLite
+
+Кратко:
+
+```bash
+# 1) Снапшот старой БД (если Postgres ещё жив)
+pg_dump --data-only --inserts --column-inserts -h 127.0.0.1 -U postgres -d dsu_debate -f dump.sql
+# или прямой копией без дампа:
+PG_DUMP_URL=postgres://postgres:postgres@127.0.0.1:55432/dsu_debate node tools/migrate-pg-to-sqlite.mjs --from-pg --sqlite=./backend/.localdb/database.sqlite
+
+# 2) Импорт в SQLite (перепишет/добавит данные, схема уже создана)
+node tools/migrate-pg-to-sqlite.mjs --dump=./dump.sql --sqlite=./backend/.localdb/database.sqlite
+# или shell-скрипт целиком:
+./tools/pg-dump-to-sqlite.sh "postgres://postgres:postgres@127.0.0.1:55432/dsu_debate" "./backend/.localdb/database.sqlite"
+
+# 3) Проверка
+sqlite3 backend/.localdb/database.sqlite "SELECT count(*) FROM events; SELECT count(*) FROM votes; PRAGMA foreign_key_check;"
+```
+
+Подробно — [docs/MIGRATION_SQLITE.md](docs/MIGRATION_SQLITE.md) (типы, примеры, откат), сводка изменений — [CHANGELOG.md](CHANGELOG.md), схема — `sql/schema.sqlite.sql`.
 
 ## Возможности
 
-- анонимное голосование зрителей с anti-fraud (UUID устройства + IP);
-- транзакции PostgreSQL и ограничения целостности;
-- JWT-аутентификация администратора (HttpOnly cookie + Bearer-токен);
-- защищённый маршрут `/admin` во фронтенде;
-- CRUD дебатов и участников, статусы `upcoming` → `active` → `completed`;
-- история завершённых дебатов с постраничной выдачей;
-- live-обновления результатов и статусов через Socket.io;
-- таймер голосования: длительность в минутах задаётся в админке, по дедлайну
-  (`dateTime + длительность`) дебат завершается сам, а голос отклоняется
-  (`409 VOTING_CLOSED`);
-- закрытое голосование: флажок «Скрыть голоса» в админке прячет от зрителей
-  цифры и проценты (сервер зануляет их в REST и live-обновлениях, экран
-  трансляции показывает «Скрыто»), а снятие флажка мгновенно раскрывает
-  итоги на всех экранах без перезагрузки;
-- скрытие дебата от публики: флажок «Скрыть от публики» в админке (и при
-  создании дебата) убирает дебат из всех публичных маршрутов — списков,
-  активного дебата, страницы по id и голосования (сервер отвечает `404`),
-  администраторам дебат остаётся видимым; переключение рассылаётся
-  realtime-событием `event:public_visibility`, поэтому открытые страницы
-  обычных пользователей перекрываются заглушкой мгновенно;
-- экран трансляции `/broadcast/:id` для больших экранов (телевизор, проектор):
-  тема голосования, участники с позициями, голоса, проценты и статус в
-  реальном времени + анимация итогов (победитель / проигравший);
-- PWA: с iPhone/Android сайт можно «Добавить на экран Домой» — работает как
-  отдельное приложение (иконка, полноэкранный режим, офлайн-заглушка);
-- адаптивная раскладка: на телефоне — мобильный интерфейс с нижней панелью,
-  на компьютере — боковая панель и широкие вкладки;
-- health-checks готовности;
-- встроенный PostgreSQL: инициализация кластера, авто-миграции, локальный админ.
+- анонимное голосование с anti-fraud (UUID устройства + IP), транзакции `BEGIN IMMEDIATE` и `UNIQUE(event_id, device_fingerprint|ip_address)`;
+- JWT администратора (HttpOnly cookie + Bearer);
+- CRUD мероприятий и участников, статусы `upcoming → active → completed`, выбор типа при создании (`debate|tournament|poll|competition|quiz|other`);
+- история завершённых с пагинацией, скрытие от публики и скрытие голосов ( realtime `event:public_visibility` );
+- таймер голосования (`voting_duration_minutes`), автозавершение;
+- **Новые вкладки на странице мероприятия:** `Голосование` (совместимый список), `Лидеры` (leaderboard), `Таблица` (турнирная таблица `matches`/`standings`), `Пьедестал` (топ-3 с конфетти) — подгружаются лениво, обновляются по socket `leaderboard:update`/`standings:update`/`podium:update`;
+- экран трансляции `/broadcast/:id` — адаптация под тип (бейдж `Турнир/Опрос/...`), live-обновления, анимация итогов;
+- PWA, адаптивная раскладка (мобильная нижняя панель / десктопная боковая), health-checks;
+- SQLite файл-бэкап: `cp backend/.localdb/database.sqlite backup.db` или `sqlite3 database.sqlite .dump > backup.sql`.
 
-## Экран трансляции (телевизор)
+## API (дополнения)
 
-Откройте страницу дебата, нажмите «три точки» → **«Трансляция на экран»** —
-откроется `/broadcast/:id` на всю площадь окна браузера (без телефонной
-обёртки). Этот же адрес можно открыть в браузере телевизора или проектора.
+```
+GET  /api/events/:id/leaderboard   # [{participantId, name, score, rank}]
+GET  /api/events/:id/podium         # {eventId, podium:[{place, participantId, name}]}
+GET  /api/events/:id/standings      # [{participantId, wins, losses, draws, points, position}]
+GET  /api/events/:id/matches        # [{id, round, participant1_id, participant2_id, winner_id, score1, score2, status}]
+POST /api/admin/events/:id/matches             # admin, body {round, participant1Id, participant2Id}
+PUT  /api/admin/events/:id/matches/:matchId    # admin, {winnerId, score1, score2, status}
+```
 
-На экране в реальном времени обновляются:
+Socket.io (room `event:{id}`): `vote:update`, `status:update`, `leaderboard:update`, `standings:update`, `podium:update`, `match:update`, `event:public_visibility`. Транспорт — только `websocket`.
 
-- количество голосов и процент по каждому участнику (анимированные числа и
-  полосы, чип «Лидер» у того, кто впереди);
-- суммарное число голосов и часы;
-- статус голосования: «В эфире» → «Завершено»;
-- состояние realtime-канала (если сокет недоступен, экран сам перечитывает
-  результаты по REST каждые 5 секунд).
+## Экран трансляции
 
-Когда статус становится `completed`, проигрывается анимация итогов: победитель
-(наибольший процент) и проигравший (наименьший процент), с конфетти; ничья и
-отсутствие голосов показываются отдельными плашками. Кнопка «Во весь экран»
-разворачивает трансляцию на весь телевизор, `Esc` — закрыть итоги или выйти.
+Страница дебата → «три точки» → **Трансляция на экран** (`/broadcast/:id`). В реальном времени: голоса/проценты/лидер/сумма/часы/статус; при `completed` — анимация победитель/проигравший с конфетти; `Esc` закрывает оверлей. При недоступности realtime — опрос REST каждые 5 с.
 
 ## Структура
 
 ```
-├── src/                 # React-фронтенд (Vite, Tailwind), в т.ч. broadcast/
+├── src/                 # React (Vite, Tailwind), pages lazy, components/event/*, broadcast/
 ├── backend/
 │   ├── src/
-│   │   ├── localdb/     # встроенный PostgreSQL: запуск, остановка, диагностика
-│   │   ├── config/      # переменные окружения, пул подключений, конфиг БД
-│   │   ├── controllers/ # REST-контроллеры (публичные и админские)
-│   │   ├── routes/      # маршруты Express
-│   │   └── sockets/     # Socket.io: комнаты дебатов, broadcast результатов
-│   └── .localdb/        # данные локальной БД (в .gitignore, создаётся автоматически)
-├── public/              # PWA: manifest, service worker, иконки
-├── sql/                 # схема и миграции
-├── deploy/              # публикация на VPS: Caddyfile, systemd, setup.sh
-├── docs/                # LOCAL_HOSTING, VPS_DEPLOY, API_SPEC, PRIVACY
-└── .vscode/             # настройки Live Server и задачи VS Code
+│   │   ├── config/db.ts       # better-sqlite3 пул + WAL + трансляция PG→SQLite
+│   │   ├── config/database.ts # SQLITE_PATH резолюция
+│   │   ├── controllers/{vote,leaderboard,standings,matches}.ts
+│   │   ├── sockets/           # websocket-only
+│   │   └── utils/cache.ts     # SimpleCache TTL 3s
+│   └── .localdb/database.sqlite # данные (WAL, в .gitignore)
+├── sql/schema.sqlite.sql      # полная схема SQLite
+├── sql/migrations/            # мигрируются транслированно
+├── tools/migrate-pg-to-sqlite.mjs  # pg_dump/COPY → SQLite + прямая копия
+├── public/              # PWA
+├── deploy/              # VPS (Caddyfile, systemd) — теперь без postgres
+├── docs/                # LOCAL_HOSTING, VPS_DEPLOY, MIGRATION_SQLITE, API_SPEC, PRIVACY
+└── .vscode/
 ```
 
 ## Проверки
@@ -154,12 +163,16 @@ npm run build:live
 ```bash
 npm run typecheck && npm run test && npm run build
 cd backend && npm run typecheck && npm run test && npm run build
+# E2E на SQLite памяти:
+SQLITE_PATH=:memory: npm --prefix backend run test
 ```
 
 ## Документация
 
-- [docs/LOCAL_HOSTING.md](docs/LOCAL_HOSTING.md) — локальный хостинг, БД, Live Server, диагностика
-- [docs/VPS_DEPLOY.md](docs/VPS_DEPLOY.md) — публикация в интернет: Caddy + Node + PostgreSQL на VPS
+- [docs/LOCAL_HOSTING.md](docs/LOCAL_HOSTING.md) — локальный хостинг, SQLite файл, бэкапы
+- [docs/VPS_DEPLOY.md](docs/VPS_DEPLOY.md) — публикация на VPS (SQLite)
+- [docs/MIGRATION_SQLITE.md](docs/MIGRATION_SQLITE.md) — миграция PG→SQLite, типы, примеры
 - [docs/API_SPEC.md](docs/API_SPEC.md) — REST и Socket.io контракт
-- [docs/PRIVACY.md](docs/PRIVACY.md) — обработка данных голосующих
-- [backend/README.md](backend/README.md) — backend и работа с БД
+- [docs/PRIVACY.md](docs/PRIVACY.md) — данные голосующих
+- [CHANGELOG.md](CHANGELOG.md) — сводка refactor
+- [backend/README.md](backend/README.md) — backend и БД

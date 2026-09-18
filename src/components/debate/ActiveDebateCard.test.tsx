@@ -13,6 +13,7 @@ const event: DebateEvent = {
   id: 1,
   title: "Нужен ли четырёхдневный рабочий день?",
   status: "active",
+  eventType: "debate",
   participantsCount: 3,
   scheduledAt: new Date(2026, 8, 18, 17, 0).toISOString(),
   totalVotes: 47,
@@ -23,7 +24,7 @@ afterEach(() => {
   cleanup();
 });
 
-describe("карточка активного дебата", () => {
+describe("карточка активного мероприятия", () => {
   test("фон непрозрачный, без стеклянной подложки поверх", () => {
     const { container } = render(
       <ActiveDebateCard event={event} voted={false} onVoteClick={() => {}} />
@@ -38,7 +39,7 @@ describe("карточка активного дебата", () => {
     render(<ActiveDebateCard event={event} voted={false} onVoteClick={() => {}} />);
 
     expect(screen.getByText(event.title)).toBeTruthy();
-    expect(screen.getByText("Активный дебат")).toBeTruthy();
+    expect(screen.getByText("Активное мероприятие")).toBeTruthy();
     expect(screen.getByText("3 участника")).toBeTruthy();
     expect(screen.getByText("47 голосов")).toBeTruthy();
     expect(screen.getByText("Голосовать")).toBeTruthy();

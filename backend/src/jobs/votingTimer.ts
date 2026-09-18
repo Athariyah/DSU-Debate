@@ -23,8 +23,7 @@ export function startVotingTimer(intervalMs = 15_000): () => void {
          SET status = 'completed'
          WHERE status = 'active'
            AND voting_duration_minutes IS NOT NULL
-           AND COALESCE(voting_started_at, date_time)
-             + make_interval(secs => voting_duration_minutes * 60) <= now()
+           AND datetime(COALESCE(voting_started_at, date_time), '+' || voting_duration_minutes || ' minutes') <= strftime('%Y-%m-%dT%H:%M:%SZ','now')
          RETURNING id`
       );
       for (const row of result.rows) {

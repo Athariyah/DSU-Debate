@@ -14,6 +14,7 @@ export const loginSchema = z.object({
 });
 
 export const eventStatusEnum = z.enum(["upcoming", "active", "completed"]);
+export const eventTypeEnum = z.enum(["debate", "tournament", "poll", "competition", "quiz", "other"]);
 
 // Длительность таймера голосования в минутах: 1..1440 (сутки).
 // null/отсутствие — таймер выключен, голосование идёт до смены статуса.
@@ -23,34 +24,70 @@ export const votingDurationSchema = z
   .min(1, "Таймер должен быть не меньше 1 минуты")
   .max(1440, "Таймер не может быть больше суток");
 
-const participantDraftSchema = z.object({
+export const participantDraftSchema = z.object({
   name: z.string().trim().min(1).max(255),
   description: z.string().trim().max(2000).optional().nullable(),
+});
+
+const votingDraftSchema = z.object({
+  title: z.string().trim().min(3).max(500),
+  status: eventStatusEnum.optional().default("upcoming"),
+  eventType: eventTypeEnum.optional().default("poll"),
+  customTypeLabel: z.string().trim().min(1).max(50).optional().nullable(),
+  dateTime: z.string().datetime({ offset: true }).optional(),
+  votingDurationMinutes: votingDurationSchema.nullable().optional(),
+  votesHidden: z.boolean().optional(),
+  hiddenFromPublic: z.boolean().optional(),
+  showLeaderboard: z.boolean().optional(),
+  showStandings: z.boolean().optional(),
+  showPodium: z.boolean().optional(),
+  broadcastMessage: z.string().trim().max(500).optional().nullable(),
+  participants: z.array(participantDraftSchema).min(2).optional(),
 });
 
 export const createEventSchema = z.object({
   title: z.string().trim().min(3).max(500),
   dateTime: z.string().datetime({ offset: true }),
   status: eventStatusEnum.optional().default("upcoming"),
+  eventType: eventTypeEnum.optional().default("debate"),
+  customTypeLabel: z.string().trim().min(1).max(50).optional().nullable(),
   votingDurationMinutes: votingDurationSchema.nullable().optional(),
-  // TRUE — дебат скрыт от обычных пользователей (виден только администраторам).
+  // TRUE — результаты скрыты от зрителей (закрытое голосование)
+  votesHidden: z.boolean().optional(),
+  // TRUE — мероприятие скрыто от обычных пользователей (виден только администраторам).
   hiddenFromPublic: z.boolean().optional(),
+  showLeaderboard: z.boolean().optional(),
+  showStandings: z.boolean().optional(),
+  showPodium: z.boolean().optional(),
+  broadcastMessage: z.string().trim().max(500).optional().nullable(),
   // Optional keeps the CRUD endpoint backwards compatible. When supplied,
   // event and participants are persisted atomically in one transaction.
   // Число участников не ограничено сверху: минимум 2 (дебаты требуют сторон).
   participants: z.array(participantDraftSchema).min(2).optional(),
+  // Several votings (child events) can be created atomically together with the parent event.
+  votings: z.array(votingDraftSchema).max(20).optional(),
+});
+
+export const createVotingSchema = votingDraftSchema.extend({
+  // when creating via POST /events/:id/votings dateTime is optional and defaults to parent
 });
 
 export const updateEventSchema = z.object({
   title: z.string().trim().min(3).max(500).optional(),
   dateTime: z.string().datetime({ offset: true }).optional(),
   status: eventStatusEnum.optional(),
+  eventType: eventTypeEnum.optional(),
+  customTypeLabel: z.string().trim().min(1).max(50).optional().nullable(),
   // null — явное выключение таймера (в отличие от «поле не передано»).
   votingDurationMinutes: votingDurationSchema.nullable().optional(),
   // true — закрытое голосование: зрители не видят голоса и проценты.
   votesHidden: z.boolean().optional(),
-  // true — дебат скрыт от обычных пользователей (виден только администраторам).
+  // true — мероприятие скрыто от обычных пользователей (виден только администраторам).
   hiddenFromPublic: z.boolean().optional(),
+  showLeaderboard: z.boolean().optional(),
+  showStandings: z.boolean().optional(),
+  showPodium: z.boolean().optional(),
+  broadcastMessage: z.string().trim().max(500).optional().nullable(),
 });
 
 export const createParticipantSchema = z.object({
@@ -73,4 +110,27 @@ export const castVoteSchema = z.object({
   deviceFingerprint: z
     .string()
     .regex(UUID_V4_REGEX, "deviceFingerprint должен быть валидным UUID v4"),
+});
+
+export const createMatchSchema = z.object({
+  eventId: z.number().int().positive(),
+  round: z.number().int().min(1).optional().default(1),
+  participant1Id: z.number().int().positive(),
+  participant2Id: z.number().int().positive(),
+  winnerId: z.number().int().positive().nullable().optional(),
+  score1: z.number().int().min(0).optional().default(0),
+  score2: z.number().int().min(0).optional().default(0),
+  status: z.enum(["upcoming", "active", "completed", "draw"]).optional().default("upcoming"),
+  scheduledAt: z.string().datetime({ offset: true }).nullable().optional(),
+});
+
+export const updateMatchSchema = z.object({
+  round: z.number().int().min(1).optional(),
+  participant1Id: z.number().int().positive().optional(),
+  participant2Id: z.number().int().positive().optional(),
+  winnerId: z.number().int().positive().nullable().optional(),
+  score1: z.number().int().min(0).optional(),
+  score2: z.number().int().min(0).optional(),
+  status: z.enum(["upcoming", "active", "completed", "draw"]).optional(),
+  scheduledAt: z.string().datetime({ offset: true }).nullable().optional(),
 });
