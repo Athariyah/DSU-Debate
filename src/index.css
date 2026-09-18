@@ -125,7 +125,8 @@ body {
   background: transparent;
 }
 .scroll-rounded-clip {
-  overflow: hidden;
+  /* use clip-path to round without disabling overflow */
+  clip-path: inset(0 round 1rem);
   border-radius: 1rem;
 }
 .styled-scrollbar {

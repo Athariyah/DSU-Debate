@@ -300,7 +300,7 @@ export function DebateDetailPage() {
           if (event.showStandings ?? true) tabs.push(["table", "Таблица"]);
           if (event.showPodium ?? true) tabs.push(["podium", "Пьедестал"]);
           return (
-            <div className="mt-5 flex gap-1.5 overflow-x-auto no-scrollbar rounded-2xl border border-white/10 bg-black/20 p-1">
+            <div className="mt-5 flex gap-1.5 overflow-x-auto styled-scrollbar rounded-2xl border border-white/10 bg-black/20 p-1">
               {tabs.map(([key, label]) => (
                 <button
                   key={key}
