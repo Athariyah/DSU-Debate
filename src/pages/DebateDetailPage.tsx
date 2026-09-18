@@ -405,10 +405,9 @@ export function DebateDetailPage() {
       </div>
 
       {(() => {
-        // Когда открыта вкладка голосования из списка votings — нижняя панель голосования не нужна (кнопка уже внутри VotingTab)
-        const hasVotings = (event.votings?.length ?? 0) > 0;
+        // Кнопка голосования — только во вкладке голосования, на Лидерах/Таблице/Пьедестале её не показываем
         const isVotingTab = activeTab.startsWith("vote");
-        if (hasVotings && isVotingTab) return null;
+        if (!isVotingTab) return null;
         return (
         <div className="mx-auto w-full max-w-2xl space-y-2 px-5 pb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] pt-2 lg:px-8">
         {voted ? (
