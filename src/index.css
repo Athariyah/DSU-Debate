@@ -104,7 +104,7 @@ body {
 /* Стилизованный скроллбар — тонкий, минималистичный, не отвлекает */
 .styled-scrollbar::-webkit-scrollbar {
   width: 6px;
-  height: 6px;
+  height: 8px;
 }
 .styled-scrollbar::-webkit-scrollbar-track {
   background: transparent;
@@ -112,13 +112,13 @@ body {
   border-radius: 9999px;
 }
 .styled-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.32);
   border-radius: 9999px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 .styled-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.48);
   background-clip: padding-box;
 }
 .styled-scrollbar::-webkit-scrollbar-corner {
@@ -131,7 +131,7 @@ body {
 }
 .styled-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.32) transparent;
   scrollbar-gutter: stable;
   /* clip track inside rounded containers */
   overflow-clip-margin: 8px;
