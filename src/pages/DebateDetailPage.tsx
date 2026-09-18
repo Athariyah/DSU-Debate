@@ -361,7 +361,7 @@ export function DebateDetailPage() {
                 // Для голосования используем его участников; socket для основного события не подходит — показываем статично
                 // Но если голосование имеет live данные, они уже в voting.participants
                 return (
-                  <VotingTab voting={voting} isActive={eventStatus === "active"} votesHidden={votesHidden} onVoted={() => setJustVotedFor(null)} />
+                  <VotingTab voting={voting} votesHidden={votesHidden} />
                 );
               })()}
             </>
@@ -452,10 +452,9 @@ export function DebateDetailPage() {
   );
 }
 
-function VotingTab({ voting, isActive, votesHidden, onVoted }: { voting: any; isActive: boolean; votesHidden: boolean; onVoted: () => void }) {
+function VotingTab({ voting, votesHidden }: { voting: any; votesHidden: boolean }) {
   const [localVoting, setLocalVoting] = useState(voting);
-  const [voteModalForVoting, setVoteModalForVoting] = useState(false);
-  const [justVoted, setJustVoted] = useState<number | null>(null);
+  const [justVoted] = useState<number | null>(null);
   useEffect(() => setLocalVoting(voting), [voting]);
   // Подписываемся на обновления голосов для этого голосования
   useEffect(() => {
@@ -490,9 +489,7 @@ function VotingTab({ voting, isActive, votesHidden, onVoted }: { voting: any; is
       ) : (
         <p className="text-center text-xs text-white/30">Всего голосов: {totalVotes}</p>
       )}
-      <Button fullWidth disabled={!isActive} onClick={() => setVoteModalForVoting(true)}>{isActive ? "Голосовать" : "Голосование ещё не началось"}</Button>
       {justVoted && <p className="text-center text-xs text-emerald-300">Ваш голос за {participants.find(pp => pp.id === justVoted)?.name} учтён</p>}
-      <VoteModal event={localVoting as any} open={voteModalForVoting} preselectedParticipantId={justVoted} onClose={() => setVoteModalForVoting(false)} onVoted={(pid) => { setJustVoted(pid); setVoteModalForVoting(false); onVoted(); }} />
     </div>
   );
 }
