@@ -1,4 +1,4 @@
-import { Home, MessagesSquare, Plus, UserRound } from "lucide-react";
+import { CalendarDays, Home, Plus, UserRound } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { NavLink } from "react-router-dom";
 import { cn } from "../../utils/cn";
@@ -7,7 +7,7 @@ import { BrandMark } from "../brand/BrandLogo";
 
 const items = [
   { to: "/home", label: "Главная", icon: Home },
-  { to: "/debates", label: "Мероприятия", icon: MessagesSquare },
+  { to: "/debates", label: "Мероприятия", icon: CalendarDays },
 ];
 
 const profileItem = { to: "/profile", label: "Профиль", icon: UserRound };

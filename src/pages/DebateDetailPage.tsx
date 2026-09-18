@@ -21,6 +21,7 @@ import { Button } from "../components/ui/Button";
 import { ParticipantResult } from "../components/debate/ParticipantResult";
 import { VoteModal } from "../components/debate/VoteModal";
 import { fetchDebateById, isAdminAuthenticated } from "../api/debates";
+import { getSocket } from "../lib/socket";
 import { useDebateSocket } from "../hooks/useDebateSocket";
 import { getVotedParticipant } from "../utils/votedStore";
 import { cn } from "../utils/cn";
@@ -50,15 +51,20 @@ export function DebateDetailPage() {
   const [hiddenFromPublic, setHiddenFromPublic] = useState(false);
   const votedRecord = event ? getVotedParticipant(event.id) : null;
   const [justVotedFor, setJustVotedFor] = useState<number | null>(votedRecord?.participantId ?? null);
-  const [activeTab, setActiveTab] = useState<"vote" | "leaders" | "table" | "podium">("vote");
+  const [activeTab, setActiveTab] = useState<string>("vote");
   const isAdmin = isAdminAuthenticated();
 
-  // Если админ скрыл вкладку — переключаем на голосование
+  // Если админ скрыл вкладку — переключаем на первое голосование
   useEffect(() => {
     if (!event) return;
-    if (activeTab === "leaders" && event.showLeaderboard === false) setActiveTab("vote");
-    if (activeTab === "table" && event.showStandings === false) setActiveTab("vote");
-    if (activeTab === "podium" && event.showPodium === false) setActiveTab("vote");
+    if (activeTab === "leaders" && event.showLeaderboard === false) setActiveTab(event.votings && event.votings.length > 0 ? "vote-0" : "vote");
+    if (activeTab === "table" && event.showStandings === false) setActiveTab(event.votings && event.votings.length > 0 ? "vote-0" : "vote");
+    if (activeTab === "podium" && event.showPodium === false) setActiveTab(event.votings && event.votings.length > 0 ? "vote-0" : "vote");
+    // If activeTab is vote-N and votings changed, ensure it stays valid
+    if (activeTab.startsWith("vote-")) {
+      const idx = parseInt(activeTab.split("-")[1] ?? "0", 10);
+      if (!event.votings || idx >= event.votings.length) setActiveTab(event.votings && event.votings.length > 0 ? "vote-0" : "vote");
+    }
   }, [event?.showLeaderboard, event?.showStandings, event?.showPodium, activeTab, event]);
 
   const loadEvent = useCallback(() => {
@@ -293,9 +299,20 @@ export function DebateDetailPage() {
           <Icon size={12} />{meta.label}
         </div> )})()}
 
-        {/* Вкладки: Голосование всегда, остальные — по флагам show* */}
+        {/* Вкладки: голосования (каждое как отдельный таб) + таблицы/пьедестал для основных участников */}
         {(() => {
-          const tabs: Array<[typeof activeTab, string]> = [["vote", "Голосование"]];
+          const votings = event.votings ?? [];
+          const tabs: Array<[string, string]> = [];
+          if (votings.length > 0) {
+            votings.forEach((v, idx) => {
+              const label = votings.length === 1 ? (v.title || "Голосование") : `Голосование №${idx + 1}`;
+              // Если у голосования есть заголовок, показываем его после номера
+              const fullLabel = v.title && votings.length > 1 ? `${label}: ${v.title}` : label;
+              tabs.push([`vote-${idx}`, fullLabel]);
+            });
+          } else {
+            tabs.push(["vote", "Голосование"]);
+          }
           if (event.showLeaderboard ?? true) tabs.push(["leaders", "Лидеры"]);
           if (event.showStandings ?? true) tabs.push(["table", "Таблица"]);
           if (event.showPodium ?? true) tabs.push(["podium", "Пьедестал"]);
@@ -315,19 +332,38 @@ export function DebateDetailPage() {
         })()}
 
         <div className="mt-6">
-          {activeTab === "vote" && (
+          {(activeTab === "vote" || activeTab.startsWith("vote-")) && (
             <>
-              <div className="space-y-3">
-                {voteList}
-              </div>
-              {votesHidden ? (
-                <p className="mt-4 flex items-center justify-center gap-1.5 text-center text-xs text-white/30">
-                  <EyeOff size={13} className="opacity-70" />
-                  Результаты скрыты организатором
-                </p>
-              ) : (
-                <p className="mt-4 text-center text-xs text-white/30">Всего голосов: {totalVotes}</p>
-              )}
+              {(() => {
+                const votings = event.votings ?? [];
+                if (votings.length === 0) {
+                  // Одиночное голосование — показываем основных участников
+                  return (
+                    <>
+                      <div className="space-y-3">
+                        {voteList}
+                      </div>
+                      {votesHidden ? (
+                        <p className="mt-4 flex items-center justify-center gap-1.5 text-center text-xs text-white/30">
+                          <EyeOff size={13} className="opacity-70" />
+                          Результаты скрыты организатором
+                        </p>
+                      ) : (
+                        <p className="mt-4 text-center text-xs text-white/30">Всего голосов: {totalVotes}</p>
+                      )}
+                    </>
+                  );
+                }
+                // Множественные голосования — каждое в своём табе
+                const idx = activeTab === "vote" ? 0 : parseInt(activeTab.split("-")[1] ?? "0", 10);
+                const voting = votings[Math.min(idx, votings.length - 1)];
+                if (!voting) return null;
+                // Для голосования используем его участников; socket для основного события не подходит — показываем статично
+                // Но если голосование имеет live данные, они уже в voting.participants
+                return (
+                  <VotingTab voting={voting} isActive={eventStatus === "active"} votesHidden={votesHidden} onVoted={() => setJustVotedFor(null)} />
+                );
+              })()}
             </>
           )}
           {activeTab === "leaders" && (event.showLeaderboard ?? true) && (
@@ -409,6 +445,51 @@ export function DebateDetailPage() {
           setVoteModalOpen(false);
         }}
       />
+    </div>
+  );
+}
+
+function VotingTab({ voting, isActive, votesHidden, onVoted }: { voting: any; isActive: boolean; votesHidden: boolean; onVoted: () => void }) {
+  const [localVoting, setLocalVoting] = useState(voting);
+  const [voteModalForVoting, setVoteModalForVoting] = useState(false);
+  const [justVoted, setJustVoted] = useState<number | null>(null);
+  useEffect(() => setLocalVoting(voting), [voting]);
+  // Подписываемся на обновления голосов для этого голосования
+  useEffect(() => {
+    if (!localVoting) return;
+    const socket = getSocket();
+    const handler = (payload: any) => {
+      if (Number(payload.eventId) !== Number(localVoting.id)) return;
+      if (Array.isArray(payload.participants)) {
+        setLocalVoting((prev: any) => ({ ...prev, participants: payload.participants.map((p: any) => ({ id: p.id ?? p.participantId, eventId: localVoting.id, name: p.name, subtitle: p.description ?? p.subtitle, votesCount: p.votesCount, percentage: p.percentage })), totalVotes: payload.totalVotes }));
+      }
+    };
+    socket.on("vote:update", handler);
+    socket.on("voteUpdate", handler);
+    return () => { socket.off("vote:update", handler); socket.off("voteUpdate", handler); };
+  }, [localVoting?.id]);
+  const participants = (localVoting.participants ?? []) as Participant[];
+  const totalVotes = localVoting.totalVotes ?? participants.reduce((a: number, p: Participant) => a + (p.votesCount ?? 0), 0);
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-bold text-white">{localVoting.title || `Голосование`}</h3>
+        <span className="text-xs text-white/40">ID {localVoting.id} · {participants.length} участника</span>
+      </div>
+      <div className="space-y-3">
+        {participants.map((p, idx) => (
+          <ParticipantResultMemo key={p.id} participant={p} index={idx} highlighted={p.id === justVoted} hidden={votesHidden} />
+        ))}
+        {participants.length === 0 && <p className="py-6 text-center text-sm text-white/40">Участники не добавлены</p>}
+      </div>
+      {votesHidden ? (
+        <p className="flex items-center justify-center gap-1.5 text-center text-xs text-white/30"><EyeOff size={13} className="opacity-70" />Результаты скрыты организатором</p>
+      ) : (
+        <p className="text-center text-xs text-white/30">Всего голосов: {totalVotes}</p>
+      )}
+      <Button fullWidth disabled={!isActive} onClick={() => setVoteModalForVoting(true)}>{isActive ? "Голосовать" : "Голосование закрыто"}</Button>
+      {justVoted && <p className="text-center text-xs text-emerald-300">Ваш голос за {participants.find(pp => pp.id === justVoted)?.name} учтён</p>}
+      <VoteModal event={localVoting as any} open={voteModalForVoting} preselectedParticipantId={justVoted} onClose={() => setVoteModalForVoting(false)} onVoted={(pid) => { setJustVoted(pid); setVoteModalForVoting(false); onVoted(); }} />
     </div>
   );
 }

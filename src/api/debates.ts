@@ -378,6 +378,26 @@ export async function fetchLeaderboard(eventId: number): Promise<{ eventId: numb
 export async function fetchPodium(eventId: number): Promise<{ eventId: number; podium: import("../types").PodiumEntry[] }> {
   return apiFetch(`/events/${eventId}/podium`);
 }
+
+export async function setPodium(eventId: number, podium: Array<{ place: number; participantId: number }>): Promise<{ eventId: number; podium: import("../types").PodiumEntry[] }> {
+  return apiFetch(`/admin/events/${eventId}/podium`, { method: "POST", auth: true, body: JSON.stringify({ podium }) });
+}
+
+
+export async function fetchParticipants(eventId: number): Promise<Participant[]> {
+  const res = await apiFetch<{ participants: BackendParticipant[] }>(`/events/${eventId}/participants`);
+  // fallback to public event
+  if (Array.isArray((res as any).participants)) {
+    return (res as any).participants.map((p: BackendParticipant) => mapParticipant(p, eventId));
+  }
+  // try via public event endpoint
+  const ev = await fetchDebateById(String(eventId));
+  return ev?.participants ?? [];
+}
+
+export async function setPodiumAuto(eventId: number): Promise<{ eventId: number; podium: import("../types").PodiumEntry[] }> {
+  return apiFetch(`/admin/events/${eventId}/podium?auto=true`, { method: "POST", auth: true });
+}
 export async function fetchStandings(eventId: number): Promise<{ items: import("../types").TournamentStanding[] }> {
   return apiFetch(`/events/${eventId}/standings`);
 }
