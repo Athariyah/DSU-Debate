@@ -3,6 +3,11 @@
 Все URL ниже указаны относительно `/api`. Формат запросов и ответов — JSON.
 Время передаётся в ISO-8601 с timezone.
 
+> За Yandex Cloud CDN методы `POST`/`PUT`/`PATCH`/`DELETE` уходят по сети как
+> `GET` с параметрами `_method`/`_body`/`_token`/`_t` (CDN режет мутации с 405),
+> backend восстанавливает исходный запрос раньше роутера — логический контракт
+> ниже от этого не меняется. Детали — [CDN_COMPATIBILITY.md](CDN_COMPATIBILITY.md).
+
 ## Health
 
 - `GET /health/live` — проверяет, что процесс backend запущен.

@@ -7,6 +7,7 @@ import { env } from "./config/env";
 import { corsGuard, isOriginAllowed } from "./config/cors";
 import { pool } from "./config/db";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
+import { methodTunnel, noStoreCache } from "./middleware/methodTunnel";
 import adminAuthRoutes from "./routes/admin.auth.routes";
 import adminEventsRoutes from "./routes/admin.events.routes";
 import adminParticipantsRoutes from "./routes/admin.participants.routes";
@@ -43,6 +44,8 @@ export function createApp(): Application {
   const app = express();
   app.set("trust proxy", env.trustProxy);
 
+  // CDN/прокси никогда не кэшируют API: голосование всегда живое.
+  app.use(noStoreCache);
   app.use(
     helmet({
       contentSecurityPolicy: false,
@@ -58,6 +61,9 @@ export function createApp(): Application {
     })
   );
   app.use(express.json({ limit: "1mb" }));
+  // Тоннелирование мутаций через GET для Yandex Cloud CDN (см. middleware):
+  // восстанавливает исходный метод/тело/токен раньше роутера и лимитеров.
+  app.use(methodTunnel);
   app.use("/api", apiRateLimit);
   // Эхо auth-каналов: клиент спрашивает «что ты увидел в моём запросе?» —
   // так из логов видно, режет ли промежуточный прокси Authorization/Cookie.
@@ -104,6 +110,30 @@ export function createApp(): Application {
     try {
       await pool.query("SELECT 1");
       res.status(200).json({ status: "ok", service: "dsu-debate-backend", database: "ok" });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Явная обработка HEAD для хелсчеков CDN: 200 OK без тела, с той же
+  // семантикой готовности, что и GET-версии выше (ready/health проверяют БД).
+  app.head("/api/health/live", (_req, res) => {
+    res.status(200).end();
+  });
+
+  app.head("/api/health/ready", async (_req, res, next) => {
+    try {
+      await pool.query("SELECT 1");
+      res.status(200).end();
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.head("/api/health", async (_req, res, next) => {
+    try {
+      await pool.query("SELECT 1");
+      res.status(200).end();
     } catch (error) {
       next(error);
     }

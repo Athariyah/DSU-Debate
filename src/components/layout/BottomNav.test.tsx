@@ -7,6 +7,7 @@ import { ProtectedRoute } from "../auth/ProtectedRoute";
 import { useEffect } from "react";
 import { apiFetch, getAdminToken } from "../../api/httpClient";
 import { resetAuthStoreForTests } from "../../api/authStore";
+import { wireRequest } from "../../test-utils/httpTunnel";
 
 const TOKEN_KEY = "dsu_admin_jwt";
 
@@ -15,7 +16,7 @@ function mockMe(result: "ok" | "expired" | "cookie") {
     "fetch",
     vi.fn(async (input: unknown, init?: { headers?: Record<string, string>; method?: string }) => {
       const url = String(input);
-      if (url.includes("/admin/auth/login") && init?.method === "POST") {
+      if (url.includes("/admin/auth/login") && wireRequest(input, init).method === "POST") {
         return {
           ok: true,
           status: 200,

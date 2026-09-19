@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { getSocket } from "../lib/socket";
+import { fetchDebateById } from "../api/debates";
 import { mockSubscribe } from "../mock/mockRealtime";
 import type { DebateStatus, Participant, VoteUpdatePayload } from "../types";
 
 export type RealtimeStatus = "connecting" | "live" | "offline" | "demo-offline";
 
 const USE_MOCKS = import.meta.env.VITE_USE_MOCKS === "true";
+
+/** Как часто опрашивать REST, пока realtime-канал недоступен (CDN глушит WebSocket). */
+const POLLING_FALLBACK_MS = 1500;
 
 interface UseDebateSocketArgs {
   eventId: number | null | undefined;
@@ -166,6 +170,42 @@ export function useDebateSocket({
       socket.off("event:public_visibility", applyPublicVisibility);
       if (socket.connected) socket.emit("leave_debate", eventId);
       demoUnsubscribe?.();
+    };
+  }, [eventId]);
+
+  // Polling-fallback для сетей за CDN без WebSocket: пока сокет не подключён,
+  // перечитываем событие по REST (GET /api/events/:id) — голоса, проценты,
+  // статус и флажок «Скрыть голоса» остаются живыми. Как только сокет оживает,
+  // тики пропускаются. В демо-режиме опрос не нужен — там mockSubscribe.
+  useEffect(() => {
+    if (eventId === undefined || eventId === null || USE_MOCKS) return;
+    let cancelled = false;
+
+    const poll = async () => {
+      if (cancelled) return;
+      if (hasLiveConnection.current || getSocket().connected) return;
+      try {
+        const event = await fetchDebateById(String(eventId));
+        if (cancelled) return;
+        if (!event) {
+          // Публичный маршрут ответил 404: дебат скрыли от публики (или
+          // удалили) — страница сама покажет заглушку.
+          onPublicVisibilityRef.current?.(true);
+          return;
+        }
+        setParticipants(event.participants);
+        setTotalVotes(event.totalVotes);
+        setEventStatus(event.status);
+        setVotesHidden(event.votesHidden ?? false);
+      } catch {
+        // Ошибка сети/сервера: молча ждём следующего тика.
+      }
+    };
+
+    const timer = window.setInterval(() => void poll(), POLLING_FALLBACK_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
     };
   }, [eventId]);
 
