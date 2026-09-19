@@ -57,12 +57,35 @@ export function setUnauthorizedHandler(handler: (tokenUsed: string | null) => vo
   unauthorizedHandler = handler;
 }
 
+// Методы, которые Yandex Cloud CDN режет с 405: наружу они уходят
+// как GET с тоннелирующими query-параметрами (см. buildTunneledUrl).
+// Backend (middleware/methodTunnel.ts) восстанавливает исходный метод,
+// тело и токен раньше роутера.
+const TUNNELED_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+/**
+ * Упаковывает мутирующий запрос в CDN-совместимый GET:
+ *   POST /api/events/1/vote {participantId: 2}
+ *     -> GET /api/events/1/vote?_method=POST&_body=%7B...%7D&_t=...
+ * Существующая query-строка пути (например, ?auto=true) сохраняется.
+ */
+function buildTunneledUrl(baseUrl: string, method: string, body: unknown, token: string | null): string {
+  const params = new URLSearchParams();
+  params.set("_method", method);
+  if (typeof body === "string" && body.length > 0) params.set("_body", body);
+  // Токен дублируется в query: промежуточные слои могут вырезать заголовки.
+  if (token) params.set("_token", token);
+  // Таймстемп против кэширования мутаций на CDN/прокси.
+  params.set("_t", String(Date.now()));
+  return `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}${params.toString()}`;
+}
+
 // Диагностический маячок в журнал backend: помогает увидеть аномалии
 // хранения токена глазами браузера, а не гадать по серверным 401.
+// Идёт через общий apiFetch, поэтому за CDN тоже тоннелируется в GET.
 function diag(payload: Record<string, unknown>): void {
-  void fetch(`${API_BASE_URL}/_diag`, {
+  void apiFetch("/_diag", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   }).catch(() => undefined);
 }
@@ -71,10 +94,23 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   const { auth, headers, ...rest } = options;
   const token = auth ? getAdminToken() : null;
 
+  let url = `${API_BASE_URL}${path}`;
+  let method = (rest.method ?? "GET").toUpperCase();
+  let body: BodyInit | null | undefined = rest.body as BodyInit | null | undefined;
+
+  // Тоннелирование мутаций через GET: иначе CDN ответит 405.
+  if (TUNNELED_METHODS.has(method)) {
+    url = buildTunneledUrl(url, method, body, token);
+    method = "GET";
+    body = undefined;
+  }
+
   let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
+    response = await fetch(url, {
       ...rest,
+      method,
+      body: body ?? undefined,
       credentials: "include",
       headers: {
         "Content-Type": "application/json",

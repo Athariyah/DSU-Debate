@@ -9,6 +9,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { AdminPage } from "./AdminPage";
 import { setAdminToken } from "../api/httpClient";
+import { wireRequest } from "../test-utils/httpTunnel";
 
 const DATE_TIME = new Date(2026, 8, 16, 17, 30).toISOString();
 
@@ -159,9 +160,9 @@ describe("флажок «Скрыть голоса»", () => {
     const bodies: string[] = [];
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-        const method = init?.method ?? "GET";
-        if (method === "PUT") bodies.push(String(init?.body));
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const { method, body } = wireRequest(input, init);
+        if (method === "PUT") bodies.push(body);
         return {
           ok: true,
           status: 200,
@@ -220,9 +221,9 @@ describe("флажок «Скрыть от публики»", () => {
     const bodies: string[] = [];
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-        const method = init?.method ?? "GET";
-        if (method === "PUT") bodies.push(String(init?.body));
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const { method, body } = wireRequest(input, init);
+        if (method === "PUT") bodies.push(body);
         return {
           ok: true,
           status: 200,
@@ -270,9 +271,8 @@ describe("удаление мероприятия", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-        const method = init?.method ?? "GET";
-        calls.push(`${method} ${url}`);
+        const { method, path } = wireRequest(input, init);
+        calls.push(`${method} ${path}`);
         return {
           ok: true,
           status: 200,

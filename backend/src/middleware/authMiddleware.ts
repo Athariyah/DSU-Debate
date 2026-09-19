@@ -13,16 +13,21 @@ function readCookie(header: string | undefined, name: string): string | null {
 }
 
 /**
- * Токен принимается тремя каналами: Authorization: Bearer, заголовок
- * X-Admin-Token и cookie. Запасной заголовок нужен потому, что некоторые
- * проксирующие слои (встроенные превью) могут вырезать Authorization и
- * Cookie из проходящих запросов — кастомный заголовок проходит свободно.
+ * Токен принимается четырьмя каналами: Authorization: Bearer, заголовок
+ * X-Admin-Token, cookie и query-параметр _token. Запасной заголовок нужен
+ * потому, что некоторые проксирующие слои (встроенные превью) могут вырезать
+ * Authorization и Cookie из проходящих запросов — кастомный заголовок
+ * проходит свободно. Параметр _token — дубль для CDN-тоннеля (см.
+ * middleware/methodTunnel.ts): обычно тоннель уже восстановил заголовки,
+ * но прямой GET с _token тоже должен авторизоваться.
  */
 export function getBearerOrCookieToken(req: Request): string | null {
   const header = req.headers.authorization;
   if (header?.startsWith("Bearer ")) return header.slice("Bearer ".length).trim();
   const custom = req.headers["x-admin-token"];
   if (typeof custom === "string" && custom.trim()) return custom.trim();
+  const tunnelled = (req.query as Record<string, unknown> | undefined)?._token;
+  if (typeof tunnelled === "string" && tunnelled.trim()) return tunnelled.trim();
   return readCookie(req.headers.cookie, "dsu_admin_token");
 }
 

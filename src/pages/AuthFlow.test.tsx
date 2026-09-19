@@ -12,6 +12,7 @@ import { AdminPage } from "./AdminPage";
 import { CreateDebatePage } from "./CreateDebatePage";
 import { ProtectedRoute } from "../components/auth/ProtectedRoute";
 import { resetAuthStoreForTests } from "../api/authStore";
+import { wireRequest } from "../test-utils/httpTunnel";
 
 vi.stubGlobal(
   "fetch",
@@ -19,7 +20,7 @@ vi.stubGlobal(
     const url = String(input);
     const auth = (init?.headers as Record<string, string> | undefined)?.Authorization ?? "";
 
-    if (url.includes("/admin/auth/login") && init?.method === "POST") {
+    if (url.includes("/admin/auth/login") && wireRequest(input, init).method === "POST") {
       return {
         ok: true,
         status: 200,
@@ -153,7 +154,7 @@ describe("гонка: запоздалый 401 со старым токеном 
       vi.fn(async (input: unknown, init?: { headers?: Record<string, string>; method?: string }) => {
         const url = String(input);
         const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-        if (url.includes("/admin/auth/login") && init?.method === "POST") {
+        if (url.includes("/admin/auth/login") && wireRequest(input, init).method === "POST") {
           return {
             ok: true,
             status: 200,

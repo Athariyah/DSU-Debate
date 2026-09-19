@@ -27,7 +27,7 @@
 - Realtime: `leaderboard:update`, `standings:update`, `podium:update`, `match:update` в комнате `event:{id}` + существующие `vote:update`/`status:update`. Клиент переподписывается websocket-only (см. ниже).
 
 **Производительность**
-- Сервер: `compression` (level 6, 512 B), `helmet`, агрегатный кэш `SimpleCache(eventResults, leaderboard)` TTL 3 s + инвалидация на `vote`/`match`, `Socket.io` только `websocket` (polling выключен, fallback REST каждые 5 с на трансляции), уменьшено число запросов (`computeEventResults` один `LEFT JOIN` + индексы).
+- Сервер: `compression` (level 6, 512 B), `helmet`, агрегатный кэш `SimpleCache(eventResults, leaderboard)` TTL 3 s + инвалидация на `vote`/`match`, `Socket.io` только `websocket` (за Yandex Cloud CDN глушится — в `useDebateSocket` polling-fallback REST каждые 1.5 с, на трансляции дополнительно опрос раз в 5 с), уменьшено число запросов (`computeEventResults` один `LEFT JOIN` + индексы).
 - Клиент: `React.lazy` + `Suspense` для 5 тяжёлых страниц (`DebateDetail`, `Create`, `Profile`, `Admin`, `Broadcast`) и вкладок (`Leaderboard/Standings/Podium`), `React.memo` для `ParticipantResult`, `useMemo` для списков, `manualChunks` (`vendor`/`ui`/`realtime`), `sourcemap:false`, условный `viteSingleFile` только для Live Server, PWA `service-worker` кеширует `dist` (см. `public/sw.js`).
 - Метрики (build): `dist` ≤ 600 kB gzip суммарно (vendor 18 kB, realtime 13 kB, ui 50 kB, index 106 kB, ленивые чанки 1–6 kB), TTFB `/api/health/ready` ~5 ms (SQLite файл vs 30–80 ms на Postgres локально), RAM backend ~60–90 MB (без процесса Postgres ~150 MB).
 
@@ -154,7 +154,7 @@ Socket.io (room `event:{id}`): `vote:update`, `status:update`, `leaderboard:upda
 ├── tools/migrate-pg-to-sqlite.mjs  # pg_dump/COPY → SQLite + прямая копия
 ├── public/              # PWA
 ├── deploy/              # VPS (Caddyfile, systemd) — теперь без postgres
-├── docs/                # LOCAL_HOSTING, VPS_DEPLOY, MIGRATION_SQLITE, API_SPEC, PRIVACY
+├── docs/                # LOCAL_HOSTING, VPS_DEPLOY, MIGRATION_SQLITE, API_SPEC, PRIVACY, CDN_COMPATIBILITY
 └── .vscode/
 ```
 
@@ -173,6 +173,7 @@ SQLITE_PATH=:memory: npm --prefix backend run test
 - [docs/VPS_DEPLOY.md](docs/VPS_DEPLOY.md) — публикация на VPS (SQLite)
 - [docs/MIGRATION_SQLITE.md](docs/MIGRATION_SQLITE.md) — миграция PG→SQLite, типы, примеры
 - [docs/API_SPEC.md](docs/API_SPEC.md) — REST и Socket.io контракт
+- [docs/CDN_COMPATIBILITY.md](docs/CDN_COMPATIBILITY.md) — работа через Yandex Cloud CDN (тоннелирование мутаций через GET, polling вместо WebSocket)
 - [docs/PRIVACY.md](docs/PRIVACY.md) — данные голосующих
 - [CHANGELOG.md](CHANGELOG.md) — сводка refactor
 - [backend/README.md](backend/README.md) — backend и БД
