@@ -238,8 +238,10 @@ export async function updateDebate(
     customTypeLabel?: string | null;
   }
 ): Promise<AdminEventSummary> {
-  const response = await apiFetch<{ event: AdminEventSummary }>(`/admin/events/${eventId}`, {
-    method: "PUT",
+  // Обновление/удаление шлём POST-алиасами (.../update, .../delete): часть
+  // прокси и CDN блокирует PUT/DELETE с 405. Сервер принимает оба варианта.
+  const response = await apiFetch<{ event: AdminEventSummary }>(`/admin/events/${eventId}/update`, {
+    method: "POST",
     auth: true,
     body: JSON.stringify(patch),
   });
@@ -247,7 +249,7 @@ export async function updateDebate(
 }
 
 export async function deleteDebate(eventId: number): Promise<void> {
-  await apiFetch<void>(`/admin/events/${eventId}`, { method: "DELETE", auth: true });
+  await apiFetch<void>(`/admin/events/${eventId}/delete`, { method: "POST", auth: true });
 }
 
 export interface AdminParticipant {

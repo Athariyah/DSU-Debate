@@ -71,6 +71,31 @@ log "apt update + базовые пакеты"
 apt-get update -qq
 apt-get install -y -qq ca-certificates curl gnupg sudo ufw openssl git >/dev/null
 
+# ------------------------------------------------- 2b. swap (защита от OOM)
+# На маленьких VPS (1 ГБ RAM и меньше) без подкачки сборка фронтенда и пики
+# нагрузки могут привести к OOM-Killer: он убьёт Node-процесс или PostgreSQL.
+# Если swap выключен — создаём файл подкачки (размер настраивается SWAP_SIZE_MB).
+SWAP_SIZE_MB="${SWAP_SIZE_MB:-1024}"
+if swapon --noheadings 2>/dev/null | grep -q .; then
+  log "swap уже включён — пропускаю"
+else
+  log "swap отсутствует — создаю /swapfile (${SWAP_SIZE_MB} МБ)"
+  if ! fallocate -l "${SWAP_SIZE_MB}M" /swapfile 2>/dev/null; then
+    dd if=/dev/zero of=/swapfile bs=1M count="${SWAP_SIZE_MB}" status=none
+  fi
+  chmod 600 /swapfile
+  mkswap /swapfile >/dev/null
+  # Часть VPS (OpenVZ/LXC без разрешённого swap) отклоняет swapon — это не
+  # повод валить всю настройку: предупреждаем и продолжаем без подкачки.
+  if swapon /swapfile 2>/dev/null; then
+    grep -qE '^/swapfile\s' /etc/fstab || printf '/swapfile none swap sw 0 0\n' >> /etc/fstab
+    log "swap включён и прописан в /etc/fstab (переживёт перезагрузку)"
+  else
+    warn "не удалось включить swap (виртуализация OpenVZ/LXC?) — продолжаю без него"
+    rm -f /swapfile
+  fi
+fi
+
 # --------------------------------------------------------------- 3. Node.js
 NEED_NODE=1
 if command -v node >/dev/null 2>&1; then

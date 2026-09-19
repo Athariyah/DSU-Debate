@@ -161,7 +161,7 @@ describe("флажок «Скрыть голоса»", () => {
       "fetch",
       vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
         const method = init?.method ?? "GET";
-        if (method === "PUT") bodies.push(String(init?.body));
+        if (method === "POST") bodies.push(String(init?.body));
         return {
           ok: true,
           status: 200,
@@ -222,7 +222,7 @@ describe("флажок «Скрыть от публики»", () => {
       "fetch",
       vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
         const method = init?.method ?? "GET";
-        if (method === "PUT") bodies.push(String(init?.body));
+        if (method === "POST") bodies.push(String(init?.body));
         return {
           ok: true,
           status: 200,
@@ -306,9 +306,10 @@ describe("удаление мероприятия", () => {
     // Отмена закрывает окно без запроса.
     fireEvent.click(screen.getByRole("button", { name: "Отмена" }));
     await waitFor(() => expect(screen.queryByText("Удалить мероприятие?")).toBeNull());
-    expect(calls.filter((call) => call.startsWith("DELETE"))).toHaveLength(0);
+    expect(calls.filter((call) => call.includes("/delete"))).toHaveLength(0);
 
-    // Подтверждение шлёт DELETE и убирает карточку.
+    // Подтверждение шлёт POST-алиас .../delete (не DELETE, который режут
+    // некоторые шлюзы) и убирает карточку.
     fireEvent.click(screen.getByRole("button", { name: "Удалить" }));
     const confirmButtons = await waitFor(() => {
       const buttons = screen.getAllByRole("button", { name: "Удалить" });
@@ -316,7 +317,7 @@ describe("удаление мероприятия", () => {
       return buttons;
     });
     fireEvent.click(confirmButtons[1]);
-    await waitFor(() => expect(calls.some((call) => call.startsWith("DELETE /api/admin/events/3"))).toBe(true));
+    await waitFor(() => expect(calls.some((call) => call.startsWith("POST /api/admin/events/3/delete"))).toBe(true));
     await waitFor(() => expect(screen.queryByText("Тестовый дебат")).toBeNull());
 
     confirmSpy.mockRestore();

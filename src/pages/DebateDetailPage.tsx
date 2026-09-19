@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, lazy, Suspense, useMemo, memo } from "react";
+import { useCallback, useEffect, useRef, useState, lazy, Suspense, useMemo, memo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   CalendarClock,
@@ -38,6 +38,9 @@ const ParticipantResultMemo = memo(ParticipantResult);
 
 const EMPTY_PARTICIPANTS: Participant[] = [];
 
+/** Как часто перечитывать результаты по REST, если realtime-канал не жив. */
+const FALLBACK_POLL_MS = 5000;
+
 export function DebateDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -50,6 +53,8 @@ export function DebateDetailPage() {
   /** Дебат скрыли от публики, пока страница была открыта (event:public_visibility). */
   const [hiddenFromPublic, setHiddenFromPublic] = useState(false);
   const votedRecord = event ? getVotedParticipant(event.id) : null;
+  /** Есть ли на экране загруженное мероприятие (защита фоновой перечитки). */
+  const hasEventRef = useRef(false);
   const [justVotedFor, setJustVotedFor] = useState<number | null>(votedRecord?.participantId ?? null);
   const [activeTab, setActiveTab] = useState<string>("vote");
   const isAdmin = isAdminAuthenticated();
@@ -67,18 +72,29 @@ export function DebateDetailPage() {
     }
   }, [event?.showLeaderboard, event?.showStandings, event?.showPodium, activeTab, event]);
 
-  const loadEvent = useCallback(() => {
+  /** silent = true: фоновая перечитка без скелетона, чтобы страница не мигала. */
+  const loadEvent = useCallback((silent = false) => {
     if (!id) return;
-    setLoading(true);
-    setError(null);
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     fetchDebateById(id)
       .then((data) => {
+        // Фоновая перечитка не затирает уже показанное мероприятие: разовый
+        // сбой сети или 404 не должен «гасить» открытую страницу.
+        if (!data && silent && hasEventRef.current) return;
         if (!data) setError("Мероприятие не найдено");
+        hasEventRef.current = Boolean(data);
         setEvent(data);
         setJustVotedFor(getVotedParticipant(id)?.participantId ?? null);
       })
-      .catch(() => setError("Не удалось загрузить мероприятие"))
-      .finally(() => setLoading(false));
+      .catch(() => {
+        if (!silent) setError("Не удалось загрузить мероприятие");
+      })
+      .finally(() => {
+        if (!silent) setLoading(false);
+      });
   }, [id]);
 
   useEffect(() => {
@@ -88,6 +104,7 @@ export function DebateDetailPage() {
       return;
     }
     // При смене дебата сбрасываем признак «скрыт от публики» предыдущего.
+    hasEventRef.current = false;
     setHiddenFromPublic(false);
     loadEvent();
   }, [id, loadEvent]);
@@ -110,6 +127,15 @@ export function DebateDetailPage() {
       }
     },
   });
+
+  // Подстраховка страницы зрителя: если realtime-канал не жив (WebSocket
+  // зарезан прокси/DPI, мобильная сеть нестабильна), регулярно перечитываем
+  // REST, чтобы цифры не «замерзали» до перезагрузки страницы.
+  useEffect(() => {
+    if (status === "live") return;
+    const timer = window.setInterval(() => loadEvent(true), FALLBACK_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [status, loadEvent]);
 
   // Таймер голосования: тикаем раз в секунду, пока дебат активен и есть
   // дедлайн. Когда интервал истекает — кнопка блокируется (бэкенд в этот же
@@ -274,7 +300,7 @@ export function DebateDetailPage() {
               : status === "connecting"
                 ? "Подключение…"
                 : status === "offline"
-                  ? "Нет realtime-соединения"
+                  ? `Обновление каждые ${FALLBACK_POLL_MS / 1000} с`
                   : "Демо-режим"}
           </span>
         </div>

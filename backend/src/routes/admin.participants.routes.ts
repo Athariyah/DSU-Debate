@@ -17,5 +17,9 @@ router.get("/", listParticipants);
 router.get("/:id", getParticipantById);
 router.put("/:id", updateParticipant);
 router.delete("/:id", deleteParticipant);
+// POST-алиасы (см. комментарий в admin.events.routes.ts): на случай шлюзов,
+// блокирующих PUT/DELETE.
+router.post("/:id/update", updateParticipant);
+router.post("/:id/delete", deleteParticipant);
 
 export default router;
