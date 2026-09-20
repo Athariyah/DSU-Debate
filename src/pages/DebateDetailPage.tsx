@@ -140,7 +140,7 @@ export function DebateDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex h-full flex-col">
+      <div className="flex h-full flex-col lg:pl-64">
         <TopBar showBack rightSlot="menu" />
         <div className="flex-1 px-5"><div className="h-40 animate-pulse rounded-3xl bg-white/5" /></div>
       </div>
@@ -149,7 +149,7 @@ export function DebateDetailPage() {
 
   if (!event) {
     return (
-      <div className="flex h-full flex-col">
+      <div className="flex h-full flex-col lg:pl-64">
         <TopBar showBack />
         <div className="flex flex-1 items-center justify-center px-5 text-center text-sm text-rose-300">
           {error ?? "Мероприятие не найдено"}
@@ -162,7 +162,7 @@ export function DebateDetailPage() {
   // публичные данные больше недоступны, показываем заглушку.
   if (hiddenFromPublic) {
     return (
-      <div className="flex h-full flex-col">
+      <div className="flex h-full flex-col lg:pl-64">
         <TopBar showBack />
         <div className="flex flex-1 items-center justify-center px-5 text-center">
           <div className="space-y-3">
@@ -200,7 +200,7 @@ export function DebateDetailPage() {
   const canVote = eventStatus === "active" && !timerExpired;
 
   return (
-    <div className="relative flex h-full flex-col">
+    <div className="relative flex h-full flex-col lg:pl-64">
       <TopBar showBack rightSlot="menu" onMenuClick={() => setMenuOpen((open) => !open)} />
 
       {menuOpen && (

@@ -262,7 +262,7 @@ export function AdminPage() {
   const navigate = useNavigate();
 
   return (
-    <div className="relative flex h-full flex-col">
+    <div className="relative flex h-full flex-col lg:pl-64">
       <TopBar title="Администрирование" showBack onBack={() => navigate("/debates")} rightSlot="profile" />
       <div className="styled-scrollbar mx-auto flex-1 w-full max-w-3xl overflow-y-auto overflow-x-hidden px-5 pb-10 pt-2 lg:px-8 lg:pb-12 lg:pt-6">
         <div className="mb-5 flex items-center justify-between">
@@ -687,7 +687,7 @@ export function AdminPage() {
       {/* App-style modals for adding participant / voting */}
       {addingParticipantFor !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="frosted-panel w-full max-w-md rounded-3xl border border-white/15 p-6">
+          <div className="frosted-panel w-full max-w-md max-h-[85vh] overflow-y-auto styled-scrollbar rounded-3xl border border-white/15 p-6">
             <h3 className="text-base font-bold text-white">Новый участник</h3>
             <p className="mt-1 text-xs text-white/40">Добавляется к мероприятию #{addingParticipantFor}</p>
             <div className="mt-4 space-y-3">
@@ -709,7 +709,7 @@ export function AdminPage() {
       )}
       {addingVotingFor !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="frosted-panel w-full max-w-md rounded-3xl border border-white/15 p-6">
+          <div className="frosted-panel w-full max-w-md max-h-[85vh] overflow-y-auto styled-scrollbar rounded-3xl border border-white/15 p-6">
             <h3 className="text-base font-bold text-white">Новое голосование</h3>
             <p className="mt-1 text-xs text-white/40">Будет создано в мероприятии #{addingVotingFor} с двумя участниками по умолчанию</p>
             <div className="mt-4">
