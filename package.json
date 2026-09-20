@@ -13,6 +13,7 @@
     "db": "npm --prefix backend run db:local",
     "db:stop": "npm --prefix backend run db:local:stop",
     "typecheck": "tsc --noEmit",
+    "generate:icons": "node tools/generate-icons.mjs",
     "test": "vitest run"
   },
   "dependencies": {
