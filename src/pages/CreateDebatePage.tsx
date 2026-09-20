@@ -181,7 +181,7 @@ export function CreateDebatePage() {
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col lg:pl-64">
       <TopBar showBack onBack={() => navigate("/admin")} title="Создать мероприятие" rightSlot="menu" />
 
       <div className="styled-scrollbar mx-auto flex-1 w-full max-w-3xl overflow-y-auto overflow-x-hidden px-5 pb-8 pt-2 lg:px-8 lg:pt-6">

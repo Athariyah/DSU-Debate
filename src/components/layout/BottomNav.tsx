@@ -71,7 +71,7 @@ export function BottomNav() {
 
       {/* Компьютер: левая боковая панель на всю высоту */}
       <div className="absolute inset-y-0 left-0 z-30 hidden w-64 lg:block">
-        <div className="flex h-full flex-col border-r border-white/10 bg-black/25 px-4 py-6 backdrop-blur-2xl">
+        <div className="flex h-full flex-col overflow-y-auto no-scrollbar border-r border-white/10 bg-black/25 px-4 py-6 backdrop-blur-2xl">
           <div className="mb-6 flex items-center gap-3 px-2">
             {/* Актуальный знак бренда — тот же, что в иконке приложения. */}
             <span className="h-10 w-10 shrink-0 overflow-hidden rounded-xl shadow-[0_6px_18px_-6px_rgba(99,102,241,0.7)] ring-1 ring-white/15">

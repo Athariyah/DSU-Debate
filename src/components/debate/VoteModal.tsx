@@ -94,7 +94,7 @@ export function VoteModal({ event, open, onClose, onVoted, preselectedParticipan
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 28, stiffness: 260 }}
-            className="glass-panel w-full rounded-t-[2rem] border border-white/10 p-6 pb-[calc(env(safe-area-inset-bottom,0px)+1.5rem)]"
+            className="glass-panel w-full max-h-[88vh] overflow-y-auto styled-scrollbar rounded-t-[2rem] border border-white/10 p-6 pb-[calc(env(safe-area-inset-bottom,0px)+1.5rem)]"
           >
             <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/20" />
 

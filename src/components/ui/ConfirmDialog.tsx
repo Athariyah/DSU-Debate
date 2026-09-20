@@ -68,7 +68,7 @@ export function ConfirmDialog({
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.95, opacity: 0, y: 8 }}
             transition={{ type: "spring", stiffness: 420, damping: 30 }}
-            className="frosted-panel relative w-full max-w-sm rounded-3xl border border-white/15 p-6"
+            className="frosted-panel relative w-full max-w-sm max-h-[85vh] overflow-y-auto styled-scrollbar rounded-3xl border border-white/15 p-6"
           >
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-rose-400/30 bg-gradient-to-br from-rose-500/25 to-red-600/20 shadow-[0_10px_30px_-10px_rgba(244,63,94,0.7)]">
               <Trash2 size={22} className="text-rose-300" />

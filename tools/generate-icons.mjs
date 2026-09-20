@@ -1,6 +1,6 @@
-/* Генератор логотипа DSU Debate: public/logo.svg + иконки PWA.
+/* Генератор логотипа DSU Event: public/logo.svg + иконки PWA.
  *
- * Надпись «DSU Debate» превращается в векторный путь шрифта Manrope
+ * Надпись «DSU Event» превращается в векторный путь шрифта Manrope
  * ExtraBold (opentype.js), поэтому ни SVG, ни растр не зависят от
  * наличия шрифта в системе/браузере. Плитка логотипа — полноразмерный
  * квадрат без прозрачных и белых углов: на домашних экранах iOS/Android
@@ -20,9 +20,9 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const FONT = path.join(root, "node_modules/@fontsource/manrope/files/manrope-latin-800-normal.woff");
 
 const SIZE = 512;
-const WORDMARK = "DSU Debate";
+const WORDMARK = "DSU Event";
 const WORDMARK_SIZE = 48;
-const WORDMARK_BASELINE = 414;
+const WORDMARK_BASELINE = 420;
 
 const font = opentype.parse(readFileSync(FONT).buffer);
 const markWidth = font.getAdvanceWidth(WORDMARK, WORDMARK_SIZE, { kerning: true });
@@ -35,22 +35,20 @@ const markPath = font.getPath(
 );
 const wordmarkD = markPath.toPathData(2);
 
-/* Плитка 512×512: фон-градиент приложения, «стеклянный» диалог с живыми
-   столбиками голосования и словесный знак внизу. Контур орбиты и точки —
-   «голоса» вокруг дискуссии. */
+/* Плитка 512×512: фон-градиент приложения, эмблема DSU Event (трофей с золотой звездой
+   и орбита событий) и словесный знак DSU Event внизу. */
 const logoSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${SIZE} ${SIZE}" width="${SIZE}" height="${SIZE}">
   <defs>
-    <linearGradient id="bubble" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#6366f1"/>
-      <stop offset="0.55" stop-color="#8b5cf6"/>
-      <stop offset="1" stop-color="#38bdf8"/>
+    <linearGradient id="trophyGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#e0e7ff"/>
     </linearGradient>
     <linearGradient id="word" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0" stop-color="#ffffff"/>
       <stop offset="1" stop-color="#c7d2fe"/>
     </linearGradient>
     <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0.10"/>
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.12"/>
       <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
     </linearGradient>
     <radialGradient id="glowIndigo" cx="0.18" cy="0.04" r="0.85">
@@ -65,6 +63,10 @@ const logoSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${SIZE} ${
       <stop offset="0" stop-color="#38bdf8" stop-opacity="0.38"/>
       <stop offset="1" stop-color="#38bdf8" stop-opacity="0"/>
     </radialGradient>
+    <radialGradient id="trophyGlow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#6366f1" stop-opacity="0.6"/>
+      <stop offset="1" stop-color="#8b5cf6" stop-opacity="0"/>
+    </radialGradient>
   </defs>
 
   <!-- Фон: полноразмерная плитка, без белых и прозрачных углов -->
@@ -74,27 +76,38 @@ const logoSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${SIZE} ${
   <rect width="${SIZE}" height="${SIZE}" fill="url(#glowSky)"/>
   <rect width="${SIZE}" height="${SIZE}" fill="url(#gloss)"/>
 
-  <!-- Орбита «голосов» вокруг дискуссии -->
-  <circle cx="256" cy="228" r="176" fill="none" stroke="#ffffff" stroke-opacity="0.10" stroke-width="1.5" stroke-dasharray="2 10" stroke-linecap="round"/>
-  <circle cx="418" cy="106" r="9" fill="#7dd3fc"/>
-  <circle cx="102" cy="118" r="6" fill="#a78bfa" fill-opacity="0.9"/>
-  <circle cx="436" cy="318" r="5" fill="#818cf8" fill-opacity="0.75"/>
+  <!-- Орбита «событий» вокруг трофея -->
+  <circle cx="256" cy="205" r="160" fill="none" stroke="#ffffff" stroke-opacity="0.12" stroke-width="2" stroke-dasharray="3 12" stroke-linecap="round"/>
+  <circle cx="400" cy="95" r="10" fill="#7dd3fc"/>
+  <circle cx="112" cy="105" r="7" fill="#a78bfa" fill-opacity="0.9"/>
+  <circle cx="410" cy="290" r="6" fill="#818cf8" fill-opacity="0.75"/>
 
-  <!-- Задний пузырь: стекло собеседника -->
-  <rect x="246" y="90" width="172" height="136" rx="40" fill="#ffffff" fill-opacity="0.07" stroke="#ffffff" stroke-opacity="0.38" stroke-width="8"/>
-  <circle cx="300" cy="158" r="9" fill="#ffffff" fill-opacity="0.45"/>
-  <circle cx="332" cy="158" r="9" fill="#ffffff" fill-opacity="0.32"/>
-  <circle cx="364" cy="158" r="9" fill="#ffffff" fill-opacity="0.2"/>
+  <!-- Свечение за трофеем -->
+  <circle cx="256" cy="205" r="110" fill="url(#trophyGlow)"/>
 
-  <!-- Передний пузырь: живое голосование -->
-  <path d="M 168 296 L 146 362 L 236 308 Z" fill="url(#bubble)"/>
-  <rect x="110" y="146" width="218" height="166" rx="48" fill="url(#bubble)"/>
-  <rect x="128" y="160" width="182" height="42" rx="21" fill="#ffffff" fill-opacity="0.16"/>
-  <rect x="164" y="208" width="26" height="58" rx="13" fill="#ffffff" fill-opacity="0.95"/>
-  <rect x="206" y="172" width="26" height="94" rx="13" fill="#ffffff" fill-opacity="0.95"/>
-  <rect x="248" y="192" width="26" height="74" rx="13" fill="#ffffff" fill-opacity="0.95"/>
+  <!-- Центр — Трофей DSU Event -->
+  <g transform="translate(256, 205)">
+    <!-- Стеклянная подложка -->
+    <rect x="-90" y="-95" width="180" height="190" rx="48" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.25" stroke-width="3"/>
+    
+    <!-- Чаша трофея -->
+    <path d="M -36 -50 L -36 8 C -36 28  -18 42 0 42 C 18 42 36 28 36 8 L 36 -50 Z" fill="url(#trophyGrad)"/>
+    
+    <!-- Ручки трофея -->
+    <path d="M -36 -32 C -58 -32 -64 -10 -45 10" fill="none" stroke="#ffffff" stroke-opacity="0.95" stroke-width="8" stroke-linecap="round"/>
+    <path d="M 36 -32 C 58 -32 64 -10 45 10" fill="none" stroke="#ffffff" stroke-opacity="0.95" stroke-width="8" stroke-linecap="round"/>
+    
+    <!-- Ножка и база -->
+    <rect x="-10" y="42" width="20" height="24" rx="5" fill="#ffffff"/>
+    <rect x="-38" y="66" width="76" height="18" rx="7" fill="#ffffff"/>
+    
+    <!-- Звезда на чаше -->
+    <g transform="translate(0 -8) scale(2.2)">
+      <path d="M 0 -7 L 2.1 -2.2 L 7.3 -1.5 L 3.5 2.2 L 4.4 7.3 L 0 4.8 L -4.4 7.3 L -3.5 2.2 L -7.3 -1.5 L -2.1 -2.2 Z" fill="#6366f1"/>
+    </g>
+  </g>
 
-  <!-- Словесный знак (контуры шрифта, не текст) -->
+  <!-- Словесный знак DSU Event (контуры шрифта) -->
   <path d="${wordmarkD}" fill="url(#word)"/>
 </svg>
 `;
