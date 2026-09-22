@@ -86,6 +86,20 @@ describe("кнопка «Создать» в нижней панели", () => {
     expect(screen.queryByLabelText("Создать мероприятие")).toBeNull();
   });
 
+  test("десктопная кнопка центрирует подпись «+ Создать»", async () => {
+    mockMe("ok");
+    window.localStorage.setItem(TOKEN_KEY, "good-token");
+    resetAuthStoreForTests();
+    renderNav();
+    const links = await screen.findAllByLabelText("Создать мероприятие");
+    const desktop = links.find((item) => item.className.includes("desktop-create-btn"));
+    expect(desktop).toBeTruthy();
+    expect(desktop?.className).toContain("items-center");
+    expect(desktop?.className).toContain("justify-center");
+    expect(desktop?.className).toContain("rounded-full");
+    expect(desktop?.textContent?.replace(/\s+/g, " ").trim()).toBe("+ Создать");
+  });
+
   test("с живым токеном кнопка есть и ведёт на /admin", async () => {
     mockMe("ok");
     window.localStorage.setItem(TOKEN_KEY, "good-token");

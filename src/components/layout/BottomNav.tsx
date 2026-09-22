@@ -106,13 +106,16 @@ export function BottomNav() {
                     aria-label="Создать мероприятие"
                     className={({ isActive }) =>
                       cn(
-                        "mt-2 flex items-center justify-center gap-1.5 rounded-2xl border border-white/25 bg-gradient-to-r from-indigo-500 via-violet-500 to-indigo-500 px-4 py-3 text-sm font-bold leading-none text-white shadow-[0_10px_28px_-10px_rgba(99,102,241,0.9),inset_0_1px_0_rgba(255,255,255,0.3)] transition-all duration-200 hover:brightness-110 active:scale-[0.98]",
+                        "desktop-create-btn mt-2 flex h-12 w-full items-center justify-center rounded-full border border-white/25 bg-gradient-to-r from-indigo-400 via-violet-500 to-indigo-500 px-5 text-[15px] font-bold leading-none text-white shadow-[0_10px_28px_-10px_rgba(99,102,241,0.9),inset_0_1px_0_rgba(255,255,255,0.3)] transition-all duration-200 hover:brightness-110 active:scale-[0.98]",
                         isActive && "ring-2 ring-white/40"
                       )
                     }
                   >
-                    <Plus size={16} strokeWidth={2.75} className="shrink-0" />
-                    <span className="leading-none translate-y-[0.5px]">Создать</span>
+                    {/* Одна строка «+ Создать»: без отдельной SVG-иконки,
+                        иначе глиф плюса и текст расходятся по вертикали. */}
+                    <span className="flex h-full items-center justify-center leading-none">
+                      + Создать
+                    </span>
                   </NavLink>
                 </motion.div>
               )}
