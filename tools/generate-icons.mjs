@@ -283,8 +283,12 @@ ${trophyGroup(SIZE / 2, cyMain, S_MAIN, "")}
 
 /* ========================= 2. Адаптивная иконка =========================
  * Только эмблема, строго по центру плитки, целиком внутри зоны 80%.
- * Фон залит до краёв — маска Android/iOS режет градиент, без белых полей. */
-const S_MASK = 1.8;
+ * Фон залит до краёв — маска Android/iOS режет градиент, без белых полей.
+ * Масштаб 2.0 (а не 1.8): эмблема занимает ~88% безопасной зоны. Если
+ * система/лаунчер дополнительно ужимает картинку (например, кладёт её
+ * foreground-слоем на свою подложку), фигура остаётся крупной и «белая
+ * рамка» вокруг логотипа не читается. */
+const S_MASK = 2;
 const halfHMask = TROPHY_HALF_H * S_MASK;
 const ringMask = Math.round(TROPHY_CIRCUM_R * S_MASK + 28);
 const dotScale = S_MASK / S_MAIN;
@@ -305,6 +309,34 @@ ${background("M")}
 ${glow(SIZE / 2, SIZE / 2, halfHMask, "M")}
 
 ${trophyGroup(SIZE / 2, SIZE / 2, S_MASK, "M")}
+</svg>
+`;
+
+/* ======================= 3. Монокромная иконка =======================
+ * purpose: "monochrome" — это НЕ картинка, а трафарет: платформа рисует
+ * только альфу и сама подставляет цвет (Material You «темизированные
+ * иконки» на Android 13+, монохромные темы на ПК). Отсюда три правила:
+ *   1) фон полностью прозрачный — никакой плитки и градиентов;
+ *   2) фигура — сплошная заливка одним цветом;
+ *   3) звезда на чаше — ВЫРЕЗ (fill-rule evenodd), иначе при заливке
+ *      одним цветом она сливается с чашей и пропадает.
+ * Зачем это в проекте: без трафарета лаунчер, включивший темизацию,
+ * укладывает обычную иконку в свою светлую подложку — вокруг логотипа
+ * появляется широкая белая рамка. С трафаретом платформа рисует силуэт
+ * как ей надо и белой подложки не возникает. */
+function monochromeGlyph(cx, cy, scale) {
+  const bowlWithStarHole = `${BOWL_D} ${starPath(STAR.cx, STAR.cy, STAR.outer)}`;
+  return `  <g transform="translate(${r2(cx)} ${r2(cy)}) scale(${scale}) translate(0 ${r2(-TROPHY_MID_Y)})">
+    <path d="${bowlWithStarHole}" fill="#ffffff" fill-rule="evenodd"/>
+    <path d="${cubicD(HANDLE_R)}" fill="none" stroke="#ffffff" stroke-width="${HANDLE_STROKE}" stroke-linecap="round"/>
+    <path d="${cubicD(HANDLE_L)}" fill="none" stroke="#ffffff" stroke-width="${HANDLE_STROKE}" stroke-linecap="round"/>
+    <rect x="${STEM.x}" y="${STEM.y}" width="${STEM.w}" height="${STEM.h}" rx="${STEM.rx}" fill="#ffffff"/>
+    <rect x="${BASE.x}" y="${BASE.y}" width="${BASE.w}" height="${BASE.h}" rx="${BASE.rx}" fill="#ffffff"/>
+  </g>`;
+}
+
+const monochromeSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${SIZE} ${SIZE}" width="${SIZE}" height="${SIZE}">
+${monochromeGlyph(SIZE / 2, SIZE / 2, S_MASK)}
 </svg>
 `;
 
@@ -330,6 +362,15 @@ for (const [file, px] of [
   console.log("✓", file, px + "px (maskable)");
 }
 
+for (const [file, px] of [
+  ["public/icon-monochrome-512.png", 512],
+  ["public/icon-monochrome-192.png", 192],
+]) {
+  const resvg = new Resvg(monochromeSvg, { fitTo: { mode: "width", value: px } });
+  writeFileSync(path.join(root, file), resvg.render().asPng());
+  console.log("✓", file, px + "px (monochrome, прозрачный фон)");
+}
+
 /* ─────────────────────────── самопроверка ─────────────────────────── */
 const contentTop = cyMain - halfHMain;
 const contentBottom = textTop + wm.height;
@@ -345,4 +386,7 @@ console.log(`  зазор орбита→надпись: ${(textTop - (cyMain + 
 console.log("\nАдаптивная иконка (512×512):");
 console.log(`  трофей: центр (256, 256), высота ${(halfHMask * 2).toFixed(1)}, ширина ${(TROPHY_HALF_W * 2 * S_MASK).toFixed(1)}`);
 console.log(`  крайняя точка ${maxExtent.toFixed(1)} из безопасной зоны ${SAFE_ZONE_R} (запас ${(SAFE_ZONE_R - maxExtent).toFixed(1)})`);
+console.log("\nМонокромная иконка (трафарет для темизированных лаунчеров):");
+console.log(`  фон прозрачный, силуэт = трофей со звездой-вырезом, масштаб ${S_MASK}`);
+console.log(`  габарит фигуры: ширина ${(TROPHY_HALF_W * 2 * S_MASK).toFixed(1)}, высота ${(halfHMask * 2).toFixed(1)} — внутри safe zone`);
 console.log("\n✓ public/logo.svg — предметы выровнены по осям и по орбите");

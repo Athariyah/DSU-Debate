@@ -97,8 +97,13 @@ export function HomePage() {
 
         <div className="mt-3 space-y-3 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0">
           {upcoming.map((event, index) => <UpcomingDebateItem key={event.id} event={event} index={index} />)}
+          {/* Пустое состояние — такая же карточка, как у мероприятий, а не
+              строка без рамки: раньше текст висел в пустоте и «съезжал»
+              влево-вниз относительно заголовка раздела. */}
           {!loading && !error && upcoming.length === 0 && (
-            <p className="py-6 text-center text-sm text-white/40">Пока нет запланированных мероприятий</p>
+            <div className="glass-panel col-span-full rounded-3xl border border-white/10 px-5 py-7 text-center text-sm text-white/45">
+              Пока нет запланированных мероприятий
+            </div>
           )}
         </div>
 
@@ -107,6 +112,19 @@ export function HomePage() {
             <h3 className="mt-8 text-[15px] font-semibold text-white">Последние завершённые</h3>
             <div className="mt-3 space-y-3 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0">
               {completed.slice(0, 3).map((event, index) => <UpcomingDebateItem key={event.id} event={event} index={index} />)}
+            </div>
+          </>
+        )}
+
+        {/* История есть, но всё скрыто администратором: без этой карточки
+            страница молча обрывалась после «Ближайших». */}
+        {!loading && !error && completed.length === 0 && (
+          <>
+            <h3 className="mt-8 text-[15px] font-semibold text-white">Последние завершённые</h3>
+            <div className="mt-3">
+              <div className="glass-panel rounded-3xl border border-white/10 px-5 py-7 text-center text-sm text-white/45">
+                Завершённых мероприятий пока нет
+              </div>
             </div>
           </>
         )}

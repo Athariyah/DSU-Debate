@@ -265,27 +265,38 @@ export function AdminPage() {
     <div className="relative flex h-full flex-col lg:pl-64">
       <TopBar title="Администрирование" showBack onBack={() => navigate("/debates")} rightSlot="profile" />
       <div className="styled-scrollbar mx-auto flex-1 w-full max-w-3xl overflow-y-auto overflow-x-hidden px-5 pb-10 pt-2 lg:px-8 lg:pb-12 lg:pt-6">
-        <div className="mb-5 flex items-center justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-white/40">Protected admin area</p>
-            <h1 className="mt-1 text-xl font-bold text-white">Мероприятия</h1>
+        {/* Заголовок и кнопка «Создать» выровнены по НИЖНЕЙ линии (items-end),
+            а не по центру блока: при центрировании кнопка вставала на уровень
+            подзаголовка и «висела» выше заголовка «Мероприятия». Подзаголовок
+            дополнительно сжимается (min-w-0 + truncate) и не выдавливает
+            кнопку с её строки на узких экранах. */}
+        <div className="mb-5 flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            <p className="truncate text-xs uppercase tracking-wide text-white/40">Protected admin area</p>
+            <h1 className="mt-1 truncate text-xl font-bold text-white">Мероприятия</h1>
           </div>
-          <Link to="/create"><Button className="inline-flex items-center justify-center gap-1.5 leading-none"><Plus size={16} strokeWidth={2.7} className="shrink-0" /><span className="leading-none translate-y-[0.5px]">Создать</span></Button></Link>
+          <Link to="/create" className="shrink-0"><Button className="inline-flex items-center justify-center gap-1.5 leading-none"><Plus size={16} strokeWidth={2.7} className="shrink-0" /><span className="leading-none translate-y-[0.5px]">Создать</span></Button></Link>
         </div>
 
-        {/* Фильтр по типу мероприятия */}
-        <div className="mb-4 flex flex-wrap items-center gap-1.5 rounded-2xl border border-white/10 bg-black/20 p-1.5">
-          <span className="ml-2 mr-1 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest text-white/40"><Filter size={12} /> Тип</span>
-          {(["all", ...EVENT_TYPE_OPTIONS] as const).map((opt) => {
-            const meta = opt === "all" ? null : EVENT_TYPE_META[opt as EventType];
-            const Icon = meta?.Icon;
-            return (
-            <button key={opt} onClick={() => setTypeFilter(opt as any)} className={cn("inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition", typeFilter === opt ? "bg-white text-black shadow" : "text-white/60 hover:text-white hover:bg-white/10")}>
-              {Icon && <Icon size={12} />}{opt === "all" ? "Все" : meta?.label}
-            </button>
-          )})}
-
-          <span className="ml-auto mr-2 text-xs text-white/30">{filteredEvents.length}/{events.length}</span>
+        {/* Фильтр по типу мероприятия. Подпись «Тип» и счётчик «N/M» вынесены
+            в отдельную строку над чипами: при переносе чипов (узкий экран,
+            150% зум на ПК) счётчик с ml-auto уезжал в самый низ блока и
+            отрывался от подписи — выглядело как элемент, потерявший место. */}
+        <div className="mb-4 rounded-2xl border border-white/10 bg-black/20 p-1.5">
+          <div className="flex items-center justify-between gap-3 pb-1.5">
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest text-white/40"><Filter size={12} /> Тип</span>
+            <span className="text-xs tabular-nums text-white/30">{filteredEvents.length}/{events.length}</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {(["all", ...EVENT_TYPE_OPTIONS] as const).map((opt) => {
+              const meta = opt === "all" ? null : EVENT_TYPE_META[opt as EventType];
+              const Icon = meta?.Icon;
+              return (
+              <button key={opt} onClick={() => setTypeFilter(opt as any)} className={cn("inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition", typeFilter === opt ? "bg-white text-black shadow" : "text-white/60 hover:text-white hover:bg-white/10")}>
+                {Icon && <Icon size={12} />}{opt === "all" ? "Все" : meta?.label}
+              </button>
+            )})}
+          </div>
         </div>
 
         {error && <p className="mb-4 rounded-2xl border border-rose-400/20 bg-rose-400/10 p-4 text-sm text-rose-300">{error}</p>}
