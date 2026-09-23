@@ -77,13 +77,23 @@ export function DebatesPage() {
             <h3 className="mb-3 mt-6 text-[15px] font-semibold text-white">Ближайшие</h3>
             <div className="space-y-3 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0">
               {upcoming.map((event) => <UpcomingDebateItem key={event.id} event={event} />)}
-              {upcoming.length === 0 && <p className="py-6 text-center text-sm text-white/40">Пока нет запланированных мероприятий</p>}
+              {/* Пустое состояние — карточка в тех же отступах, что и список:
+                  строка текста без рамки «уезжала» влево от заголовка. */}
+              {upcoming.length === 0 && (
+                <div className="glass-panel col-span-full rounded-3xl border border-white/10 px-5 py-7 text-center text-sm text-white/45">
+                  Пока нет запланированных мероприятий
+                </div>
+              )}
             </div>
 
             <h3 className="mb-3 mt-8 text-[15px] font-semibold text-white">Завершённые</h3>
             <div className="space-y-3 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0">
               {completed.map((event) => <UpcomingDebateItem key={event.id} event={event} />)}
-              {completed.length === 0 && <p className="py-6 text-center text-sm text-white/40">История пока пуста</p>}
+              {completed.length === 0 && (
+                <div className="glass-panel col-span-full rounded-3xl border border-white/10 px-5 py-7 text-center text-sm text-white/45">
+                  История пока пуста
+                </div>
+              )}
               {completed.length < completedTotal && (
                 <button onClick={() => void loadMoreCompleted()} disabled={loadingMore} className="w-full rounded-2xl border border-white/10 px-4 py-3 text-sm text-white/60 hover:bg-white/5 disabled:opacity-50">
                   {loadingMore ? "Загрузка…" : "Загрузить ещё"}
