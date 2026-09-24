@@ -94,7 +94,7 @@ export function SplashPage() {
   const slide = SLIDES[page];
 
   return (
-    <div className="relative flex h-full flex-col overflow-hidden px-7 pb-[calc(env(safe-area-inset-bottom,0px)+2rem)] pt-[calc(env(safe-area-inset-top,0px)+3.5rem)] [@media(max-height:700px)]:pt-[calc(env(safe-area-inset-top,0px)+1.75rem)] lg:pl-64">
+    <div className="relative flex h-full flex-col overflow-hidden px-7 pb-[calc(env(safe-area-inset-bottom,0px)+2rem)] pt-[calc(env(safe-area-inset-top,0px)+3.5rem)] [@media(max-height:700px)]:pt-[calc(env(safe-area-inset-top,0px)+1.75rem)]">
       <SplashBackdrop />
 
       <div className="relative flex-1">
