@@ -2,11 +2,12 @@
 /**
  * Пустые состояния списков мероприятий.
  *
- * Текст «Пока нет запланированных мероприятий» раньше был голой строкой без
- * рамки: он жил в сетке списка (lg:grid) или под заголовком раздела и
- * визуально «съезжал» — казалось, что элемент потерял своё место. Теперь это
- * такая же карточка, как у мероприятий (glass-panel + скругление 3xl), и на
- * широком экране она занимает всю ширину сетки (col-span-full).
+ * Раньше сообщения вроде «Пока нет запланированных мероприятий» жили внутри
+ * стеклянных карточек (glass-panel): тяжёлые «панельки» на пустом экране
+ * спорили с заголовками разделов. Теперь это голый текст на фоне страницы —
+ * без рамки, подложки и скруглений, зато строго по центру (text-center), а в
+ * сетке списка (lg:grid) занимает всю её ширину (col-span-full), чтобы строка
+ * не «съезжала» влево от заголовка.
  */
 import { cleanup, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
@@ -33,14 +34,16 @@ function stubEmptyBackend() {
 }
 
 /**
- * Карточка пустого состояния: рамка, скругление и текст внутри.
- * gridColumn — карточка лежит внутри двухколоночной сетки списка (lg:grid)
- * и обязана занимать всю ширину, а не половину строки.
+ * Текст пустого состояния: лежит прямо на фоне (без стеклянной подложки,
+ * рамки и скруглений) и выровнен по центру. gridColumn — текст внутри
+ * двухколоночной сетки списка (lg:grid) занимает всю её ширину.
  */
-function emptyCard(text: string | RegExp, { gridColumn = false } = {}) {
+function emptyText(text: string | RegExp, { gridColumn = false } = {}) {
   const node = screen.getByText(text);
-  expect(node.className).toContain("glass-panel");
-  expect(node.className).toContain("rounded-3xl");
+  expect(node.className).not.toContain("glass-panel");
+  expect(node.className).not.toContain("rounded-");
+  expect(node.className).not.toContain("border");
+  expect(node.className).toContain("text-center");
   if (gridColumn) expect(node.className).toContain("col-span-full");
   else expect(node.className).not.toContain("col-span-full");
   return node;
@@ -53,7 +56,7 @@ afterEach(() => {
 });
 
 describe("пустые состояния на главной", () => {
-  test("«Ближайшие» и «Завершённые» показывают карточки вместо строк без рамки", async () => {
+  test("«Ближайшие» и «Завершённые» показывают текст на фоне по центру", async () => {
     stubEmptyBackend();
     render(
       <MemoryRouter>
@@ -62,15 +65,15 @@ describe("пустые состояния на главной", () => {
     );
 
     expect(await screen.findByText("Пока нет запланированных мероприятий")).toBeTruthy();
-    emptyCard("Пока нет запланированных мероприятий", { gridColumn: true });
-    // Секция завершённых раньше исчезала целиком — теперь у неё есть карточка.
+    emptyText("Пока нет запланированных мероприятий", { gridColumn: true });
+    // У секции завершённых тоже текст на фоне, без карточки.
     expect(await screen.findByText("Последние завершённые")).toBeTruthy();
-    emptyCard("Завершённых мероприятий пока нет");
+    emptyText("Завершённых мероприятий пока нет");
   });
 });
 
 describe("пустые состояния на странице мероприятий", () => {
-  test("«Ближайшие» и «Завершённые» показывают карточки вместо строк без рамки", async () => {
+  test("«Ближайшие» и «Завершённые» показывают текст на фоне по центру", async () => {
     stubEmptyBackend();
     render(
       <MemoryRouter>
@@ -79,7 +82,7 @@ describe("пустые состояния на странице мероприя
     );
 
     expect(await screen.findByText("Пока нет запланированных мероприятий")).toBeTruthy();
-    emptyCard("Пока нет запланированных мероприятий", { gridColumn: true });
-    emptyCard("История пока пуста", { gridColumn: true });
+    emptyText("Пока нет запланированных мероприятий", { gridColumn: true });
+    emptyText("История пока пуста", { gridColumn: true });
   });
 });

@@ -262,7 +262,7 @@ export function AdminPage() {
   const navigate = useNavigate();
 
   return (
-    <div className="relative flex h-full flex-col lg:pl-64">
+    <div className="relative flex h-full flex-col">
       <TopBar title="Администрирование" showBack onBack={() => navigate("/debates")} rightSlot="profile" />
       <div className="styled-scrollbar mx-auto flex-1 w-full max-w-3xl overflow-y-auto overflow-x-hidden px-5 pb-10 pt-2 lg:px-8 lg:pb-12 lg:pt-6">
         {/* Заголовок и кнопка «Создать» выровнены по НИЖНЕЙ линии (items-end),
@@ -301,7 +301,7 @@ export function AdminPage() {
 
         {error && <p className="mb-4 rounded-2xl border border-rose-400/20 bg-rose-400/10 p-4 text-sm text-rose-300">{error}</p>}
         {loading && <div className="h-28 animate-pulse rounded-3xl bg-white/5" />}
-        {!loading && filteredEvents.length === 0 && <p className="rounded-3xl border border-white/10 p-6 text-center text-sm text-white/50">{events.length===0? "Мероприятий пока нет": "Нет мероприятий этого типа"}</p>}
+        {!loading && filteredEvents.length === 0 && <p className="py-10 text-center text-sm text-white/50">{events.length===0? "Мероприятий пока нет": "Нет мероприятий этого типа"}</p>}
 
         <div className="space-y-4">
           {filteredEvents.map((event) => {
